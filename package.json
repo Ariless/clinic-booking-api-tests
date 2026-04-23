@@ -1,0 +1,18 @@
+{
+  "name": "clinic-booking-api-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Playwright + API tests for clinic-booking-api (SUT)",
+  "scripts": {
+    "test": "playwright test",
+    "test:api": "playwright test tests/api",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:ui": "playwright test tests/ui",
+    "test:e2e": "playwright test tests/e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "dotenv": "^16.4.7",
+    "ajv": "^8.18.0"
+  }
+}
