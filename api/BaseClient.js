@@ -4,7 +4,8 @@ class BaseClient {
   }
 
   async parseResponse(response) {
-    const body = await response.json();
+    const text = await response.text();
+    const body = text ? JSON.parse(text) : null;
     return { status: response.status(), body };
   }
 

@@ -26,6 +26,13 @@ class DoctorsClient extends BaseClient {
         const response = await this.request.get(endpoints.doctorSlots(doctorRecordId));
         return this.parseResponse(response);
     }
+
+    async deleteSlot(slotId, opts = {}) {
+        const response = await this.request.delete(endpoints.doctorsMeSlot(slotId), {
+            headers: { ...(opts.headers || {}) },
+        });
+        return this.parseResponse(response);
+    }
 }
 
 module.exports = { DoctorsClient };

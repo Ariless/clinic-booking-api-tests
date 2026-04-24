@@ -14,7 +14,7 @@ let slotSeq = 0;
 function nextSeedSlotWindow() {
     slotSeq += 1;
     const slotStartMs =
-        Date.now() + 86400000 + Math.floor(Math.random() * 30 * 86400000) + slotSeq * 2 * 60 * 60 * 1000;
+        Date.now() + 86400000 + Math.floor(Math.random() * 365 * 86400000) + slotSeq * 2 * 60 * 60 * 1000;
     return {
         seedSlotStart: new Date(slotStartMs).toISOString(),
         seedSlotEnd: new Date(slotStartMs + 60 * 60 * 1000).toISOString(),

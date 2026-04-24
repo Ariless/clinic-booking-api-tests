@@ -31,6 +31,13 @@ class AppointmentsClient extends BaseClient {
         return this.parseResponse(response);
     }
 
+    async cancelAppointment(appointmentId, opts = {}) {
+        const response = await this.request.patch(endpoints.appointmentCancel(appointmentId), {
+            headers: { ...(opts.headers || {}) },
+        });
+        return this.parseResponse(response);
+    }
+
     async rejectAppointment(appointmentId, opts = {}) {
         const response = await this.request.patch(endpoints.appointmentReject(appointmentId), {
             headers: { ...(opts.headers || {}) },
