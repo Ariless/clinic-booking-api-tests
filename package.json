@@ -1,18 +1,22 @@
 {
   "name": "clinic-booking-api-tests",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Playwright + API tests for clinic-booking-api (SUT)",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
   "scripts": {
-    "test": "playwright test",
-    "test:api": "playwright test tests/api",
-    "test:smoke": "playwright test --grep @smoke",
-    "test:ui": "playwright test tests/ui",
-    "test:e2e": "playwright test tests/e2e"
+    "test": "npx playwright test",
+    "test:smoke": "npx playwright test --grep @smoke",
+    "test:api": "npx playwright test tests/api",
+    "report": "npx allure generate allure-results -o allure-report --clean && npx allure open allure-report"
   },
+  "private": true,
   "devDependencies": {
     "@playwright/test": "^1.59.1",
-    "dotenv": "^16.4.7",
-    "ajv": "^8.18.0"
+    "allure-commandline": "^2.38.1",
+    "allure-playwright": "^3.7.1"
+  },
+  "dependencies": {
+    "ajv": "^8.18.0",
+    "dotenv": "^17.4.2"
   }
 }

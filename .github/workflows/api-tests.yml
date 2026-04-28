@@ -1,0 +1,126 @@
+# Playwright suite (API + UI + e2e under tests/) against a real SUT (second checkout).
+name: Playwright tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BASE_URL: http://127.0.0.1:3000
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write   # needed for peaceiris/actions-gh-pages
+
+    steps:
+      - name: Checkout test repo
+        uses: actions/checkout@v4
+
+      - name: Checkout SUT
+        uses: actions/checkout@v4
+        with:
+          # owner/repo with npm start, db:seed, GET /health. Repo variable SUT_GITHUB_REPOSITORY overrides default.
+          repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
+          path: sut
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install & seed SUT
+        working-directory: sut
+        run: |
+          npm ci
+          npm run db:seed
+
+      - name: Start SUT
+        working-directory: sut
+        run: |
+          npm start > /tmp/sut.log 2>&1 &
+          echo $! > /tmp/sut.pid
+          for i in $(seq 1 45); do
+            if curl -sf "${{ env.BASE_URL }}/health" > /dev/null; then
+              echo "SUT healthy"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "--- sut log ---"
+          cat /tmp/sut.log || true
+          exit 1
+
+      - name: Install Playwright (browsers)
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: Smoke (@smoke)
+        run: npm run test:smoke
+
+      # Runs everything under testDir (./tests): today mostly tests/api; adds tests/ui + tests/e2e when you create them.
+      - name: Full suite (api, ui, e2e)
+        run: npm test
+
+      # ── Allure report ────────────────────────────────────────────────────────
+
+      - name: Fetch Allure history from gh-pages
+        if: always()
+        uses: actions/checkout@v4
+        continue-on-error: true   # gh-pages branch may not exist on first run
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Prepare Allure results (history + environment)
+        if: always()
+        run: |
+          mkdir -p allure-results
+          # Restore history so Grafana-style trending works across runs
+          if [ -d gh-pages/history ]; then
+            echo "Restoring Allure history from gh-pages"
+            cp -r gh-pages/history allure-results/history
+          fi
+          # Write environment metadata visible in the Allure report
+          printf 'Node.js=%s\nSUT=%s\nBase.URL=%s\n' \
+            "$(node --version)" \
+            "${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}" \
+            "${{ env.BASE_URL }}" \
+            > allure-results/environment.properties
+
+      - name: Generate Allure report
+        if: always()
+        run: npx allure generate allure-results -o allure-report --clean
+
+      - name: Deploy Allure report to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report
+          keep_files: false
+
+      # ── Artifacts ────────────────────────────────────────────────────────────
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+
+      - name: Stop SUT
+        if: always()
+        run: |
+          if [ -f /tmp/sut.pid ]; then kill "$(cat /tmp/sut.pid)" 2>/dev/null || true; fi

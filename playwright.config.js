@@ -13,8 +13,12 @@ module.exports = defineConfig({
     ? [
         ["github"],
         ["html", { open: "never", outputFolder: "playwright-report" }],
+        ["allure-playwright"],
       ]
-    : "list",
+    : [
+        ["list"],
+        ["allure-playwright"],
+      ],
   use: {
     baseURL: process.env.BASE_URL || "http://localhost:3000",
     testIdAttribute: "data-qa",

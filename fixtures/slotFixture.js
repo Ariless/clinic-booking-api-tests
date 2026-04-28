@@ -1,6 +1,7 @@
 const { test: base, expect } = require("./userFixture");
 const { AuthClient } = require("../api/AuthClient");
 const { DoctorsClient } = require("../api/DoctorsClient");
+const { AppointmentsClient } = require("../api/AppointmentsClient");
 const { seedDoctors, nextSeedSlotWindow } = require("../data/seedAccounts");
 
 const test = base.extend({
@@ -26,7 +27,16 @@ const test = base.extend({
 
         await use({ slot: slotBody, doctorToken, doctor, seedSlotStart, seedSlotEnd });
 
-        await doctors.deleteSlot(slotBody.id, { headers: { Authorization: `Bearer ${doctorToken}` } });
+        const appts = new AppointmentsClient(request);
+        const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
+        const { body: doctorAppts } = await appts.listDoctor(doctorAuth);
+        const activeOnSlot = (Array.isArray(doctorAppts) ? doctorAppts : []).filter(
+            a => a.slotId === slotBody.id && ["pending", "confirmed"].includes(a.status),
+        );
+        for (const appt of activeOnSlot) {
+            await appts.cancelAsDoctor(appt.id, doctorAuth);
+        }
+        await doctors.deleteSlot(slotBody.id, doctorAuth);
     },
 });
 
