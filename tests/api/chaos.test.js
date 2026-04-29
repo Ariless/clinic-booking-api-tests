@@ -8,7 +8,7 @@ const CHAOS_ENABLED = process.env.CHAOS_ENABLED === "true";
 
 test("GET /api/v1/doctors — 200 chaos off by default, API works normally @smoke", async ({ request }) => {
     test.skip(CHAOS_ENABLED, "Server is in chaos mode — this smoke test requires chaos OFF");
-    cстостоonst response = await request.get(endpoints.doctors);
+    const response = await request.get(endpoints.doctors);
     expect(response.status()).toBe(200);
 });
 
