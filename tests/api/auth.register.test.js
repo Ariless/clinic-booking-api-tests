@@ -3,6 +3,8 @@ const { UserClient } = require("../../api/UserClient");
 const { generateUser } = require("../../utils/userUtils");
 const { seedDoctors } = require("../../data/seedAccounts");
 
+const REGISTER_MAX = parseInt(process.env.RATE_LIMIT_REGISTER_MAX ?? "5");
+
 test.describe("POST /api/v1/auth/register — patient", () => {
     test("201: unique patient, token returned; teardown DELETE /auth/me", async ({ request }) => {
         const users = new UserClient(request);
@@ -87,5 +89,21 @@ test.describe("POST /api/v1/auth/register — doctor", () => {
         });
         expect(status).toBe(400);
         expect(body.errorCode).toBe("VALIDATION_ERROR");
+    });
+});
+
+test.describe("POST /api/v1/auth/register — rate limit @rate-limit", () => {
+    test.skip(!process.env.RATE_LIMIT_REGISTER_MAX, `RATE_LIMIT_REGISTER_MAX not set; run with RATE_LIMIT_REGISTER_MAX=2 RATE_LIMIT_REGISTER_WINDOW_MS=5000 to enable this suite`);
+
+    test("429 RATE_LIMITED after exhausting per-IP register limit @rate-limit", async ({ request }) => {
+        const users = new UserClient(request);
+        for (let i = 0; i < REGISTER_MAX; i++) {
+            await users.registerPatient({ email: "not-an-email", password: "short", name: "n" });
+        }
+        const { status, body } = await users.registerPatient({ email: "not-an-email", password: "short", name: "n" });
+        expect(status).toBe(429);
+        expect(body.errorCode).toBe("RATE_LIMITED");
+        expect(body.message).toBeTruthy();
+        expect(body.requestId).toBeTruthy();
     });
 });
