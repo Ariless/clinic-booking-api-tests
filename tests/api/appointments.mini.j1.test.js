@@ -1,7 +1,7 @@
 const { test, expect } = require("../../fixtures");
 const { AppointmentsClient } = require("../../api/AppointmentsClient");
 
-test("mini J1: slot → book → GET /my shows pending @smoke", async ({ request, user, slot }) => {
+test("POST /api/v1/appointments — 201 patient books slot, GET /my shows pending @smoke", async ({ request, user, slot }) => {
     const { slot: slotBody } = slot;
     const appointments = new AppointmentsClient(request);
     const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };

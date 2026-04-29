@@ -1,7 +1,7 @@
 const { test, expect } = require("../../fixtures");
 const { AppointmentsClient } = require("../../api/AppointmentsClient");
 
-test("PATCH /api/v1/appointments/:id/confirm confirmed → confirmed Error 422 @api", async ({ request, user, slot }) => {
+test("PATCH /api/v1/appointments/:id/confirm — 422 INVALID_TRANSITION when already confirmed @api", async ({ request, user, slot }) => {
     const { slot: slotBody, doctorToken } = slot;
 
     const appointments = new AppointmentsClient(request);
@@ -25,7 +25,7 @@ test("PATCH /api/v1/appointments/:id/confirm confirmed → confirmed Error 422 @
     expect(confirmBody1.requestId).toBeTruthy();
 })
 
-test("PATCH /api/v1/appointments/:id/reject rejected → confirmed Error 422 @api", async ({ request, user, slot }) => {
+test("PATCH /api/v1/appointments/:id/confirm — 422 INVALID_TRANSITION when appointment already rejected @api", async ({ request, user, slot }) => {
     const { slot: slotBody, doctorToken } = slot;
 
     const appointments = new AppointmentsClient(request);
@@ -51,7 +51,7 @@ test("PATCH /api/v1/appointments/:id/reject rejected → confirmed Error 422 @ap
     expect(confirmBody1.requestId).toBeTruthy();
 })
 
-test("PATCH /api/v1/appointments/:id/cancel cancelled → cancelled Error 422 @api", async ({ request, user, slot }) => {
+test("PATCH /api/v1/appointments/:id/cancel — 422 INVALID_TRANSITION when already cancelled @api", async ({ request, user, slot }) => {
     const { slot: slotBody } = slot;
 
     const appointments = new AppointmentsClient(request);

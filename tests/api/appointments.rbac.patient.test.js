@@ -1,7 +1,7 @@
 const { test, expect } = require("../../fixtures");
 const { AppointmentsClient } = require("../../api/AppointmentsClient");
 
-test("Patient cannot confirm an appointment @api", async ({ request, user, slot }) => {
+test("PATCH /api/v1/appointments/:id/confirm — 403 FORBIDDEN when patient tries to confirm @api", async ({ request, user, slot }) => {
     const { slot: slotBody } = slot;
 
     const appointments = new AppointmentsClient(request);
@@ -18,7 +18,7 @@ test("Patient cannot confirm an appointment @api", async ({ request, user, slot 
     expect(confirmBody.errorCode).toBe("FORBIDDEN");
 });
 
-test("Patient cannot reject an appointment @api", async ({ request, user, slot }) => {
+test("PATCH /api/v1/appointments/:id/reject — 403 FORBIDDEN when patient tries to reject @api", async ({ request, user, slot }) => {
     const { slot: slotBody } = slot;
     const appointments = new AppointmentsClient(request);
     const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
@@ -31,7 +31,7 @@ test("Patient cannot reject an appointment @api", async ({ request, user, slot }
     expect(rejectBody.errorCode).toBe("FORBIDDEN");
 })
 
-test("Doctor cannot GET /appointments/my @api", async ({ request, user, slot }) => {
+test("GET /api/v1/appointments/my — 403 FORBIDDEN when doctor accesses patient-only route @api", async ({ request, user, slot }) => {
     const appointments = new AppointmentsClient(request);
     const doctorAuth = { headers: { Authorization: `Bearer ${slot.doctorToken}` } };
     const { status: myStatus, body: myBody } = await appointments.listMy(doctorAuth);

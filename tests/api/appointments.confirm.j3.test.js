@@ -2,7 +2,7 @@ const { test, expect } = require("../../fixtures");
 const { AppointmentsClient } = require("../../api/AppointmentsClient");
 const { DoctorsClient } = require("../../api/DoctorsClient");
 
-test("PATCH /api/v1/appointments/:id/confirm — J3 pending → confirmed @api", async ({ request, user, slot }) => {
+test("PATCH /api/v1/appointments/:id/confirm — 200 pending → confirmed @api", async ({ request, user, slot }) => {
     const { slot: slotBody, doctorToken, doctor } = slot;
     const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
 

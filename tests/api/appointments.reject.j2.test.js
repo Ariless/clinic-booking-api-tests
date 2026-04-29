@@ -2,7 +2,7 @@ const { test, expect } = require("../../fixtures");
 const { AppointmentsClient } = require("../../api/AppointmentsClient");
 const { DoctorsClient } = require("../../api/DoctorsClient");
 
-test("PATCH /api/v1/appointments/:id/reject — J2 pending → rejected @api", async ({ request, user, slot }) => {
+test("PATCH /api/v1/appointments/:id/reject — 200 pending → rejected, slot freed @api", async ({ request, user, slot }) => {
     const { slot: slotBody, doctorToken, doctor, seedSlotStart, seedSlotEnd } = slot;
 
     const appointments = new AppointmentsClient(request);
