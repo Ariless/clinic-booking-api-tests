@@ -9,7 +9,7 @@ class LoginPage extends BasePage {
         this.loginButton = page.getByTestId("login-submit");
     }
 
-    async fillAndSubmit(email, password) {
+    async submitForm(email, password) {
         await this.navigate(this.url);
         await this.emailInput.fill(email);
         await this.passwordInput.fill(password);
