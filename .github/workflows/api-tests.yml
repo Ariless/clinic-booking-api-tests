@@ -1,4 +1,4 @@
-# Playwright suite (API + UI + e2e under tests/) against a real SUT (second checkout).
+# Playwright suite — smoke gates API + E2E (parallel), merged Allure report on GitHub Pages.
 name: Playwright tests
 
 on:
@@ -13,27 +13,29 @@ concurrency:
 
 env:
   BASE_URL: http://127.0.0.1:3000
+  RATE_LIMIT_REGISTER_MAX: 1000
+  RATE_LIMIT_LOGIN_MAX: 1000
+  RATE_LIMIT_BOOKING_MAX: 1000
 
+# ── Smoke ────────────────────────────────────────────────────────────────────
+# Fast gate on every push / PR. API and E2E jobs start only if this passes.
 jobs:
-  playwright:
+  smoke:
+    name: Smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
     permissions:
-      contents: write   # needed for peaceiris/actions-gh-pages
+      contents: read
 
     steps:
-      - name: Checkout test repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Checkout SUT
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          # owner/repo with npm start, db:seed, GET /health. Repo variable SUT_GITHUB_REPOSITORY overrides default.
           repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
           path: sut
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
@@ -41,9 +43,7 @@ jobs:
 
       - name: Install & seed SUT
         working-directory: sut
-        run: |
-          npm ci
-          npm run db:seed
+        run: npm ci && npm run db:seed
 
       - name: Start SUT
         working-directory: sut
@@ -52,47 +52,226 @@ jobs:
           echo $! > /tmp/sut.pid
           for i in $(seq 1 45); do
             if curl -sf "${{ env.BASE_URL }}/health" > /dev/null; then
-              echo "SUT healthy"
-              exit 0
+              echo "SUT ready"; exit 0
             fi
             sleep 1
           done
-          echo "--- sut log ---"
-          cat /tmp/sut.log || true
-          exit 1
+          echo "=== SUT failed to start ===" && cat /tmp/sut.log && exit 1
 
-      - name: Install Playwright (browsers)
-        run: |
-          npm ci
-          npx playwright install chromium --with-deps
+      - name: Install Playwright
+        run: npm ci && npx playwright install chromium --with-deps
 
       - name: Smoke (@smoke)
         run: npm run test:smoke
 
-      # Runs everything under testDir (./tests): today mostly tests/api; adds tests/ui + tests/e2e when you create them.
-      - name: Full suite (api, ui, e2e)
-        run: npm test
-
-      # ── Allure report ────────────────────────────────────────────────────────
-
-      - name: Fetch Allure history from gh-pages
+      - name: Upload allure results
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-smoke
+          path: allure-results/
+          if-no-files-found: ignore
+
+      - name: Stop SUT
+        if: always()
+        run: |
+          [ -f /tmp/sut.pid ] && kill "$(cat /tmp/sut.pid)" 2>/dev/null || true
+
+# ── API tests ────────────────────────────────────────────────────────────────
+# Full tests/api suite. Runs in parallel with E2E after smoke passes.
+  api:
+    name: API tests
+    needs: [smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
+          path: sut
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install & seed SUT
+        working-directory: sut
+        run: npm ci && npm run db:seed
+
+      - name: Start SUT
+        working-directory: sut
+        run: |
+          npm start > /tmp/sut.log 2>&1 &
+          echo $! > /tmp/sut.pid
+          for i in $(seq 1 45); do
+            if curl -sf "${{ env.BASE_URL }}/health" > /dev/null; then
+              echo "SUT ready"; exit 0
+            fi
+            sleep 1
+          done
+          echo "=== SUT failed to start ===" && cat /tmp/sut.log && exit 1
+
+      - name: Install Playwright
+        run: npm ci && npx playwright install chromium --with-deps
+
+      - name: API tests
+        run: npm run test:api
+
+      - name: Upload allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-api
+          path: allure-results/
+          if-no-files-found: ignore
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-api
+          path: playwright-report/
+          if-no-files-found: ignore
+
+      - name: Stop SUT
+        if: always()
+        run: |
+          [ -f /tmp/sut.pid ] && kill "$(cat /tmp/sut.pid)" 2>/dev/null || true
+
+# ── E2E & UI ─────────────────────────────────────────────────────────────────
+# Browser tests (tests/e2e + tests/ui). --pass-with-no-tests keeps the job green
+# until those directories are committed. workers:1 for SQLite safety.
+  e2e:
+    name: E2E & UI
+    needs: [smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
+          path: sut
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install & seed SUT
+        working-directory: sut
+        run: npm ci && npm run db:seed
+
+      - name: Start SUT
+        working-directory: sut
+        run: |
+          npm start > /tmp/sut.log 2>&1 &
+          echo $! > /tmp/sut.pid
+          for i in $(seq 1 45); do
+            if curl -sf "${{ env.BASE_URL }}/health" > /dev/null; then
+              echo "SUT ready"; exit 0
+            fi
+            sleep 1
+          done
+          echo "=== SUT failed to start ===" && cat /tmp/sut.log && exit 1
+
+      - name: Install Playwright
+        run: npm ci && npx playwright install chromium --with-deps
+
+      - name: E2E & UI tests
+        run: npm run test:browser
+
+      - name: Upload allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-e2e
+          path: allure-results/
+          if-no-files-found: ignore
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-e2e
+          path: playwright-report/
+          if-no-files-found: ignore
+
+      - name: Stop SUT
+        if: always()
+        run: |
+          [ -f /tmp/sut.pid ] && kill "$(cat /tmp/sut.pid)" 2>/dev/null || true
+
+# ── Allure report ─────────────────────────────────────────────────────────────
+# Merges allure-results from all three jobs and deploys to GitHub Pages.
+# Runs even if api or e2e failed so the report always reflects the latest run.
+  allure-report:
+    name: Allure report
+    needs: [api, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - name: Download allure results — smoke
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-results-smoke
+          path: allure-results/
+        continue-on-error: true
+
+      - name: Download allure results — api
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-results-api
+          path: allure-results/
+        continue-on-error: true
+
+      - name: Download allure results — e2e
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-results-e2e
+          path: allure-results/
+        continue-on-error: true
+
+      - name: Restore Allure history from gh-pages
         uses: actions/checkout@v4
-        continue-on-error: true   # gh-pages branch may not exist on first run
+        continue-on-error: true
         with:
           ref: gh-pages
           path: gh-pages
 
-      - name: Prepare Allure results (history + environment)
-        if: always()
+      - name: Prepare history + environment
         run: |
           mkdir -p allure-results
-          # Restore history so Grafana-style trending works across runs
           if [ -d gh-pages/history ]; then
-            echo "Restoring Allure history from gh-pages"
+            echo "Restoring Allure history"
             cp -r gh-pages/history allure-results/history
           fi
-          # Write environment metadata visible in the Allure report
           printf 'Node.js=%s\nSUT=%s\nBase.URL=%s\n' \
             "$(node --version)" \
             "${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}" \
@@ -100,27 +279,11 @@ jobs:
             > allure-results/environment.properties
 
       - name: Generate Allure report
-        if: always()
         run: npx allure generate allure-results -o allure-report --clean
 
-      - name: Deploy Allure report to GitHub Pages
-        if: always()
+      - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: allure-report
           keep_files: false
-
-      # ── Artifacts ────────────────────────────────────────────────────────────
-
-      - name: Upload Playwright HTML report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-
-      - name: Stop SUT
-        if: always()
-        run: |
-          if [ -f /tmp/sut.pid ]; then kill "$(cat /tmp/sut.pid)" 2>/dev/null || true; fi
