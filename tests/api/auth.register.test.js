@@ -92,18 +92,15 @@ test.describe("POST /api/v1/auth/register — doctor", () => {
     });
 });
 
-test.describe("POST /api/v1/auth/register — rate limit @rate-limit", () => {
-    test.skip(!process.env.RATE_LIMIT_REGISTER_MAX, `RATE_LIMIT_REGISTER_MAX not set; run with RATE_LIMIT_REGISTER_MAX=2 RATE_LIMIT_REGISTER_WINDOW_MS=5000 to enable this suite`);
-
-    test("429 RATE_LIMITED after exhausting per-IP register limit @rate-limit", async ({ request }) => {
-        const users = new UserClient(request);
-        for (let i = 0; i < REGISTER_MAX; i++) {
-            await users.registerPatient({ email: "not-an-email", password: "short", name: "n" });
-        }
-        const { status, body } = await users.registerPatient({ email: "not-an-email", password: "short", name: "n" });
-        expect(status).toBe(429);
-        expect(body.errorCode).toBe("RATE_LIMITED");
-        expect(body.message).toBeTruthy();
-        expect(body.requestId).toBeTruthy();
-    });
+test("POST /api/v1/auth/register — 429 RATE_LIMITED after exhausting per-IP register limit @rate-limit", async ({ request }) => {
+    test.skip(REGISTER_MAX > 5, `RATE_LIMIT_REGISTER_MAX=${REGISTER_MAX}; set RATE_LIMIT_REGISTER_MAX=2 and RATE_LIMIT_REGISTER_WINDOW_MS=5000 to run`);
+    const users = new UserClient(request);
+    for (let i = 0; i < REGISTER_MAX; i++) {
+        await users.registerPatient({ email: "not-an-email", password: "short", name: "n" });
+    }
+    const { status, body } = await users.registerPatient({ email: "not-an-email", password: "short", name: "n" });
+    expect(status).toBe(429);
+    expect(body.errorCode).toBe("RATE_LIMITED");
+    expect(body.message).toBeTruthy();
+    expect(body.requestId).toBeTruthy();
 });

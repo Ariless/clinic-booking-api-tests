@@ -1,5 +1,7 @@
 const { test, expect } = require("../../fixtures");
 const { AppointmentsClient } = require("../../api/AppointmentsClient");
+const { assertSchema } = require("../../utils/schemaValidator");
+const { validateAppointment } = require("../../data/schemas/appointmentSchemas");
 
 test("POST /api/v1/appointments — 201 patient books slot, GET /my shows pending @smoke", async ({ request, user, slot }) => {
     const { slot: slotBody } = slot;
@@ -8,6 +10,7 @@ test("POST /api/v1/appointments — 201 patient books slot, GET /my shows pendin
 
     const { status: bookStatus, body: bookBody } = await appointments.createAppointment(slotBody.id, patientAuth);
     expect(bookStatus).toBe(201);
+    assertSchema(bookBody, validateAppointment);
     expect(bookBody.status).toBe("pending");
     expect(bookBody.slotId).toBe(slotBody.id);
 

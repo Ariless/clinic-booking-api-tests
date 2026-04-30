@@ -1,5 +1,7 @@
 const { test, expect } = require("../../fixtures");
 const { AppointmentsClient } = require("../../api/AppointmentsClient");
+const { assertSchema } = require("../../utils/schemaValidator");
+const { validateError } = require("../../data/schemas/errorSchema");
 
 test("PATCH /api/v1/appointments/:id/confirm — 422 INVALID_TRANSITION when already confirmed @api", async ({ request, user, slot }) => {
     const { slot: slotBody, doctorToken } = slot;
@@ -20,9 +22,8 @@ test("PATCH /api/v1/appointments/:id/confirm — 422 INVALID_TRANSITION when alr
         headers: { Authorization: `Bearer ${doctorToken}` },
     });
     expect(confirmStatus1).toBe(422);
-    expect(confirmBody1.message).toBeTruthy();
+    assertSchema(confirmBody1, validateError);
     expect(confirmBody1.errorCode).toBe("INVALID_TRANSITION");
-    expect(confirmBody1.requestId).toBeTruthy();
 })
 
 test("PATCH /api/v1/appointments/:id/confirm — 422 INVALID_TRANSITION when appointment already rejected @api", async ({ request, user, slot }) => {
@@ -46,9 +47,8 @@ test("PATCH /api/v1/appointments/:id/confirm — 422 INVALID_TRANSITION when app
         headers: { Authorization: `Bearer ${doctorToken}` },
     });
     expect(confirmStatus1).toBe(422);
-    expect(confirmBody1.message).toBeTruthy();
+    assertSchema(confirmBody1, validateError);
     expect(confirmBody1.errorCode).toBe("INVALID_TRANSITION");
-    expect(confirmBody1.requestId).toBeTruthy();
 })
 
 test("PATCH /api/v1/appointments/:id/cancel — 422 INVALID_TRANSITION when already cancelled @api", async ({ request, user, slot }) => {
@@ -66,7 +66,6 @@ test("PATCH /api/v1/appointments/:id/cancel — 422 INVALID_TRANSITION when alre
 
     const { status: cancelStatus1, body: cancelBody1 } = await appointments.cancelAppointment(bookBody.id, patientAuth);
     expect(cancelStatus1).toBe(422);
-    expect(cancelBody1.message).toBeTruthy()
+    assertSchema(cancelBody1, validateError);
     expect(cancelBody1.errorCode).toBe("INVALID_TRANSITION");
-    expect(cancelBody1.requestId).toBeTruthy();
 });

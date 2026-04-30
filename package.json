@@ -7,6 +7,10 @@
     "test": "npx playwright test",
     "test:smoke": "npx playwright test --grep @smoke",
     "test:api": "npx playwright test tests/api",
+    "test:ui": "npx playwright test tests/ui --pass-with-no-tests",
+    "test:e2e": "npx playwright test tests/e2e --pass-with-no-tests",
+    "test:browser": "npx playwright test tests/e2e tests/ui --pass-with-no-tests",
+    "test:chaos": "npx playwright test --grep @chaos",
     "report": "npx allure generate allure-results -o allure-report --clean && npx allure open allure-report"
   },
   "private": true,

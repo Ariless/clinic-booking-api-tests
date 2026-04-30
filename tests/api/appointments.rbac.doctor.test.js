@@ -1,5 +1,7 @@
 const { test, expect } = require("../../fixtures");
 const { endpoints } = require("../../data/testData");
+const { assertSchema } = require("../../utils/schemaValidator");
+const { validateError } = require("../../data/schemas/errorSchema");
 
 test("GET /api/v1/appointments/doctor — 403 when patient JWT @smoke", async ({ request, user }) => {
     const response = await request.get(endpoints.appointmentsDoctor, {
@@ -7,5 +9,6 @@ test("GET /api/v1/appointments/doctor — 403 when patient JWT @smoke", async ({
     });
     expect(response.status()).toBe(403);
     const body = await response.json();
+    assertSchema(body, validateError);
     expect(body.errorCode).toBe("FORBIDDEN");
 });

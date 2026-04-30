@@ -1,6 +1,4 @@
-const Ajv = require("ajv");
-
-const ajv = new Ajv({ allErrors: true, strict: true });
+const { ajv } = require("../../utils/schemaValidator");
 
 const doctorsListSchema = {
   type: "array",
