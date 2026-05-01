@@ -11,10 +11,12 @@
     "test:e2e": "npx playwright test tests/e2e --pass-with-no-tests",
     "test:browser": "npx playwright test tests/e2e tests/ui --pass-with-no-tests",
     "test:chaos": "npx playwright test --grep @chaos",
-    "report": "npx allure generate allure-results -o allure-report --clean && npx allure open allure-report"
+    "report": "npx allure generate allure-results -o allure-report --clean && npx allure open allure-report",
+    "test:count": "npx playwright test --list 2>/dev/null | grep -E '\\[chromium\\]' | wc -l | tr -d ' '"
   },
   "private": true,
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.59.1",
     "allure-commandline": "^2.38.1",
     "allure-playwright": "^3.7.1"

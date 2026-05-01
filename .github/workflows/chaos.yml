@@ -1,0 +1,80 @@
+# Chaos mode tests — manual trigger only.
+# Start the SUT with fault injection, then run @chaos-tagged tests.
+#
+# Usage: Actions tab → "Chaos tests" → Run workflow
+# Optional inputs: fail_probability (default 1 = every request fails)
+name: Chaos tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      fail_probability:
+        description: "CHAOS_FAIL_PROBABILITY (0.0 – 1.0; default 1 = every request fails)"
+        default: "1"
+        required: false
+
+env:
+  BASE_URL: http://127.0.0.1:3000
+
+jobs:
+  chaos:
+    name: Chaos mode (@chaos)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
+          path: sut
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install & seed SUT
+        working-directory: sut
+        run: npm ci && npm run db:seed
+
+      - name: Start SUT (chaos mode)
+        working-directory: sut
+        env:
+          CHAOS_ENABLED: "true"
+          CHAOS_FAIL_PROBABILITY: ${{ github.event.inputs.fail_probability || '1' }}
+        run: |
+          npm start > /tmp/sut.log 2>&1 &
+          echo $! > /tmp/sut.pid
+          for i in $(seq 1 45); do
+            if curl -sf "${{ env.BASE_URL }}/health" > /dev/null; then
+              echo "SUT ready"; exit 0
+            fi
+            sleep 1
+          done
+          echo "=== SUT failed to start ===" && cat /tmp/sut.log && exit 1
+
+      - name: Install Playwright
+        run: npm ci && npx playwright install chromium --with-deps
+
+      - name: Chaos tests (@chaos)
+        env:
+          CHAOS_ENABLED: "true"
+        run: npm run test:chaos
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-chaos
+          path: playwright-report/
+          if-no-files-found: ignore
+
+      - name: Stop SUT
+        if: always()
+        run: |
+          [ -f /tmp/sut.pid ] && kill "$(cat /tmp/sut.pid)" 2>/dev/null || true

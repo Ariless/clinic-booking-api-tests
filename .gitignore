@@ -7,3 +7,5 @@ playwright/.cache/
 allure-results/
 allure-report/
 reports/
+.DS_Store
+.idea/
