@@ -1,6 +1,6 @@
 # System Weakness Report — clinic-booking-api
 
-**Scope:** QA-perspective analysis of architectural risks, concurrency gaps, and business logic vulnerabilities in the SUT. This is not a penetration test — it is a structured map of failure modes that informed the test suite design.
+**Scope:** QA-perspective analysis of architectural risks, concurrency gaps, and business logic vulnerabilities in the SUT. This is an FMEA-inspired (Failure Mode and Effects Analysis) structured map of failure modes and their test coverage — not a penetration test. Each section identifies a failure mode, its severity, whether the system mitigates it, and whether a test exists.
 
 **Companion documents:** `RISK_ANALYSIS.md` (impact × likelihood → test files), `DESIGN_PRINCIPLES.md` (how tests are built around these risks).
 
@@ -80,7 +80,7 @@
 
 **Impact:** Dispute resolution, compliance reporting, and debugging are impossible without application logs. The system relies entirely on Pino logs for actor identity — if logs are lost or not ingested, the information is gone.
 
-**Test coverage:** Not tested at DB level — no audit assertions exist. Planned as part of Audit Trail feature.
+**Mitigated by:** Pino structured logging + Loki/Grafana observability stack already covers actor identity at the application level. A separate DB audit table adds no meaningful portfolio value on top of this. Weakness acknowledged, not planned for implementation.
 
 ---
 
@@ -188,7 +188,7 @@
 | Concurrent waitlist promotion | Medium | ✅ transaction serialization | Partial — single-path only |
 | Auto-expiry timer race | Low | ✅ SQLite serialization | ❌ planned |
 | Slot state ambiguity (pending vs confirmed) | Medium | Partial — query filter | Partial — J3 test |
-| No audit trail | Medium | ❌ logs only | ❌ planned (Audit Trail feature) |
+| No audit trail | Medium | ✅ Pino + Loki/Grafana | — not planned (mitigated by observability stack) |
 | Waitlist fairness | Low | N/A — product decision | ❌ planned |
 | Doctor self-registration | High | ❌ known gap | ❌ acknowledged |
 | IDOR on `GET /appointments/:id` | High | ✅ fixed: `requireAuth` + ownership check | ✅ `security.test.js` (found + fixed 2026-04-30) |

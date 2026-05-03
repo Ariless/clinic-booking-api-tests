@@ -3,7 +3,7 @@
 [![Playwright tests](https://github.com/Ariless/clinic-booking-api-tests/actions/workflows/api-tests.yml/badge.svg)](https://github.com/Ariless/clinic-booking-api-tests/actions/workflows/api-tests.yml)
 [![Allure Report](https://img.shields.io/badge/Test_Report-Allure-orange)](https://ariless.github.io/clinic-booking-api-tests/)
 
-**Playwright (JavaScript)** automation for **[clinic-booking-api](https://github.com/Ariless/clinic-booking-api)** (upstream reference) — or your fork (**e.g. `clinic-booking-api-learning`**) when contracts are aligned. Controlled **SUT**: REST + demo UI under `public/`. Same engineering habits as a production-grade framework: **POM**, **API client layer**, **tagged suites**, **schema-style checks**, **no sleeps**, **`data-qa`** selectors.
+**Playwright (JavaScript)** automation for **[clinic-booking-api](https://github.com/Ariless/clinic-booking-api)**. Controlled **SUT**: REST + demo UI under `public/`. Same engineering habits as a production-grade framework: **POM**, **API client layer**, **tagged suites**, **schema-style checks**, **no sleeps**, **`data-qa`** selectors.
 
 **Normative design rules** (pyramid / determinism / state ownership / one-behaviour tests / failure transparency / minimalism + SRP, DRY, POM, review checklist): **`DESIGN_PRINCIPLES.md`**.
 
@@ -15,7 +15,7 @@
 
 - **Risk-first API checks** — what hurts users and the business (double booking, RBAC, lifecycle) before chasing coverage metrics; see **`docs/RISK_ANALYSIS.md`**.
 - **Clear ownership** — J1 / J2 / J3 style files + **`@smoke`** / **`@api`** (optional **`@negative`**, **`@regression`**, **`@rbac`** in titles when you add them); see **`docs/TEST_STRATEGY.md`**.
-- **What is already exercised** — auth (register + login), doctor catalog, **J1** booking slice in smoke (**pending** + `GET …/my`), **J3** confirm + slot invariant, **J2** reject, **N1** double-book `409 SLOT_TAKEN`, patient cancel + slot freed, `422 INVALID_TRANSITION`, extended RBAC (`appointments.rbac.patient`, `appointments.rbac.cross-doctor`), waitlist lifecycle + auto-promotion, rate limits (`@rate-limit`; require env override), chaos smoke + 503 body + health exempt (`@chaos`), security — IDOR + JWT tamper (`@security`; caught a real unintentional vulnerability), accessibility on login + register + booking pages (`@a11y`; axe-core, zero violations except documented color-contrast debt), UI gate + login + register forms, E2E cross-layer booking / conflict / confirm, **performance baseline** — k6 booking flow (50 VUs, p95 thresholds; `k6/booking-flow.js`), **DB-state assertions** — direct SQLite queries via `utils/dbClient.js` embedded inline in `appointments.mini.j1`, `appointments.confirm.j3`, `appointments.cancel.patient`, `appointments.waitlist`, `appointments.waitlist.promotion` — verifies `slot.isAvailable`, `appointment.status`, and waitlist row presence/absence after each operation, **mobile viewport** — `mobile-chrome` project (`Pixel 7`) re-runs all `tests/ui/**` on a 412 × 915 viewport; API tests run on `chromium` only.
+- **What is already exercised** — auth (register + login), doctor catalog, **J1** booking slice in smoke (**pending** + `GET …/my`), **J3** confirm + slot invariant, **J2** reject, **N1** double-book `409 SLOT_TAKEN`, patient cancel + slot freed, `422 INVALID_TRANSITION`, extended RBAC (`appointments.rbac.patient`, `appointments.rbac.cross-doctor`), waitlist lifecycle + auto-promotion, rate limits (`@rate-limit`; require env override), chaos smoke + 503 body + health exempt (`@chaos`), security — IDOR + JWT tamper (`@security`; caught a real unintentional vulnerability), accessibility on login + register + booking pages (`@a11y`; axe-core, zero violations except documented color-contrast debt), UI gate + login + register forms, E2E cross-layer booking / conflict / confirm, **doctor UI confirm** (`doctor-confirm.e2e.test.js` `@e2e`) — patient books via API → doctor logs in, clicks Confirm in the doctor UI → success banner → patient sees confirmed via API; first test covering the doctor persona in a real browser; catches JavaScript wiring errors the API layer cannot see, **performance baseline** — k6 booking flow (50 VUs, p95 thresholds; `k6/booking-flow.js`), **DB-state assertions** — direct SQLite queries via `utils/dbClient.js` embedded inline in `appointments.mini.j1`, `appointments.confirm.j3`, `appointments.cancel.patient`, `appointments.waitlist`, `appointments.waitlist.promotion` — verifies `slot.isAvailable`, `appointment.status`, and waitlist row presence/absence after each operation, **mobile viewport** — `mobile-chrome` project (`Pixel 7`) re-runs all `tests/ui/**` on a 412 × 915 viewport; API tests run on `chromium` only, **patient WS notifications** (`patient-notifications.e2e.test.js` `@e2e`) — WebSocket connected → doctor confirms via API → `appointment.confirmed` notification item appears in patient browser in real time; proves server correctly routes events to the patient channel, **consultations cross-layer** (`consultations.cross-layer.test.js` `@e2e`) — patient books consultation via UI → API list confirms record → DB consultation row + payment row verified; skip guard: `PAYMENT_MODE=mock_success`, **waitlist cross-layer** (`waitlist.cross-layer.test.js` `@e2e`) — join via API → UI shows waitlist entry → leave via UI → API verifies removal → DB confirms row deleted, **guest gate — consultations** (`consultations.test.js` `@ui`) — unauthenticated user reaches `/patient/consultations` and sees sign-in gate instead of the booking form, **guest gate — notifications** (`patient-notifications.test.js` `@ui`) — unauthenticated user reaches `/patient/notifications` and sees sign-in gate instead of the live feed.
 
 ### Test metrics (lightweight — for interviews, not “enterprise BI”)
 
@@ -53,6 +53,7 @@ How this suite knows the system broke — and what each failure means:
 | axe violations on login / register / booking | Accessibility regression — landmark or heading structure broken | `accessibility.test.js` (`@a11y`) |
 | `GET /appointments/:id` returns `200` with no token | IDOR regression — auth guard removed from route | `security.test.js` (`@security`) |
 | k6 `p(95) > 200ms` or `error_rate > 1%` threshold breached | Performance regression — latency spike or increased error rate under load | `k6/booking-flow.js` |
+| Doctor UI confirm button does nothing or returns error | JavaScript event handler broken or endpoint wired incorrectly — doctors can't confirm from the browser | `doctor-confirm.e2e.test.js` |
 
 **Invalid states** — if any of these exist in the DB, something is broken:
 - `slot.isAvailable = 0` with no active appointment referencing it
@@ -67,7 +68,7 @@ How this suite knows the system broke — and what each failure means:
 
 | | |
 | --- | --- |
-| **Repository** | Default upstream: [github.com/Ariless/clinic-booking-api](https://github.com/Ariless/clinic-booking-api). For **training / your fork** (e.g. **`clinic-booking-api-learning`**), use the same layout: set **`BASE_URL`** locally and **`SUT_GITHUB_REPOSITORY`** (`owner/repo`) in GitHub Actions so CI checks out the fork. |
+| **Repository** | [github.com/Ariless/clinic-booking-api](https://github.com/Ariless/clinic-booking-api). Set `BASE_URL` locally; set `SUT_GITHUB_REPOSITORY` (`owner/repo`) in GitHub Actions so CI checks out the SUT. |
 | **Contracts** | `API_ENDPOINTS.md`, `CONTRACT_PACK.md`, OpenAPI (`GET /api/docs`) |
 | **How to test it** | `TESTING_AGAINST_THIS_SUT.md` |
 | **UI hooks** | `quality-strategy.md` → *Demo UI — stable selectors (`data-qa`)* |
@@ -201,6 +202,9 @@ flowchart TB
 | **Hybrid data setup** | API for fast lifecycle; UI for user-visible behaviour; GET for reconciliation. |
 | **`dotenv` for `BASE_URL`** | Environment parity local vs CI secrets. |
 | **Retries + trace on first retry (CI)** | Flake investigation, not masking broken assertions — see **`DESIGN_PRINCIPLES.md`**. |
+| **Invariant-based assertions** | Tests prove system properties, not just status codes — e.g. cancel must free the slot atomically, promotion must happen exactly once. DB checks in E2E tests confirm persistence, not just the HTTP response. |
+| **FMEA-inspired weakness analysis** | `docs/SYSTEM_WEAKNESS_REPORT.md` maps each architectural failure mode to severity + test coverage before writing a single test — same structured thinking as Failure Mode and Effects Analysis. |
+| **Observability instrumentation assertions** | Every error response is asserted to include `requestId` — the field that correlates a user-visible error to a specific log line in production. Planned: `GET /metrics` counter assertions after state-changing operations (booking, cancel, waitlist join). |
 
 ---
 
@@ -323,6 +327,42 @@ npm run report              # allure generate + open
 - **`docs/TEST_STRATEGY.md`** — risk-first strategy (API-first + **§9** UI/e2e backlog in **`E2E_TEST_PLAN.md`**), `@smoke` / `@api`, J1/J2/J3 split, planned conflict + cancel files.
 - **`docs/RISK_ANALYSIS.md`** — short **impact × likelihood** table mapped to test files (and gaps).
 - The SUT repo’s **`quality-strategy.md`** stays the contract for **`data-qa`** and product-side quality notes; this repo’s `docs/` stay **automation- and portfolio-facing**.
+
+---
+
+---
+
+## SUT extensions (added for testability and portfolio)
+
+These features were added to the SUT to enable meaningful UI/E2E coverage and to demonstrate end-to-end thinking:
+
+| Extension | What it does | Why it was added |
+| --- | --- | --- |
+| `patient-consultations.html` + `/patient/consultations` route | Form to book a consultation (doctor select + payment method) + consultation history | The payment feature had API coverage but zero UI. No UI = nothing to test at the E2E layer. |
+| `patient-notifications.html` + `/patient/notifications` route | Live WebSocket notification feed for the patient | Demonstrates WebSocket is real: patients see `appointment.confirmed`, `.rejected`, `.cancelled_by_doctor` in the browser in real time. |
+| Patient-side WebSocket (`wsServer`, `wsNotifier`, `connections`) | Server now accepts WS connections from patients, not just doctors | Existing WS was doctor-only. Adding patient delivery is a real business feature — patients know instantly when their appointment status changes. |
+| Nav links updated on all patient pages | Consultations + Notifications accessible from any patient page | Consistency; also needed so Playwright can navigate without hardcoding URLs everywhere. |
+
+---
+
+## Risk-based decisions (interview / defence notes)
+
+### What was removed and why
+
+| Removed | Reason |
+| --- | --- |
+| `doctors.list.test.js` — "idempotent, repeated call returns same data" | Tested REST contract semantics (GET idempotency), not a business risk specific to this system. Adds test count without adding confidence in anything that could actually fail. |
+| `security.test.js` — `POST /api/v1/appointments — 401 with no auth token` | Duplicate of the GET 401 test above it. Both verify the same auth middleware is applied. One test proves the middleware is wired; a second on a different verb adds marginal confidence that doesn't justify the maintenance cost. |
+
+### Why UI tests only cover error paths
+
+All business logic is exercised at the API layer (fast, deterministic, no browser overhead). UI tests cover only what the API cannot verify: error message rendering, form validation display, guest gates, accessibility. Successful login and successful registration are covered by `auth.login.test.js` and `auth.register.test.js` at API level — adding UI duplicates of the same happy paths would be testing the framework, not the product.
+
+**Interview line:** *"I test at the lowest layer that gives me confidence. Business logic belongs in API tests. UI tests catch rendering and wiring bugs — things only a browser can see."*
+
+### Why the doctor UI E2E test was added
+
+`confirm.cross-layer.test.js` already calls `confirmAppointment()` via the API client. That test proves the HTTP endpoint works. It does not prove the doctor's browser can confirm appointments — a broken `addEventListener`, a wrong `data-appt-id`, or a missing `window.confirm` handler would all pass the API test and fail in the real UI. `doctor-confirm.e2e.test.js` fills that gap and is the only test where the doctor persona interacts with a real browser.
 
 ---
 

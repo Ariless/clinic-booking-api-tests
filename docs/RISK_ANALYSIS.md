@@ -57,7 +57,11 @@ IMPACT ↑
 | Doctor list / schema | 3 | 2 | 6 | `doctors.list.test.js` (`@smoke`) |
 | GET idempotency — same result on repeated calls | 2 | 1 | 2 | `doctors.list.test.js` (`@api`) — low risk score, high interview value: "I verify HTTP semantics explicitly" |
 | AI rate limit (`429 RATE_LIMITED`) | 3 | 2 | 6 | `ai.recommend.test.js` (`@api`) |
-| AI feature flag (`ENABLE_AI_RECOMMENDATION=false` → 503) | 3 | 2 | 6 | **Planned** → `ai.recommend.test.js` (requires server restart with flag off) |
+| AI feature flag (`ENABLE_AI_RECOMMENDATION=false` → 503) | 3 | 2 | 6 | `ai.recommend.test.js` (`@api`) — shipped |
+| RAG: response schema `{ specialty, reasoning }` always present | 4 | 2 | 8 | **Planned** → `ai.recommend.rag.test.js` (`@rag`); skip without `ANTHROPIC_API_KEY` |
+| RAG: hallucination — model recommends specialty not in knowledge base | 4 | 2 | 8 | **Planned** → `ai.recommend.rag.test.js` (`@rag`); context grounding assertion |
+| RAG: prompt injection in symptoms field hijacks recommendation | 4 | 1 | 4 | **Planned** → `ai.recommend.rag.test.js` (`@rag`); adversarial inputs |
+| RAG: Claude unavailable → graceful 503, not unhandled exception | 4 | 1 | 4 | **Planned** → `ai.recommend.rag.test.js` (`@rag`); wrong API key simulation |
 | Login rate limit (`429 RATE_LIMITED` after N failed/valid attempts per IP) | 4 | 2 | 8 | `auth.login.test.js` (`@rate-limit`) — **shipped**; requires `RATE_LIMIT_LOGIN_MAX=2 RATE_LIMIT_LOGIN_WINDOW_MS=5000` |
 | Register rate limit (`429 RATE_LIMITED` after N attempts per IP) | 3 | 1 | 3 | `auth.register.test.js` (`@rate-limit`) — **shipped**; requires `RATE_LIMIT_REGISTER_MAX=2 RATE_LIMIT_REGISTER_WINDOW_MS=5000` |
 | Booking rate limit (`429 RATE_LIMITED` after N booking attempts per IP) | 4 | 2 | 8 | `appointments.booking.rate-limit.test.js` (`@rate-limit`) — **shipped**; requires `RATE_LIMIT_BOOKING_MAX=2 RATE_LIMIT_BOOKING_WINDOW_MS=5000` |

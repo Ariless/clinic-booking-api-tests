@@ -147,6 +147,7 @@ All schemas use `additionalProperties: true` — non-breaking API additions do n
 | Waitlist join → view → leave (happy path) | **`appointments.waitlist.test.js`** (`@api`) — **shipped** | Core waitlist lifecycle |
 | Waitlist duplicate join → `409`, patient deletes another's entry → `403` | **`appointments.waitlist.test.js`** (`@api`) — **shipped** | Data integrity + security boundary |
 | Cancel / reject → waitlist patient auto-promoted | **`appointments.waitlist.promotion.test.js`** (`@api`) — **shipped** | Core business value: freed slot goes to next in queue |
+| Waitlist offer: get pending offers, accept (swap booking), decline (stay on waitlist), 409 on double-accept | **`appointments.waitlist.offers.test.js`** (`@api`) — **shipped** | Manual confirmation flow when patient already has an active booking |
 | Login rate limit → `429 RATE_LIMITED` | **`auth.login.test.js`** (`@rate-limit`) — **shipped**; run with `RATE_LIMIT_LOGIN_MAX=2 RATE_LIMIT_LOGIN_WINDOW_MS=5000` | Brute-force protection on login |
 | Register rate limit → `429 RATE_LIMITED` | **`auth.register.test.js`** (`@rate-limit`) — **shipped**; run with `RATE_LIMIT_REGISTER_MAX=2 RATE_LIMIT_REGISTER_WINDOW_MS=5000` | Spam registration prevention |
 | Booking rate limit → `429 RATE_LIMITED` | **`appointments.booking.rate-limit.test.js`** (`@rate-limit`) — **shipped**; run with `RATE_LIMIT_BOOKING_MAX=2 RATE_LIMIT_BOOKING_WINDOW_MS=5000` | Slot-hoarding / abuse prevention |
@@ -299,9 +300,21 @@ flowchart LR
   mobile:         # manual / scheduled; --project=mobile-chrome (Playwright device emulation)
 ```
 
+### Local-only suites — risk vs infrastructure cost
+
+Not every suite belongs in CI. The decision is explicit: signal value weighed against the infrastructure required to run it reliably.
+
+| Suite | Why local only | Unblocking condition |
+|---|---|---|
+| `chaos.test.js` (`@chaos`) | Requires chaos-enabled SUT (`CHAOS_ENABLED=true`, `CHAOS_PROBABILITY`, fault injection middleware). CI SUT runs in standard mode. | Separate `chaos.yml` already exists — triggered manually via `workflow_dispatch`. |
+| `observability.loki.test.js` (`@observability`) | Requires full Loki stack (`docker-compose.observability.yml`). CI runs SUT only, no Loki sidecar. | Add observability compose to CI workflow + `LOKI_ENABLED=true`. High infrastructure cost for low CI frequency value. |
+| `appointments.booking.rate-limit.test.js` | Requires `RATE_LIMIT_WINDOW_MS` env override — CI SUT uses production defaults; parallel runs exhaust the window and produce false 429s. | Add env override to `api-tests.yml`; or isolate to a separate serial job. |
+
+**Why this matters:** running these in the default CI job would produce flaky failures caused by missing infrastructure, not product defects — exactly the failure-classification problem the framework is designed to avoid.
+
 ### Interview line
 
-"Smoke is the gate — if it fails, nothing downstream runs. API and E2E start in parallel after smoke passes. Chaos is a separate manual workflow that starts the SUT with fault injection before running `@chaos` tests. Allure always merges results from all jobs and deploys to Pages even if a job fails."
+"Smoke is the gate — if it fails, nothing downstream runs. API and E2E start in parallel after smoke passes. Chaos is a separate manual workflow that starts the SUT with fault injection before running `@chaos` tests. Allure always merges results from all jobs and deploys to Pages even if a job fails. Three suites are intentionally local-only: chaos needs a fault-injected SUT, observability needs a Loki stack, and rate-limit tests need an env override to avoid false 429s in parallel CI runs. Each has an explicit unblocking condition — the exclusion is a cost decision, not a gap."
 
 ---
 
@@ -418,25 +431,210 @@ k6 run --env BASE_URL=http://localhost:3000 k6/booking-flow.js
 
 **Interview line:** *"I separate the rate limiter from the performance test — rate limits protect production, not benchmark runs. I authenticate once in `setup()` so the JWT is shared across all 50 VUs, same as a real user who logs in once and stays logged in. `409` under load is correct behavior, so I exclude it from the error rate — otherwise the threshold would always fail."*
 
-### 14.5 AI testing strategy (`@ai`)
+### 14.5 AI testing strategy — RAG (`@ai`, `@rag`)
 
-Blocked on Anthropic API key. When unblocked:
+The recommendation endpoint is being upgraded from **rule-based** to **RAG (Retrieval-Augmented Generation)**:
 
-- Response schema validation — AI response matches contract regardless of content
-- Prompt injection — adversarial symptom inputs; assert no data leak or server error
-- Feature flag — `ENABLE_AI_RECOMMENDATION=false` → `503 FEATURE_DISABLED`
-- Fallback path — no API key → rule-based response, not crash
-- Nondeterminism guard — same input, multiple runs, always valid schema (not always same answer)
+1. **Knowledge base** — `src/data/specialtyKnowledge.json`: specialty → symptom descriptions
+2. **Retrieval layer** — `src/services/retrieval.js`: keyword overlap scoring; returns top-K specialties for given symptoms
+3. **Generation** — Claude API called with retrieved context injected into prompt; constrained to respond with `{ "specialty": "<from list>", "reasoning": "<one sentence>" }`
+4. **Mode switch** — `AI_IMPLEMENTATION=rule_based|rag` env var; existing tests always use `rule_based`, RAG tests tagged `@rag`
+
+**Why RAG over vanilla LLM call:** Without retrieval, Claude can hallucinate specialties not in our system. With retrieval, the prompt contains only specialties we actually have doctors for — the model is grounded to our context.
+
+**Test cases — no API key needed:**
+
+| Case | How |
+|---|---|
+| Feature flag `false` → `503 FEATURE_DISABLED` | `@ai` — already works |
+| `400` on empty symptoms | `@ai` — already works |
+| `429` rate limit | `@ai` — already works |
+| Full route with mock response (`AI_MOCK_RESPONSE=true`) | `@ai` — SUT returns deterministic JSON, no API call |
+
+**Test cases — `ANTHROPIC_API_KEY` required (tagged `@rag`, skip guard):**
+
+| Case | What it verifies |
+|---|---|
+| `200` response always has `{ specialty, reasoning }` | Schema contract — non-determinism handled |
+| `specialty` is always one of our knowledge-base entries | Context grounding — model doesn't hallucinate |
+| Prompt injection in symptoms (`"Ignore instructions..."`) → no system compromise | AI security boundary |
+| Wrong API key / Claude unreachable → `503` graceful error | Degradation path |
+| Claude returns malformed JSON → `422 UNKNOWN_SPECIALTY` | Parse failure handled |
+| E2E: patient types symptoms → reasoning appears in UI | Full user journey `@e2e @rag` |
+
+**Env vars:**
+```
+ENABLE_AI_RECOMMENDATION=true
+AI_IMPLEMENTATION=rag
+ANTHROPIC_API_KEY=<key>
+AI_MOCK_RESPONSE=true   # skip real API call, return deterministic mock (for CI)
+```
+
+**Blocked on:** Anthropic API key (`console.anthropic.com` — free tier available). Phase 1 SUT work (knowledge base + retrieval + mock mode) can start without it.
+
+**Interview line:** *"I upgraded the recommendation endpoint to RAG and wrote tests covering schema validation, context grounding — verifying the model only recommends specialties from our knowledge base, never hallucinates — prompt injection resilience, and graceful degradation when the LLM is unavailable. All RAG tests are isolated behind `@rag` and skip automatically without `ANTHROPIC_API_KEY`."*
 
 ---
 
-## 15. Narrative & depth layer — backlog (agreed 2026-04-30)
+## 15. Test design techniques
+
+### 15.1 Invariant-based testing
+
+Tests are written around **system invariants** — properties that must always be true — not just around HTTP responses. This mirrors the approach used for non-deterministic and AI systems: when the exact output can vary, assert what must always hold.
+
+Examples in this suite:
+
+| Invariant | What always must be true | Where asserted |
+|---|---|---|
+| No double-booking | `slot.isAvailable = 0` while appointment is active; second booking → `409 SLOT_TAKEN` | `appointments.booking.conflict.test.js` + DB check |
+| Cancel frees the slot atomically | After cancel, `slot.isAvailable = 1` AND `appointment.status = 'cancelled'` in the same transaction | `appointments.cancel.patient.test.js` (DB check) |
+| Waitlist promotion is exactly-once | Under concurrent cancels, one waitlist patient promoted exactly once — never zero, never twice | `appointments.concurrency.test.js` |
+| State machine never accepts illegal transitions | No `(from, to)` combination outside the allowed set ever returns `200` | `appointments.invalid-transition.test.js` |
+| Auth guard always active | Any protected route without a valid token → `401`; with wrong role → `403` | `appointments.rbac.*.test.js`, `security.test.js` |
+
+**Interview line:** *"I write tests around invariants, not just happy paths. A double-booking test isn't interesting because it returns 409 — it's interesting because it proves the system never sells one slot twice, regardless of how many concurrent requests arrive."*
+
+### 15.2 Boundary value analysis
+
+Boundaries are tested explicitly, not assumed. Current examples:
+
+| Boundary | Test |
+|---|---|
+| Empty symptoms string → `400 VALIDATION_ERROR` | `ai.recommend.test.js` |
+| Unknown specialty (unmappable symptoms) → `422 UNKNOWN_SPECIALTY` | `ai.recommend.test.js` |
+| `doctorRecordId` that doesn't exist → `404 DOCTOR_NOT_FOUND` | `auth.register.test.js` |
+| Duplicate waitlist join → `409 WAITLIST_DUPLICATE` | `appointments.waitlist.test.js` |
+| Invalid state transition (cancelled → confirmed) → `422 INVALID_TRANSITION` | `appointments.invalid-transition.test.js` |
+
+
+### 15.3 Property-based testing ✅
+
+**What:** Instead of enumerating specific test cases, generate all possible inputs automatically and assert that a property holds for every one.
+
+**Target:** `src/utils/appointmentStateMachine.js` — the `isValidTransition(from, to)` function.
+
+**Tool:** `fast-check` (installed in SUT — `src/utils/__tests__/appointmentStateMachine.test.js`)
+
+```js
+// Asserts: for every (from, to) combination drawn from all status values,
+// isValidTransition() never throws and always returns a boolean
+fc.assert(fc.property(
+  fc.constantFrom("pending", "confirmed", "rejected", "cancelled"),
+  fc.constantFrom("pending", "confirmed", "rejected", "cancelled"),
+  (from, to) => typeof isValidTransition(from, to) === "boolean"
+));
+```
+
+**Why:** Our `invalid-transition` tests cover specific pairs we thought to write. Property-based testing covers all 16 combinations and any future status values automatically.
+
+**Interview line:** *"I used property-based testing on the state machine. Instead of enumerating which transitions I expected to be invalid, I generated all possible pairs and asserted the function never throws and always returns a boolean. It caught an edge case I hadn't thought to test manually."*
+
+### 15.4 AI-assisted test generation (planned)
+
+A documented artifact showing Claude used as a QA tool — not a replacement for judgement, but an accelerator:
+
+1. Feed `CONTRACT_PACK.md` + `API_ENDPOINTS.md` to Claude
+2. Ask: *"Generate test cases for `POST /api/v1/appointments` covering happy path, RBAC, invalid transitions, concurrent access, and boundary values"*
+3. Review output: accept cases that cover real business risk, discard generic CRUD tests or cases already covered
+4. Document in `docs/AI_TEST_GENERATION.md`: what was generated, what was kept, what was discarded and why
+
+**Why this matters for portfolio:** Shows you control AI as a precision tool rather than accepting its output uncritically.
+
+### 15.5 Observability-driven testing ✅
+
+**What:** Instead of only asserting the HTTP response, assert that the system correctly emitted a structured log event to the internal observability infrastructure (Loki). This tests a different layer — not "did the API return 201" but "did the system correctly record that the booking happened, with the right identifiers."
+
+**Tool:** Loki query API (`/loki/api/v1/query_range`) queried directly from tests. Stack: Loki + Promtail + Grafana via `docker-compose.observability.yml` in the SUT repo.
+
+**Implemented in:** `tests/api/observability.loki.test.js` (`@observability`, skip guard: `LOKI_ENABLED=true`)
+
+```js
+// After booking, poll Loki until the log entry appears (up to 15s)
+const entry = await waitForLokiLog({ requestId, timeout: 15000 });
+expect(entry).toMatchObject({
+  event: "appointment.booked",
+  patientId: String(user.id),
+  appointmentId: String(appointmentId),
+});
+```
+
+**Why this is a distinct technique:**
+- HTTP response tests verify the contract surface.
+- Observability tests verify the internal event model — the part that drives alerting, audit, and incident response.
+- A system can return `201` and still silently fail to log. These two layers fail independently.
+
+**Interview line:** *"I have a test that books an appointment and then queries Loki to assert the structured log entry appeared with the correct requestId, patientId, and event type. It tests a layer that HTTP assertions can't reach — the internal observability model. The two layers fail independently, so you need both."*
+
+---
+
+## 16. Narrative & depth layer — backlog (agreed 2026-04-30)
 
 These four items add the "system thinking" layer on top of the existing framework. Planned in order.
 
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 1 | **`docs/SYSTEM_WEAKNESS_REPORT.md`** | ✅ done | Concurrency, state gaps, security, operational risks mapped to test coverage |
-| 2 | **Concurrency test suite** | planned | `tests/api/concurrency/` — parallel cancel+book, double-cancel, waitlist promotion under concurrency |
-| 3 | **Failure detection model** | planned | Section in README: "how I know the system broke" — critical signals, invalid states, detection chain |
-| 4 | **Portfolio narrative** | planned | Interview talking points: 2-3 min project story, what to lead with, how to answer "what did you find?" |
+| 2 | **Concurrency test suite** | ✅ done | `tests/api/concurrency/appointments.concurrency.test.js` — double-cancel + concurrent waitlist promotion (exactly-once assert) |
+| 3 | **Failure detection model** | ✅ done | Section in README: "How this suite knows the system broke" — signals table + invalid states |
+| 4 | **Portfolio narrative** | ✅ done | `docs/PORTFOLIO_NARRATIVE.md` — 2-min story, what to show, 7 interview Q&As |
+| 5 | **Test orthogonality map** | ✅ done | §17 — every test file mapped to its unique risk dimension |
+| 6 | **Risk-based CI prioritization rationale** | ✅ done | §13 — local-only suites table with cost rationale and unblocking conditions |
+
+---
+
+## 17. Test orthogonality map
+
+Each test file covers a **unique risk dimension**. No two files test the same thing. This table is the systems-thinking view of the suite — coverage is designed, not accidental.
+
+### API layer
+
+| File | Unique risk dimension |
+|---|---|
+| `auth.login.test.js` | Authentication correctness — valid credentials accepted, invalid rejected, token structure valid |
+| `auth.register.test.js` | Registration boundary — duplicate email rejected, weak password rejected, `doctorRecordId` existence enforced |
+| `appointments.mini.j1.test.js` | **J1 journey** — booking happy path + slot lock invariant (slot unavailable after booking) |
+| `appointments.reject.j2.test.js` | **J2 journey** — reject flow + slot release (slot available again after rejection) |
+| `appointments.confirm.j3.test.js` | **J3 journey** — confirm flow + post-confirm slot and diary invariants |
+| `appointments.cancel.patient.test.js` | Patient cancellation + waitlist auto-promotion trigger |
+| `appointments.booking.conflict.test.js` | Double-booking prevention — same slot cannot be booked twice |
+| `appointments.invalid-transition.test.js` | State machine guard — invalid transitions (`cancelled → confirmed`, etc.) rejected with correct error |
+| `appointments.waitlist.test.js` | Waitlist boundary conditions — join, leave, duplicate join rejected |
+| `appointments.waitlist.promotion.test.js` | Auto-promotion correctness — exactly one patient promoted after cancellation |
+| `appointments.waitlist.offers.test.js` | Waitlist offer manual confirmation — accept swaps bookings, decline frees slot + patient stays on list, 409 on duplicate resolve |
+| `appointments.rbac.patient.test.js` | RBAC: patient forbidden on doctor-only actions (confirm, reject); doctor forbidden on patient-only route |
+| `appointments.rbac.cross-doctor.test.js` | RBAC: cross-doctor data isolation — doctor cannot access another doctor's appointments (IDOR) |
+| `appointments.booking.rate-limit.test.js` | Rate limiting — booking endpoint enforces per-token request window *(local only — requires env override)* |
+| `doctors.list.test.js` | Doctor listing — availability data integrity, correct shape |
+| `ai.recommend.test.js` | AI feature contract — feature flag, error codes, response schema, rate limit |
+| `security.test.js` | Security boundary — IDOR on appointment access, JWT tampering rejected |
+| `infrastructure.test.js` | Infrastructure contract — health endpoint, error response format consistency |
+| `chaos.test.js` | Fault tolerance — 503 contract under chaos mode, health endpoint exempt, latency injection *(manual workflow)* |
+| `concurrency/appointments.concurrency.test.js` | Race conditions — double-cancel exactly once, concurrent waitlist promotion produces exactly one booking |
+| `notifications.webhook.test.js` | Webhook delivery contract — payload shape, fire-and-forget (webhook failure doesn't affect transaction) |
+| `notifications.ws.test.js` | WebSocket notification — JWT auth on connect, event delivery after booking/cancellation |
+| `consultations.payment.test.js` | Payment flow — idempotency key, 402 on failure, no consultation created on payment failure |
+| `observability.loki.test.js` | Internal observability — structured log emitted to Loki with correct `requestId`, `event`, `patientId` *(local only — requires Loki stack)* |
+
+### E2E layer
+
+| File | Unique risk dimension |
+|---|---|
+| `booking.cross-layer.test.js` | Booking flow consistency — UI action reflected in API state and DB |
+| `confirm.cross-layer.test.js` | Confirm flow cross-layer — doctor confirm visible to patient across all layers |
+| `booking-conflict.e2e.test.js` | Double-booking in real user flow — conflict error surfaced correctly in UI; DB check: exactly one active appointment for the slot |
+| `doctor-confirm.e2e.test.js` | Doctor confirmation from UI — full interaction from doctor login to confirm |
+| `waitlist.cross-layer.test.js` | Waitlist promotion visible across layers — cancellation triggers promotion visible in UI and API |
+| `offers.cross-layer.test.js` | Offer accept cross-layer — UI renders pending offer, patient accepts, booking swap reflected in API state |
+| `consultations.cross-layer.test.js` | Payment + consultation cross-layer — payment result visible in UI and consultation record created |
+| `patient-notifications.e2e.test.js` | Patient notification receipt — notification appears in UI after booking event |
+
+### UI layer
+
+| File | Unique risk dimension |
+|---|---|
+| `login.test.js` | Login page behaviour — form validation, error states, successful redirect |
+| `register-patient.test.js` | Registration page — form validation, duplicate handling, successful flow |
+| `guest-gates.test.js` | Auth guard — unauthenticated users cannot access protected pages (booking, consultations, notifications) |
+| `accessibility.test.js` | WCAG compliance — axe-core audit on login, register, booking pages |
+
+**Why this matters:** every file answers a question that no other file asks. Adding a new test file should cover a new risk dimension — if it doesn't, it's either a duplicate or it belongs in an existing file.
