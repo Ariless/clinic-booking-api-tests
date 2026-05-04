@@ -9,6 +9,12 @@ class BaseClient {
     return { status: response.status(), body };
   }
 
+  async parseResponseFull(response) {
+    const text = await response.text();
+    const body = text ? JSON.parse(text) : null;
+    return { status: response.status(), body, response };
+  }
+
   async postJson(path, body, extraHeaders = {}) {
     return this.request.post(path, {
       data: JSON.stringify(body),

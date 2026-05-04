@@ -10,6 +10,14 @@ class AppointmentsClient extends BaseClient {
         return this.parseResponse(response);
     }
 
+    async createAppointmentFull(slotId, opts = {}) {
+        const response = await this.request.post(endpoints.appointments, {
+            data: JSON.stringify({ slotId }),
+            headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+        });
+        return this.parseResponseFull(response);
+    }
+
     async getAppointment(appointmentId, opts = {}) {
         const response = await this.request.get(endpoints.appointment(appointmentId), {
             headers: { ...(opts.headers || {}) },
@@ -74,16 +82,33 @@ class AppointmentsClient extends BaseClient {
         return this.parseResponse(response);
     }
 
-async leaveWaitlist(waitlistId, opts = {}) {
-    const response = await this.request.delete(endpoints.appointmentsWaitlistDelete(waitlistId), {
-        headers: { ...(opts.headers || {}) },
-    });
-    return this.parseResponse(response);
-}
+    async leaveWaitlist(waitlistId, opts = {}) {
+        const response = await this.request.delete(endpoints.appointmentsWaitlistDelete(waitlistId), {
+            headers: { ...(opts.headers || {}) },
+        });
+        return this.parseResponse(response);
+    }
 
+    async getWaitlistOffers(opts = {}) {
+        const response = await this.request.get(endpoints.appointmentsWaitlistOffers, {
+            headers: { ...(opts.headers || {}) },
+        });
+        return this.parseResponse(response);
+    }
 
+    async acceptOffer(offerId, opts = {}) {
+        const response = await this.request.post(endpoints.appointmentsWaitlistOfferAccept(offerId), {
+            headers: { ...(opts.headers || {}) },
+        });
+        return this.parseResponse(response);
+    }
 
-
+    async declineOffer(offerId, opts = {}) {
+        const response = await this.request.post(endpoints.appointmentsWaitlistOfferDecline(offerId), {
+            headers: { ...(opts.headers || {}) },
+        });
+        return this.parseResponse(response);
+    }
 }
 
 module.exports = { AppointmentsClient };

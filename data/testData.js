@@ -41,12 +41,19 @@ const endpoints = {
   appointmentsWaitlistJoin: `${API_V1}/appointments/waitlist`,
   appointmentsWaitlistMe: `${API_V1}/appointments/waitlist/me`,
   appointmentsWaitlistDelete: (waitlistId) => `${API_V1}/appointments/waitlist/${waitlistId}`,
+  appointmentsWaitlistOffers: `${API_V1}/appointments/waitlist-offers`,
+  appointmentsWaitlistOfferAccept: (offerId) => `${API_V1}/appointments/waitlist-offers/${offerId}/accept`,
+  appointmentsWaitlistOfferDecline: (offerId) => `${API_V1}/appointments/waitlist-offers/${offerId}/decline`,
 
   appointment: (id) => `${API_V1}/appointments/${id}`,
   appointmentCancel: (id) => `${API_V1}/appointments/${id}/cancel`,
   appointmentConfirm: (id) => `${API_V1}/appointments/${id}/confirm`,
   appointmentReject: (id) => `${API_V1}/appointments/${id}/reject`,
   appointmentCancelAsDoctor: (id) => `${API_V1}/appointments/${id}/cancel-as-doctor`,
+
+  // --- consultations ---
+  consultations: `${API_V1}/consultations`,
+  consultationsMe: `${API_V1}/consultations/me`,
 
   // --- debug (только dev + флаг в SUT) ---
   debugSimulateConcurrentBooking: `${API_V1}/debug/simulate-concurrent-booking`,
