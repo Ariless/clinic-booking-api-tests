@@ -27,6 +27,12 @@ Each test owns its data (seed login or register + teardown). API calls use `requ
 | E1 | `booking.cross-layer.test.js` | Patient logs in via UI → selects specialty/doctor/slot → books → `GET /appointments/my` confirms `pending` | ✅ shipped |
 | E2 | `booking-conflict.e2e.test.js` | Book slot via API (patient A) → patient B tries to book same slot via UI → conflict error shown | ✅ shipped |
 | E3 | `confirm.cross-layer.test.js` | Book via API → doctor confirms via API → patient opens appointments UI → status shows `confirmed` | ✅ shipped |
+| E4 | `doctor-confirm.e2e.test.js` | Book via API → doctor logs in via UI → clicks Confirm → banner + API + DB verified | ✅ shipped |
+| E5 | `patient-notifications.e2e.test.js` | WS connected → doctor confirms via API → notification item appears in patient UI | ✅ shipped |
+| E6 | `consultations.cross-layer.test.js` | Patient books consultation via UI → API list + DB consultation + DB payment verified; skip: `PAYMENT_MODE=mock_success` | ✅ shipped |
+| E7 | `waitlist.cross-layer.test.js` | Join via API → UI shows entry → leave via UI → API + DB verify removal | ✅ shipped |
+| E8 | `offers.cross-layer.test.js` | API creates offer → UI shows "Earlier slot available" → patient clicks Accept → API + DB: slot swap verified | ✅ shipped |
+| E9 | `doctor-notifications.e2e.test.js` | Patient books/cancels via API → doctor's appointments page shows toast without page reload; also: WS connection verified via `data-qa-ws="connected"` | ✅ shipped |
 
 ---
 

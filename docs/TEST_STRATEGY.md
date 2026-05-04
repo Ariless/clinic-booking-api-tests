@@ -442,6 +442,15 @@ The recommendation endpoint is being upgraded from **rule-based** to **RAG (Retr
 
 **Why RAG over vanilla LLM call:** Without retrieval, Claude can hallucinate specialties not in our system. With retrieval, the prompt contains only specialties we actually have doctors for — the model is grounded to our context.
 
+**How retrieval scoring works (`retrieval.js`):**
+
+1. Patient symptoms are split into words: `"chest pain"` → `["chest", "pain"]`
+2. Each knowledge-base entry is scored by how many of its keywords match any symptom word — match is bidirectional: a word matches a keyword if either contains the other (`w.includes(kw) || kw.includes(w)`)
+3. Entries with score > 0 are sorted descending; top-K returned
+4. Top-1 result is used as the recommended specialty in mock mode
+
+Example: `"chest pain and palpitations"` → Cardiologist scores 3 (matches `chest`, `pain` via `back pain` partial, `palpitation`), all others score 0–1.
+
 **Test cases — no API key needed:**
 
 | Case | How |
@@ -470,7 +479,19 @@ ANTHROPIC_API_KEY=<key>
 AI_MOCK_RESPONSE=true   # skip real API call, return deterministic mock (for CI)
 ```
 
-**Blocked on:** Anthropic API key (`console.anthropic.com` — free tier available). Phase 1 SUT work (knowledge base + retrieval + mock mode) can start without it.
+**Phase 1 status (complete 2026-05-03):** knowledge base, retrieval, mock mode, and 3 RAG tests shipped. Run locally:
+
+```bash
+# 1. Start SUT in RAG mock mode
+AI_IMPLEMENTATION=rag AI_MOCK_RESPONSE=true node src/server.js
+
+# 2. Run tests (RAG tests will execute; in normal mode they skip)
+AI_IMPLEMENTATION=rag AI_MOCK_RESPONSE=true npx playwright test tests/api/ai.recommend.test.js
+```
+
+Normal `npm test` — RAG tests skip automatically, suite stays green.
+
+**Phase 2 blocked on:** Anthropic API key (`console.anthropic.com` — free tier available).
 
 **Interview line:** *"I upgraded the recommendation endpoint to RAG and wrote tests covering schema validation, context grounding — verifying the model only recommends specialties from our knowledge base, never hallucinates — prompt injection resilience, and graceful degradation when the LLM is unavailable. All RAG tests are isolated behind `@rag` and skip automatically without `ANTHROPIC_API_KEY`."*
 
@@ -605,7 +626,7 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `appointments.rbac.cross-doctor.test.js` | RBAC: cross-doctor data isolation — doctor cannot access another doctor's appointments (IDOR) |
 | `appointments.booking.rate-limit.test.js` | Rate limiting — booking endpoint enforces per-token request window *(local only — requires env override)* |
 | `doctors.list.test.js` | Doctor listing — availability data integrity, correct shape |
-| `ai.recommend.test.js` | AI feature contract — feature flag, error codes, response schema, rate limit |
+| `ai.recommend.test.js` | AI feature contract — feature flag, error codes, response schema, rate limit; RAG mode: `reasoning` field present, specialty-invariant (never hallucinates outside `ALLOWED_SPECIALTIES`), 422 on unrecognised symptoms *(RAG tests skip unless `AI_IMPLEMENTATION=rag AI_MOCK_RESPONSE=true`)* |
 | `security.test.js` | Security boundary — IDOR on appointment access, JWT tampering rejected |
 | `infrastructure.test.js` | Infrastructure contract — health endpoint, error response format consistency |
 | `chaos.test.js` | Fault tolerance — 503 contract under chaos mode, health endpoint exempt, latency injection *(manual workflow)* |
@@ -627,6 +648,7 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `offers.cross-layer.test.js` | Offer accept cross-layer — UI renders pending offer, patient accepts, booking swap reflected in API state |
 | `consultations.cross-layer.test.js` | Payment + consultation cross-layer — payment result visible in UI and consultation record created |
 | `patient-notifications.e2e.test.js` | Patient notification receipt — notification appears in UI after booking event |
+| `doctor-notifications.e2e.test.js` | Doctor real-time UI — booking/cancellation toast appears in doctor browser without page reload; also caught real SUT bug (`window.ClinicCore` undefined — WS never connected before fix) |
 
 ### UI layer
 
