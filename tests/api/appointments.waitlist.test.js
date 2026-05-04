@@ -2,6 +2,7 @@ const { test, expect } = require("../../fixtures");
 const { AppointmentsClient } = require("../../api/AppointmentsClient");
 const { seedPatient } = require("../../data/seedAccounts");
 const {AuthClient} = require("../../api/AuthClient");
+const { dbClient } = require("../../utils/dbClient");
 
 test("POST/GET/DELETE /api/v1/appointments/waitlist — join, view, leave happy path @api", async ({ request, user, slot }) => {
     const appointments = new AppointmentsClient(request);
@@ -15,9 +16,16 @@ test("POST/GET/DELETE /api/v1/appointments/waitlist — join, view, leave happy 
     expect(listStatus).toBe(200);
     expect(listBody).toHaveLength(1);
 
+    const dbAfterJoin = dbClient.getWaitlistByPatient(user.user.id);
+    expect(dbAfterJoin).toHaveLength(1);
+    expect(dbAfterJoin[0].doctorId, "DB: waitlist entry must reference correct doctor").toBe(slot.doctor.doctorRecordId);
+
     const {status: leaveStatus, body: leaveBody} = await appointments.leaveWaitlist(joinBody.id, patientAuth)
     expect(leaveStatus).toBe(200);
     expect(leaveBody.removed).toBe(true);
+
+    const dbAfterLeave = dbClient.getWaitlistByPatient(user.user.id);
+    expect(dbAfterLeave, "DB: waitlist entry must be removed after leave").toHaveLength(0);
 })
 
 test("POST /api/v1/appointments/waitlist — 409 WAITLIST_DUPLICATE on duplicate join @api", async ({ request, user, slot }) => {
@@ -32,6 +40,9 @@ test("POST /api/v1/appointments/waitlist — 409 WAITLIST_DUPLICATE on duplicate
         const { status: conflictStatus, body: conflictBody } = await appointments.joinWaitlist(slot.doctor.doctorRecordId, patientAuth);
         expect(conflictStatus).toBe(409);
         expect(conflictBody.errorCode).toBe("WAITLIST_DUPLICATE");
+
+        const dbRows = dbClient.getWaitlistByPatient(user.user.id);
+        expect(dbRows, "DB: duplicate join must not create a second row").toHaveLength(1);
     } finally {
         await appointments.leaveWaitlist(joinBody.id, patientAuth);
     }

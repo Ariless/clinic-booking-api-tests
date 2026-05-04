@@ -1,5 +1,6 @@
 const { test, expect } = require("../../fixtures/twoUsersFixture");
 const { AppointmentsClient } = require("../../api/AppointmentsClient");
+const { dbClient } = require("../../utils/dbClient");
 
 async function assertPromoted(appointments, auth, slotId, doctorId) {
     const { status: listStatus, body: listBody } = await appointments.listMy(auth);
@@ -29,6 +30,12 @@ test("PATCH /api/v1/appointments/:id/cancel — waitlist patient auto-promoted t
     expect(cancelStatus).toBe(200);
 
     await assertPromoted(appointments, patient2Auth, slotBody.id, slot.doctor.doctorRecordId);
+
+    const dbWaitlist = dbClient.getWaitlistByPatient(user2.user.id);
+    expect(dbWaitlist, "DB: waitlist entry must be removed after promotion").toHaveLength(0);
+    const dbAppts = dbClient.getActiveAppointmentsForSlot(slotBody.id);
+    expect(dbAppts).toHaveLength(1);
+    expect(dbAppts[0].patientId, "DB: promoted appointment must belong to patient2").toBe(user2.user.id);
 });
 
 test("PATCH /api/v1/appointments/:id/reject — waitlist patient auto-promoted to freed slot @api", async ({ request, user, user2, slot }) => {
@@ -48,4 +55,10 @@ test("PATCH /api/v1/appointments/:id/reject — waitlist patient auto-promoted t
     expect(rejectStatus).toBe(200);
 
     await assertPromoted(appointments, patient2Auth, slotBody.id, slot.doctor.doctorRecordId);
+
+    const dbWaitlist = dbClient.getWaitlistByPatient(user2.user.id);
+    expect(dbWaitlist, "DB: waitlist entry must be removed after promotion").toHaveLength(0);
+    const dbAppts = dbClient.getActiveAppointmentsForSlot(slotBody.id);
+    expect(dbAppts).toHaveLength(1);
+    expect(dbAppts[0].patientId, "DB: promoted appointment must belong to patient2").toBe(user2.user.id);
 });
