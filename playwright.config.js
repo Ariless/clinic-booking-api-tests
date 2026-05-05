@@ -3,6 +3,7 @@ require("dotenv").config();
 
 // Chromium only — avoids frozen WebKit on mac14-arm64 (Playwright warning).
 // Install browsers: npx playwright install chromium
+// Mobile project uses Pixel 7 (Android Chrome) — no WebKit dependency.
 module.exports = defineConfig({
   testDir: "./tests",
   fullyParallel: false,
@@ -28,6 +29,11 @@ module.exports = defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "mobile-chrome",
+      use: { ...devices["Pixel 7"] },
+      testMatch: ["**/tests/ui/**/*.test.js"],
     },
   ],
 });
