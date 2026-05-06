@@ -78,7 +78,6 @@ test("GET /api/v1/doctors — mix of 200 and 503 with fixed seed and FAIL_PROBAB
         !CHAOS_ENABLED || CHAOS_SEED === null,
         "Restart server with CHAOS_ENABLED=true CHAOS_SEED=abc CHAOS_FAIL_PROBABILITY=0.5, then: CHAOS_ENABLED=true CHAOS_SEED=abc CHAOS_FAIL_PROBABILITY=0.5 npx playwright test chaos.test.js"
     );
-    // TODO: send N sequential requests (e.g. 20) to /api/v1/doctors
     const statuses = [];
     for (let i = 0; i < 20; i++) {
         const response = await request.get(endpoints.doctors);

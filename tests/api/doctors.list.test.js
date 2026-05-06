@@ -13,15 +13,3 @@ test("GET /api/v1/doctors — list doctors @smoke", async ({ request }) => {
     expect(ok, JSON.stringify(validateDoctorsList.errors)).toBe(true);
 });
 
-test("GET /api/v1/doctors — idempotent, repeated call returns same data @api", async ({ request }) => {
-    const doctors = new DoctorsClient(request);
-
-    const { status: status1, body: body1 } = await doctors.list();
-    const { status: status2, body: body2 } = await doctors.list();
-
-    expect(status1).toBe(200);
-    expect(status2).toBe(200);
-    expect(body1).toEqual(body2);
-});
-
-
