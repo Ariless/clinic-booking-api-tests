@@ -9,3 +9,4 @@ allure-report/
 reports/
 .DS_Store
 .idea/
+data/clinic.dbdata/clinic.db
