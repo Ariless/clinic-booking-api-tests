@@ -10,6 +10,7 @@
     "test:ui": "npx playwright test tests/ui --pass-with-no-tests",
     "test:e2e": "npx playwright test tests/e2e --pass-with-no-tests",
     "test:browser": "npx playwright test tests/e2e tests/ui --pass-with-no-tests",
+    "test:unit": "npx playwright test tests/unit",
     "test:chaos": "npx playwright test --grep @chaos",
     "report": "npx allure generate allure-results -o allure-report --clean && npx allure open allure-report",
     "test:count": "npx playwright test --list 2>/dev/null | grep -E '\\[chromium\\]' | wc -l | tr -d ' '"
