@@ -1,6 +1,7 @@
 const { test, expect } = require("../../fixtures");
 const { AppointmentsClient } = require("../../api/AppointmentsClient");
 const { DoctorsClient } = require("../../api/DoctorsClient");
+const { dbClient } = require("../../utils/dbClient");
 
 test("PATCH /api/v1/appointments/:id/confirm — 200 pending → confirmed @api", async ({ request, user, slot }) => {
     const { slot: slotBody, doctorToken, doctor } = slot;
@@ -27,4 +28,9 @@ test("PATCH /api/v1/appointments/:id/confirm — 200 pending → confirmed @api"
     expect(slotsStatus).toBe(200);
     const listedSlot = slotsBody.find((s) => s.id === slotBody.id);
     expect(listedSlot, "slot is no longer available after confirm").toBeFalsy();
+
+    const dbAppt = dbClient.getAppointmentById(bookBody.id);
+    expect(dbAppt.status, "DB: appointment status must be confirmed").toBe("confirmed");
+    const dbSlot = dbClient.getSlotById(slotBody.id);
+    expect(dbSlot.isAvailable, "DB: slot must stay unavailable after confirm").toBe(0);
 });

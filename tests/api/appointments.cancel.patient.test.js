@@ -2,6 +2,7 @@ const { test, expect } = require("../../fixtures");
 const { AppointmentsClient } = require("../../api/AppointmentsClient");
 const { DoctorsClient } = require("../../api/DoctorsClient");
 const { assertSlotAvailable } = require("../../utils/slotAssertion");
+const { dbClient } = require("../../utils/dbClient");
 
 test("PATCH /api/v1/appointments/:id/cancel — 200 patient cancels own appointment, slot freed @api", async ({ request, user, slot }) => {
     const { slot: slotBody, doctor, seedSlotStart, seedSlotEnd } = slot;
@@ -21,4 +22,9 @@ test("PATCH /api/v1/appointments/:id/cancel — 200 patient cancels own appointm
     expect(slotsStatus).toBe(200);
     const listedSlot = slotsBody.find((s) => s.id === slotBody.id);
     assertSlotAvailable(listedSlot, doctor, { startTime: seedSlotStart, endTime: seedSlotEnd });
+
+    const dbSlot = dbClient.getSlotById(slotBody.id);
+    expect(dbSlot.isAvailable, "DB: slot must be freed after cancel").toBe(1);
+    const dbAppt = dbClient.getAppointmentById(bookBody.id);
+    expect(dbAppt.status, "DB: appointment status must be cancelled").toBe("cancelled");
 });

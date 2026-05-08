@@ -2,6 +2,7 @@ const { test, expect } = require("../../fixtures");
 const { AppointmentsClient } = require("../../api/AppointmentsClient");
 const { assertSchema } = require("../../utils/schemaValidator");
 const { validateAppointment } = require("../../data/schemas/appointmentSchemas");
+const { dbClient } = require("../../utils/dbClient");
 
 test("POST /api/v1/appointments — 201 patient books slot, GET /my shows pending @smoke", async ({ request, user, slot }) => {
     const { slot: slotBody } = slot;
@@ -19,4 +20,10 @@ test("POST /api/v1/appointments — 201 patient books slot, GET /my shows pendin
     const row = myBody.find((a) => a.id === bookBody.id);
     expect(row, "appointment should appear in GET /appointments/my").toBeTruthy();
     expect(row.status).toBe("pending");
+
+    const dbSlot = dbClient.getSlotById(slotBody.id);
+    expect(dbSlot.isAvailable, "DB: slot must be unavailable after booking").toBe(0);
+    const dbAppt = dbClient.getAppointmentById(bookBody.id);
+    expect(dbAppt.status, "DB: appointment status must be pending").toBe("pending");
+    expect(dbAppt.patientId, "DB: appointment must belong to the patient").toBe(bookBody.patientId);
 });
