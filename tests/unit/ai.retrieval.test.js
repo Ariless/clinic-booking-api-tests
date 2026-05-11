@@ -1,7 +1,11 @@
+const path = require("path");
 const { test, expect } = require("@playwright/test");
-const { retrieve } = require("../../../sut/src/services/retrieval");
-const { buildPrompt } = require("../../../sut/src/services/aiRecommendation");
-const specialtyKnowledge = require("../../../sut/src/data/specialtyKnowledge.json");
+const SUT_ROOT = process.env.SUT_ROOT
+  ? path.resolve(process.env.SUT_ROOT)
+  : path.resolve(__dirname, "../../../sut");
+const { retrieve } = require(path.join(SUT_ROOT, "src/services/retrieval"));
+const { buildPrompt } = require(path.join(SUT_ROOT, "src/services/aiRecommendation"));
+const specialtyKnowledge = require(path.join(SUT_ROOT, "src/data/specialtyKnowledge.json"));
 
 test.describe("RAG pipeline — retrieval → prompt unit tests", () => {
     test("retrieve: chest pain symptoms → Cardiologist ranked first @unit", () => {
