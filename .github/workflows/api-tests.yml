@@ -16,6 +16,7 @@ env:
   DB_PATH: sut/data/clinic.db
   AI_MOCK_RESPONSE: "true"
   SUT_ROOT: sut
+  RATE_LIMIT_REGISTER_MAX: "1000"
 
 # ── Smoke ────────────────────────────────────────────────────────────────────
 # Fast gate on every push / PR. API and E2E jobs start only if this passes.

@@ -15,8 +15,7 @@ let slotSeq = 0;
 /** New window each call — avoids SLOT_OVERLAP when several tests hit the same doctor in one Playwright run. */
 function nextSeedSlotWindow() {
     slotSeq += 1;
-    const slotStartMs =
-        Date.now() + 86400000 + Math.floor(Math.random() * 365 * 86400000) + slotSeq * 2 * 60 * 60 * 1000;
+    const slotStartMs = Date.now() + 86400000 + slotSeq * 2 * 60 * 60 * 1000;
     return {
         seedSlotStart: new Date(slotStartMs).toISOString(),
         seedSlotEnd: new Date(slotStartMs + 60 * 60 * 1000).toISOString(),
