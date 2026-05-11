@@ -13,17 +13,23 @@
     "test:unit": "npx playwright test tests/unit",
     "test:chaos": "npx playwright test --grep @chaos",
     "report": "npx allure generate allure-results -o allure-report --clean && npx allure open allure-report",
-    "test:count": "npx playwright test --list 2>/dev/null | grep -E '\\[chromium\\]' | wc -l | tr -d ' '"
+    "test:pact": "npx playwright test tests/api/pact",
+    "test:visual": "npx playwright test tests/ui/visual.test.js",
+    "test:visual:update": "npx playwright test tests/ui/visual.test.js --update-snapshots",
+    "test:count": "npx playwright test --list 2>/dev/null | grep -E '\\[chromium\\]' | wc -l | tr -d ' '",
+    "ai:gap-analysis": "node scripts/ai-gap-analysis.js"
   },
   "private": true,
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
+    "@pact-foundation/pact": "^16.4.0",
     "@playwright/test": "^1.59.1",
     "allure-commandline": "^2.38.1",
     "allure-playwright": "^3.7.1",
     "better-sqlite3": "^12.9.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.1",
     "ajv": "^8.18.0",
     "dotenv": "^17.4.2",
     "ws": "^8.20.0"
