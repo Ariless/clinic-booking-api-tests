@@ -1,6 +1,11 @@
 const { test: base } = require("@playwright/test");
 const { generateUser } = require("../utils/userUtils");
 const { UserClient } = require("../api/UserClient");
+const { attachBugReport } = require("../utils/aiBugReporter");
+
+base.afterEach(async ({}, testInfo) => {
+    await attachBugReport(testInfo);
+});
 
 const test = base.extend({
     // Setup: creates a unique user via API before the test.
