@@ -184,7 +184,6 @@ jobs:
     needs: [smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true
     permissions:
       contents: read
 
@@ -211,7 +210,12 @@ jobs:
         run: npm ci && npx playwright install chromium --with-deps
 
       - name: Visual tests (@visual)
-        run: npm run test:visual
+        run: |
+          if ls tests/ui/visual.test.js-snapshots/*-linux.png 2>/dev/null | grep -q .; then
+            npm run test:visual
+          else
+            echo "No linux baselines — skipping. Run 'Update visual snapshots' workflow first."
+          fi
 
       - name: Upload Playwright report
         if: always()
