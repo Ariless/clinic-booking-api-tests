@@ -153,8 +153,8 @@ jobs:
       - name: Install Playwright
         run: npm ci && npx playwright install chromium --with-deps
 
-      - name: E2E & UI tests
-        run: npm run test:browser
+      - name: E2E & UI tests (visual excluded — run update-visual-snapshots first)
+        run: npx playwright test tests/e2e tests/ui --pass-with-no-tests --grep-invert @visual
 
       - name: Upload allure results
         if: always()
@@ -176,12 +176,61 @@ jobs:
         if: always()
         run: docker compose -f sut/docker-compose.test.yml down
 
+# ── Visual regression ────────────────────────────────────────────────────────
+# Runs @visual tests separately. continue-on-error until linux baselines exist —
+# run the "Update visual snapshots" workflow once, then remove continue-on-error.
+  visual:
+    name: Visual regression
+    needs: [smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
+          path: sut
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Start SUT
+        run: |
+          mkdir -p sut/data
+          docker compose -f sut/docker-compose.test.yml up -d --wait
+
+      - name: Install Playwright
+        run: npm ci && npx playwright install chromium --with-deps
+
+      - name: Visual tests (@visual)
+        run: npm run test:visual
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-visual
+          path: playwright-report/
+          if-no-files-found: ignore
+
+      - name: Stop SUT
+        if: always()
+        run: docker compose -f sut/docker-compose.test.yml down
+
 # ── Allure report ─────────────────────────────────────────────────────────────
 # Merges allure-results from all three jobs and deploys to GitHub Pages.
 # Runs even if api or e2e failed so the report always reflects the latest run.
   allure-report:
     name: Allure report
-    needs: [api, e2e]
+    needs: [api, e2e, visual]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 10

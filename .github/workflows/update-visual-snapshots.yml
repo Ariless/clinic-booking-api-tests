@@ -1,0 +1,63 @@
+# Generates Playwright visual regression baselines on linux and commits them back.
+# Run manually via GitHub Actions → "Update visual snapshots" → Run workflow.
+# When to use: after adding new visual tests, or if CI reports "snapshot missing" failures.
+name: Update visual snapshots
+
+on:
+  workflow_dispatch:
+
+env:
+  BASE_URL: http://127.0.0.1:3000
+  SUT_ROOT: sut
+
+jobs:
+  update-snapshots:
+    name: Update linux baselines
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the commit push works cleanly.
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
+          path: sut
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Start SUT
+        run: |
+          mkdir -p sut/data
+          docker compose -f sut/docker-compose.test.yml up -d --wait
+
+      - name: Install Playwright
+        run: npm ci && npx playwright install chromium --with-deps
+
+      - name: Generate linux baselines
+        run: npx playwright test tests/ui/visual.test.js --update-snapshots
+
+      - name: Commit updated snapshots
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add tests/ui/visual.test.js-snapshots/
+          if git diff --cached --quiet; then
+            echo "No snapshot changes — baselines already up to date."
+          else
+            git commit -m "chore: update linux visual regression baselines [skip ci]"
+            git push
+          fi
+
+      - name: Stop SUT
+        if: always()
+        run: docker compose -f sut/docker-compose.test.yml down
