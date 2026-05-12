@@ -25,11 +25,14 @@ stateDiagram-v2
 
     confirmed --> cancelled : PATCH /cancel (patient or doctor)
 
+    pending   --> pending   : PATCH /reschedule (patient) — new slot, same doctor
+    confirmed --> pending   : PATCH /reschedule (patient) — new slot, same doctor; doctor must re-confirm
+
     cancelled --> [*]
     rejected  --> [*]
 ```
 
-**Invalid transitions → `422 INVALID_TRANSITION`:** confirm/reject from non-pending; cancel from cancelled or rejected.
+**Full rules** (allowed/disallowed transitions, reschedule constraints, RBAC, error codes): **`BUSINESS_RULES.md`** §3, §7, §9.
 
 ---
 
@@ -76,6 +79,7 @@ Prove **high-impact failures** early, not maximize endpoint coverage:
 | **`@ui`** | Pure UI state checks — no API assertion; headed Chromium | PR or nightly alongside `@api` |
 | **`@e2e`** | Cross-layer journeys — UI action + API assertion (or vice-versa); `workers: 1` | PR or nightly; see **`E2E_TEST_PLAN.md`** |
 | **`@chaos`** | Chaos mode feature verification — requires a **chaos-enabled server** (see §12); never runs in normal smoke/api jobs | Separate CI job or local manual run |
+| **`@unit`** | Pure unit tests — no HTTP, no SUT, no browser; test SUT modules in isolation (retrieval scoring, prompt construction) | Always — no env setup needed |
 
 Filter examples:
 
@@ -312,9 +316,68 @@ Not every suite belongs in CI. The decision is explicit: signal value weighed ag
 
 **Why this matters:** running these in the default CI job would produce flaky failures caused by missing infrastructure, not product defects — exactly the failure-classification problem the framework is designed to avoid.
 
+### SUT lifecycle — Docker Compose (changed 2026-05-09)
+
+**Before:** each CI job started the SUT with a shell background process:
+
+```yaml
+- name: Install & seed SUT
+  working-directory: sut
+  run: npm ci && npm run db:seed
+
+- name: Start SUT
+  working-directory: sut
+  run: |
+    npm start > /tmp/sut.log 2>&1 &
+    echo $! > /tmp/sut.pid
+    for i in $(seq 1 45); do
+      if curl -sf "$BASE_URL/health" > /dev/null; then echo "SUT ready"; exit 0; fi
+      sleep 1
+    done
+    echo "=== SUT failed to start ===" && cat /tmp/sut.log && exit 1
+
+- name: Stop SUT
+  if: always()
+  run: |
+    [ -f /tmp/sut.pid ] && kill "$(cat /tmp/sut.pid)" 2>/dev/null || true
+```
+
+Rate limits were also overridden via `env:` in the workflow (global `RATE_LIMIT_*` vars).
+
+**After:** each CI job uses Docker Compose:
+
+```yaml
+- name: Start SUT
+  run: |
+    mkdir -p sut/data
+    docker compose -f sut/docker-compose.test.yml up -d --wait
+
+- name: Stop SUT
+  if: always()
+  run: docker compose -f sut/docker-compose.test.yml down
+```
+
+Rate limits, `AI_MOCK_RESPONSE`, `CHAOS_ENABLED`, and all SUT env vars now live in `sut/docker-compose.test.yml`.
+
+**Why:**
+- `--wait` blocks until the healthcheck passes — no manual curl loop needed
+- The image is the same artifact run locally and in CI: "works on my machine" and "works in CI" become the same statement
+- `docker compose down` always removes the container, even if tests crash — no orphan processes
+- SUT config is in one file (`docker-compose.test.yml`) rather than scattered between the workflow and `.env`
+
+**Constraint:** `dbClient.js` reads SQLite directly from the filesystem (not via API). The container uses a bind mount `./data:/app/data` so the test runner can still access the DB file at `sut/data/clinic.db` from outside the container.
+
+**Note for local runs:** same command as CI:
+```bash
+mkdir -p sut/data
+docker compose -f sut/docker-compose.test.yml up -d --wait
+BASE_URL=http://localhost:3000 npx playwright test
+docker compose -f sut/docker-compose.test.yml down
+```
+
 ### Interview line
 
-"Smoke is the gate — if it fails, nothing downstream runs. API and E2E start in parallel after smoke passes. Chaos is a separate manual workflow that starts the SUT with fault injection before running `@chaos` tests. Allure always merges results from all jobs and deploys to Pages even if a job fails. Three suites are intentionally local-only: chaos needs a fault-injected SUT, observability needs a Loki stack, and rate-limit tests need an env override to avoid false 429s in parallel CI runs. Each has an explicit unblocking condition — the exclusion is a cost decision, not a gap."
+"Smoke is the gate — if it fails, nothing downstream runs. API and E2E start in parallel after smoke passes. The SUT runs as a Docker container in every CI job — same image locally and in CI, no curl loop, no orphan processes. `docker compose --wait` blocks until the healthcheck passes. Chaos is a separate manual workflow that starts the SUT with fault injection before running `@chaos` tests. Allure always merges results from all jobs and deploys to Pages even if a job fails. Three suites are intentionally local-only: chaos needs a fault-injected SUT, observability needs a Loki stack, and rate-limit tests need an env override to avoid false 429s in parallel CI runs. Each has an explicit unblocking condition — the exclusion is a cost decision, not a gap."
 
 ---
 
@@ -330,11 +393,15 @@ Not penetration testing — boundary assertions that prove the API rejects unaut
 
 | Case | What | Assertion |
 | --- | --- | --- |
-| IDOR — patient reads another patient's appointment | `GET /appointments/:otherId` with own JWT | `403` or `404` |
+| IDOR — patient reads another patient's appointment | `GET /appointments/:otherId` with own JWT | `403` |
 | IDOR — patient cancels another patient's appointment | `PATCH /appointments/:otherId/cancel` with own JWT | `403` |
-| SQL injection in register email | `email: "' OR '1'='1"` | `400` — not `500` or `200` |
+| BOLA — patient deletes another patient's waitlist entry | `DELETE /appointments/waitlist/:otherId` with own JWT | `403 FORBIDDEN` |
+| BOLA — patient accepts another patient's waitlist offer | `POST /appointments/waitlist-offers/:otherId/accept` with own JWT | `403 FORBIDDEN` |
+| BOLA — patient declines another patient's waitlist offer | `POST /appointments/waitlist-offers/:otherId/decline` with own JWT | `403 FORBIDDEN` |
 | JWT tampered — modified payload | altered token on any protected route | `401` |
 | Missing auth header | any `/api/v1` protected route with no `Authorization` | `401` |
+
+**BOLA (Broken Object Level Authorization)** — OWASP API Top 10 №1. Same class as IDOR but API-specific: endpoint receives an object ID and must verify the caller owns that object. Waitlist offers are particularly sensitive — accepting one triggers slot reassignment and appointment cancellation.
 
 ### 14.2 Accessibility testing (`@a11y`)
 
@@ -433,12 +500,11 @@ k6 run --env BASE_URL=http://localhost:3000 k6/booking-flow.js
 
 ### 14.5 AI testing strategy — RAG (`@ai`, `@rag`)
 
-The recommendation endpoint is being upgraded from **rule-based** to **RAG (Retrieval-Augmented Generation)**:
+The recommendation endpoint uses **RAG (Retrieval-Augmented Generation)**:
 
 1. **Knowledge base** — `src/data/specialtyKnowledge.json`: specialty → symptom descriptions
 2. **Retrieval layer** — `src/services/retrieval.js`: keyword overlap scoring; returns top-K specialties for given symptoms
 3. **Generation** — Claude API called with retrieved context injected into prompt; constrained to respond with `{ "specialty": "<from list>", "reasoning": "<one sentence>" }`
-4. **Mode switch** — `AI_IMPLEMENTATION=rule_based|rag` env var; existing tests always use `rule_based`, RAG tests tagged `@rag`
 
 **Why RAG over vanilla LLM call:** Without retrieval, Claude can hallucinate specialties not in our system. With retrieval, the prompt contains only specialties we actually have doctors for — the model is grounded to our context.
 
@@ -460,12 +526,23 @@ Example: `"chest pain and palpitations"` → Cardiologist scores 3 (matches `che
 | `429` rate limit | `@ai` — already works |
 | Full route with mock response (`AI_MOCK_RESPONSE=true`) | `@ai` — SUT returns deterministic JSON, no API call |
 
+**Unit tests — no SUT, no API key (`@unit`, `tests/unit/ai.retrieval.test.js`):**
+
+| Case | What it verifies |
+|---|---|
+| `retrieve("chest pain...")` → Cardiologist ranked first | Retrieval scoring correct for cardiac symptoms |
+| `retrieve("skin rash...")` → Dermatologist ranked first | Retrieval scoring correct for skin symptoms |
+| `retrieve("xyzzy gibberish")` → empty result | Unknown symptoms produce no match |
+| `buildPrompt(symptoms, retrieved)` contains retrieved specialty + description | Retrieved context actually reaches the Claude prompt |
+
 **Test cases — `ANTHROPIC_API_KEY` required (tagged `@rag`, skip guard):**
 
 | Case | What it verifies |
 |---|---|
 | `200` response always has `{ specialty, reasoning }` | Schema contract — non-determinism handled |
 | `specialty` is always one of our knowledge-base entries | Context grounding — model doesn't hallucinate |
+| LLM judge: `reasoning` is semantically valid for the specialty | Second Claude evaluates if reasoning logically justifies the recommendation |
+| RAG completeness: retrieved specialty names appear in `reasoning` | Calls `retrieve()` locally, counts how many retrieved specialties are mentioned in response; asserts recommended specialty present + coverage ≥ 50% |
 | Prompt injection in symptoms (`"Ignore instructions..."`) → no system compromise | AI security boundary |
 | Wrong API key / Claude unreachable → `503` graceful error | Degradation path |
 | Claude returns malformed JSON → `422 UNKNOWN_SPECIALTY` | Parse failure handled |
@@ -474,26 +551,25 @@ Example: `"chest pain and palpitations"` → Cardiologist scores 3 (matches `che
 **Env vars:**
 ```
 ENABLE_AI_RECOMMENDATION=true
-AI_IMPLEMENTATION=rag
 ANTHROPIC_API_KEY=<key>
 AI_MOCK_RESPONSE=true   # skip real API call, return deterministic mock (for CI)
 ```
 
-**Phase 1 status (complete 2026-05-03):** knowledge base, retrieval, mock mode, and 3 RAG tests shipped. Run locally:
+**Run locally:**
 
 ```bash
-# 1. Start SUT in RAG mock mode
-AI_IMPLEMENTATION=rag AI_MOCK_RESPONSE=true node src/server.js
+# Mock mode (no API cost)
+AI_MOCK_RESPONSE=true node src/server.js
+AI_MOCK_RESPONSE=true npx playwright test tests/api/ai.recommend.test.js
 
-# 2. Run tests (RAG tests will execute; in normal mode they skip)
-AI_IMPLEMENTATION=rag AI_MOCK_RESPONSE=true npx playwright test tests/api/ai.recommend.test.js
+# Real Claude
+ANTHROPIC_API_KEY=<key> node src/server.js
+ANTHROPIC_API_KEY=<key> npx playwright test tests/api/ai.recommend.test.js
 ```
 
-Normal `npm test` — RAG tests skip automatically, suite stays green.
+All AI tests skip automatically if neither `AI_MOCK_RESPONSE=true` nor `ANTHROPIC_API_KEY` is set.
 
-**Phase 2 blocked on:** Anthropic API key (`console.anthropic.com` — free tier available).
-
-**Interview line:** *"I upgraded the recommendation endpoint to RAG and wrote tests covering schema validation, context grounding — verifying the model only recommends specialties from our knowledge base, never hallucinates — prompt injection resilience, and graceful degradation when the LLM is unavailable. All RAG tests are isolated behind `@rag` and skip automatically without `ANTHROPIC_API_KEY`."*
+**Interview line:** *"I upgraded the recommendation endpoint to RAG and wrote tests covering six patterns: schema validation and invariant assertions for non-determinism, an LLM eval golden dataset, an LLM-as-a-judge test where a second Claude evaluates whether the reasoning logically justifies the recommendation, RAG completeness metrics that measure how many retrieved specialties appear in the model's reasoning, prompt injection resilience, and graceful degradation. I also have pure unit tests for the retrieval layer itself — retrieval scoring and prompt construction tested in isolation, no HTTP, no API key. RAG tests skip automatically without `ANTHROPIC_API_KEY`."*
 
 ---
 
@@ -550,18 +626,68 @@ fc.assert(fc.property(
 
 **Interview line:** *"I used property-based testing on the state machine. Instead of enumerating which transitions I expected to be invalid, I generated all possible pairs and asserted the function never throws and always returns a boolean. It caught an edge case I hadn't thought to test manually."*
 
-### 15.4 AI-assisted test generation (planned)
+### 15.4 AI-assisted test generation ✅
 
-A documented artifact showing Claude used as a QA tool — not a replacement for judgement, but an accelerator:
+A documented artifact showing Claude used as a QA tool — not a replacement for judgement, but an accelerator. Full write-up: [`docs/AI_TEST_GENERATION.md`](AI_TEST_GENERATION.md).
 
-1. Feed `CONTRACT_PACK.md` + `API_ENDPOINTS.md` to Claude
-2. Ask: *"Generate test cases for `POST /api/v1/appointments` covering happy path, RBAC, invalid transitions, concurrent access, and boundary values"*
-3. Review output: accept cases that cover real business risk, discard generic CRUD tests or cases already covered
-4. Document in `docs/AI_TEST_GENERATION.md`: what was generated, what was kept, what was discarded and why
+Process: `CONTRACT_PACK.md` was fed to Claude with a prompt asking for test cases across happy path, RBAC, state transitions, and error cases. Output was reviewed critically — ~70% of suggestions accepted, the rest collapsed, discarded, or replaced with manually identified cases Claude missed.
 
-**Why this matters for portfolio:** Shows you control AI as a precision tool rather than accepting its output uncritically.
+Key finding: Claude covered the obvious contract surface but missed the IDOR on `GET /appointments/:id`, the `EMAIL_RETIRED` second-409 edge case, and the symmetric doctor-side isolation test. These were caught through manual contract review.
 
-### 15.5 Observability-driven testing ✅
+**Why this matters for portfolio:** Shows you control AI as a precision tool rather than accepting its output uncritically. The artifact documents exactly what was kept, what was changed, and what was missing from the AI output — a rare combination in QA portfolios.
+
+### 15.5 AI-assisted bug reporting (added 2026-05-09) ✅
+
+**Before:** test failures produced a Playwright error message. A developer reading the report had to mentally reconstruct the bug context from the assertion text and stack trace.
+
+**After:** on every test failure, `utils/aiBugReporter.js` sends the test name, file, duration, error message, and stack trace to Claude Haiku. Claude returns a structured markdown bug report: title, component, severity, steps to reproduce, actual vs expected, possible cause. The report is:
+1. Attached to the Allure test result card via `testInfo.attach()` — visible as a "Bug Report" attachment inline with the test
+2. Saved to `bug-reports/<sanitized-test-name>_<timestamp>.md` for archiving
+
+**Skip guard:** if `ANTHROPIC_API_KEY` is not set, the function is a silent no-op. Tests run normally. No API key = no reports, no failure.
+
+**Integration point:** `afterEach` hook in `fixtures/userFixture.js`. All tests that extend the base fixture get the reporter automatically — no per-test wiring.
+
+**Why `afterEach` in fixture, not a custom Playwright reporter:** a custom reporter class cannot inject into individual Allure test result cards. `testInfo.attach()` called inside `afterEach` is intercepted by `allure-playwright` and added to the correct test's result. This is the native integration path.
+
+**Demo:**
+```bash
+DEMO_BUG_REPORTER=true ANTHROPIC_API_KEY=<key> npx playwright test bug-reporter.demo
+```
+Two intentionally failing tests each produce an AI-generated bug report attached to their Allure card.
+
+**Interview line:** *"I added an AI bug reporter that fires on every test failure. It sends the test name, error, and stack to Claude Haiku and gets back a structured bug report — component, severity, steps to reproduce, actual vs expected. The report attaches to the Allure result card and saves to a file. This is AI supporting the QA process, not AI generating tests. It reduces the friction between 'test failed' and 'bug report ready to share'."*
+
+---
+
+**What it does NOT do:**
+- It does not run the test again or read source code.
+- It does not replace human judgement on severity.
+- The AI output is a draft — the tester reviews before sharing.
+
+### 15.6 AI-assisted gap analysis (added 2026-05-09) ✅
+
+**What:** A one-shot script that sends the live OpenAPI spec + all test names to Claude Haiku and receives a structured gap analysis: endpoints with zero test coverage, documented error codes never exercised, additional scenarios implied by the spec.
+
+**Before:** coverage gaps were found ad-hoc — during code review, Pact verification, or when a bug slipped through. No systematic view of "what does the spec say is possible, vs what do tests actually exercise."
+
+**After:** `scripts/ai-gap-analysis.js` extracts the `paths:` block from `openapi.yaml` and all `describe()`/`test()` names from every test file, sends both to Claude, and saves the result to `docs/AI_GAP_ANALYSIS.md`. Run before each release cycle.
+
+```bash
+ANTHROPIC_API_KEY=<key> npm run ai:gap-analysis
+```
+
+**What the output contains:**
+- Endpoints with no dedicated test (found 10 on first run, including the entire `/reschedule` endpoint and all slot management routes)
+- Error codes in spec but never triggered in tests (~45 on first run, prioritised High/Medium/Low)
+- Additional scenarios worth adding (validation boundaries, RBAC edge cases, state machine completeness)
+- What is already well covered (balanced — not just a list of gaps)
+
+**Why this is distinct from `contract.drift.test.js`:** the drift guard checks that documented paths exist in the spec. The gap analysis checks that test cases exist for documented paths. Different direction, different question.
+
+**Interview line:** *"I have a script that feeds the OpenAPI spec and all test names to Claude and gets back a gap analysis — endpoints with zero coverage, error codes never triggered, additional scenarios. It found 10 endpoints with no dedicated tests and ~45 undocumented error code paths on first run. It's not a replacement for a risk-based test strategy, but it's a fast way to catch blind spots before a release."*
+
+### 15.7 Observability-driven testing ✅
 
 **What:** Instead of only asserting the HTTP response, assert that the system correctly emitted a structured log event to the internal observability infrastructure (Loki). This tests a different layer — not "did the API return 201" but "did the system correctly record that the booking happened, with the right identifiers."
 
@@ -585,6 +711,22 @@ expect(entry).toMatchObject({
 - A system can return `201` and still silently fail to log. These two layers fail independently.
 
 **Interview line:** *"I have a test that books an appointment and then queries Loki to assert the structured log entry appeared with the correct requestId, patientId, and event type. It tests a layer that HTTP assertions can't reach — the internal observability model. The two layers fail independently, so you need both."*
+
+### 15.6 Contract drift guard ✅
+
+**What:** Fetches the live OpenAPI spec from the running SUT (`/api/openapi.yaml`) and asserts that all expected paths, error codes, and schemas are documented. Fails when a route is added to the SUT but not to `openapi.yaml` — i.e. when the spec drifts from the implementation.
+
+**Implemented in:** `tests/api/contract.drift.test.js` (5 tests, `@api`, no skip guard)
+
+What it catches:
+- Endpoint added to SUT, missing from spec
+- Error code renamed in one place but not the other
+- Spec file broken or unreachable
+- Swagger UI down
+
+What it does NOT catch: response body shape mismatches (requires dredd/spectral for that).
+
+**Interview line:** *"I have a test that fetches the live OpenAPI spec from the running server and asserts that every documented path, error code, and schema is present. It's a drift guard — if someone adds a route and forgets to update the spec, the test fails. It also double-checks that Swagger UI itself is reachable."*
 
 ---
 
@@ -626,7 +768,10 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `appointments.rbac.cross-doctor.test.js` | RBAC: cross-doctor data isolation — doctor cannot access another doctor's appointments (IDOR) |
 | `appointments.booking.rate-limit.test.js` | Rate limiting — booking endpoint enforces per-token request window *(local only — requires env override)* |
 | `doctors.list.test.js` | Doctor listing — availability data integrity, correct shape |
-| `ai.recommend.test.js` | AI feature contract — feature flag, error codes, response schema, rate limit; RAG mode: `reasoning` field present, specialty-invariant (never hallucinates outside `ALLOWED_SPECIALTIES`), 422 on unrecognised symptoms *(RAG tests skip unless `AI_IMPLEMENTATION=rag AI_MOCK_RESPONSE=true`)* |
+| `ai.recommend.test.js` | AI feature contract — feature flag, error codes, response schema, rate limit; `reasoning` field present, specialty-invariant (never hallucinates outside `ALLOWED_SPECIALTIES`) *(tests skip unless `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` set)* |
+| `pact/ai.recommend.pact.consumer.test.js` | Consumer-driven contract — shape of 200/400/422 responses formalized as a pact; runs against Pact mock server (no SUT needed) |
+| `pact/ai.recommend.pact.provider.test.js` | Provider contract verification — SUT satisfies all consumer interactions in `pacts/` JSON; skip guard: requires `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` |
+| `contract.drift.test.js` | OpenAPI contract drift guard — spec reachable, all paths/error codes/schemas documented; Swagger UI reachable |
 | `security.test.js` | Security boundary — IDOR on appointment access, JWT tampering rejected |
 | `infrastructure.test.js` | Infrastructure contract — health endpoint, error response format consistency |
 | `chaos.test.js` | Fault tolerance — 503 contract under chaos mode, health endpoint exempt, latency injection *(manual workflow)* |
@@ -635,6 +780,12 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `notifications.ws.test.js` | WebSocket notification — JWT auth on connect, event delivery after booking/cancellation |
 | `consultations.payment.test.js` | Payment flow — idempotency key, 402 on failure, no consultation created on payment failure |
 | `observability.loki.test.js` | Internal observability — structured log emitted to Loki with correct `requestId`, `event`, `patientId` *(local only — requires Loki stack)* |
+
+### Unit layer
+
+| File | Unique risk dimension |
+|---|---|
+| `unit/ai.retrieval.test.js` | RAG retrieval correctness — scoring returns right specialty for known symptoms, unknown symptoms produce empty result; prompt builder includes retrieved specialty + description (context injection verified without a live SUT) |
 
 ### E2E layer
 
@@ -656,6 +807,7 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 |---|---|
 | `login.test.js` | Login page behaviour — form validation, error states, successful redirect |
 | `register-patient.test.js` | Registration page — form validation, duplicate handling, successful flow |
+| `visual.test.js` | Visual regression — pixel-level baseline comparison for login (empty + error) and register pages across Chromium and mobile-chrome; catches CSS/layout regressions invisible to behavioural tests |
 | `guest-gates.test.js` | Auth guard — unauthenticated users cannot access protected pages (booking, consultations, notifications) |
 | `accessibility.test.js` | WCAG compliance — axe-core audit on login, register, booking pages |
 

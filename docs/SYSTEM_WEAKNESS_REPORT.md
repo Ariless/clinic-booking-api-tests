@@ -2,7 +2,7 @@
 
 **Scope:** QA-perspective analysis of architectural risks, concurrency gaps, and business logic vulnerabilities in the SUT. This is an FMEA-inspired (Failure Mode and Effects Analysis) structured map of failure modes and their test coverage — not a penetration test. Each section identifies a failure mode, its severity, whether the system mitigates it, and whether a test exists.
 
-**Companion documents:** `RISK_ANALYSIS.md` (impact × likelihood → test files), `DESIGN_PRINCIPLES.md` (how tests are built around these risks).
+**Companion documents:** `RISK_ANALYSIS.md` (impact × likelihood → test files), `DESIGN_PRINCIPLES.md` (how tests are built around these risks), `KNOWN_ISSUES.md` (bug register — fixed + open + design debt).
 
 ---
 
@@ -112,17 +112,9 @@
 
 ### 3.2 IDOR on appointment read — ✅ found and fixed (2026-04-30)
 
-**Risk:** `GET /appointments/:id` existed without `requireAuth` and without an ownership check. Any unauthenticated user could read any appointment by ID. Any authenticated patient could read another patient's appointment.
+**Risk:** `GET /appointments/:id` without `requireAuth` and without an ownership check — any unauthenticated user could read any appointment by ID; any authenticated patient could read another patient's appointment.
 
-**Found by:** `security.test.js` — two tests failed:
-- `GET /:id` with no token → expected `401`, received `200`
-- `GET /:id` with another patient's token → expected `403`, received `200`
-
-**Fix applied to SUT (`appointmentsRoutes.js`):**
-- Added `requireAuth` middleware to `GET /:id`
-- Added ownership check: patient can only read their own appointment (`appointment.patientId !== userId` → `403 FORBIDDEN`)
-
-**Test coverage:** `security.test.js` (`@security`) — 5 tests all green after fix.
+**→ Bug details, fix, and test coverage:** `KNOWN_ISSUES.md` B-01
 
 ---
 
@@ -138,21 +130,11 @@
 
 ### 3.4 Accessibility violations — ✅ found and fixed (2026-04-30)
 
-**Risk:** Pages lacked semantic HTML structure required by WCAG 2.1 AA. Screen reader users could not navigate pages efficiently.
+**Risk:** Pages lacked semantic HTML structure required by WCAG 2.1 AA — missing `<main>` landmark and `<h1>` on key pages. Screen reader users could not navigate efficiently. EU Accessibility Act compliance risk.
 
-**Found by:** `accessibility.test.js` (`@a11y`) using axe-core. Violations detected:
-- `landmark-one-main` — no `<main>` landmark on login, register, booking pages
-- `page-has-heading-one` — booking page had `<h2>` sections but no `<h1>`
-- `region` — content not contained within landmark regions
+**Known residual:** `color-contrast` excluded — `.muted` is `#64748b` (3.9:1, below WCAG AA 4.5:1). See `KNOWN_ISSUES.md` D-01.
 
-**Fix applied to SUT:**
-- Added `<main>` landmark to `login.html`, `register-patient.html`, `patient-booking.html`
-- Added visually-hidden `<h1>Book an appointment</h1>` to booking page
-- Added `.visually-hidden` CSS utility class to `app.css`
-
-**Known residual:** `color-contrast` rule excluded — `.muted` uses `#64748b` (3.9:1 ratio, below WCAG AA 4.5:1). Documented design debt; requires a design decision to darken the palette.
-
-**Test coverage:** `accessibility.test.js` — 3 tests all green after fix.
+**→ Bug details, fix, and test coverage:** `KNOWN_ISSUES.md` B-02
 
 ---
 
@@ -180,7 +162,46 @@
 
 ---
 
-## 5. Summary table
+## 5. AI recommendation risks
+
+### 5.1 Retrieval quality — wrong specialty for common symptoms (found 2026-05-08)
+
+**Risk:** Keyword-overlap scoring in `retrieval.js` uses generic words like "pain" that match multiple specialties. "chest pain" scores Orthopedist higher than Cardiologist — a silent misrouting with no error signal.
+
+**Architectural note:** The retrieval layer is the first-pass filter. If it returns the wrong top-1, Claude never sees the correct specialty in its context window. The LLM may correct this in real Claude mode but not in mock mode, where retrieval result is returned directly.
+
+**→ Bug details, workaround, and fix plan:** `KNOWN_ISSUES.md` B-05
+
+---
+
+### 5.2 Specialty/seed data mismatch — empty doctors array (found 2026-05-08)
+
+**Risk:** Knowledge base and `ALLOWED_SPECIALTIES` include 6 specialties; seed data only seeds 3 doctors (Cardiologist, Dermatologist, Neurologist). If retrieval returns Orthopedist or Pediatrician, the API responds `200 OK` with `doctors: []` — a valid-looking response with no actionable result.
+
+**Architectural note:** The mismatch between knowledge base coverage and seeded data creates a silent failure path: no error code, no indication to the patient that no appointment can actually be made.
+
+**→ Bug details, workaround, and fix plan:** `KNOWN_ISSUES.md` B-06
+
+---
+
+### 1.4 Reschedule compound operation (free + promote + book)
+
+**Risk:** `PATCH /reschedule` must atomically: (1) free old slot, (2) trigger waitlist promotion on old slot, (3) book new slot. If any step fails mid-way, the system must roll back to a consistent state.
+
+**How the system protects itself:**
+- All three steps run inside a single `db.transaction()`.
+- SQLite rolls back the entire transaction on any failure — no partial state (e.g. old slot freed but new slot not booked).
+- The unique index `idx_appointments_one_active_per_slot` catches concurrent booking of the new slot that slips past the availability check.
+
+**Residual weakness:** If two patients race to reschedule to the same new slot, the second request receives `409 SLOT_TAKEN` via the unique constraint — same protection as original booking. However, the first patient's old slot is already freed and promoted before the constraint fires in the second transaction — this is correct behavior, not a bug.
+
+**Severity:** Low — the transaction boundary is correctly drawn and the constraint provides a backstop.
+
+**Test coverage:** ❌ planned (after TS migration) — concurrency test: two patients reschedule to the same slot simultaneously; only one should succeed.
+
+---
+
+## 6. Summary table
 
 | Weakness | Severity | Mitigated? | Test exists? |
 |---|---|---|---|
@@ -197,3 +218,6 @@
 | No slot soft-lock in UI | Low | ✅ clean 409 error | ✅ `booking-conflict.e2e` |
 | Accessibility violations (missing landmarks, headings) | Medium | ✅ fixed: `<main>` + `<h1>` added | ✅ `accessibility.test.js` (found + fixed 2026-04-30) |
 | Color contrast below WCAG AA | Low | ❌ known design debt (#64748b) | ⚠️ excluded from axe run, documented |
+| Retrieval quality — ambiguous symptoms route to wrong specialty | Medium | Partial — LLM may correct; mock mode exposes raw retrieval | ❌ no regression test for ambiguous symptoms (found 2026-05-08, Pact) |
+| Specialty/seed data mismatch — `doctors: []` on valid 200 | Medium | ❌ no guard | ❌ no test; silent failure (found 2026-05-08, Pact) |
+| Reschedule free+promote+book atomicity | Low | ✅ single transaction + unique index | ❌ concurrency test planned |

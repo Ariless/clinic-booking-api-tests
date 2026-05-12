@@ -15,7 +15,7 @@
 
 - **Risk-first API checks** — what hurts users and the business (double booking, RBAC, lifecycle) before chasing coverage metrics; see **`docs/RISK_ANALYSIS.md`**.
 - **Clear ownership** — J1 / J2 / J3 style files + **`@smoke`** / **`@api`** (optional **`@negative`**, **`@regression`**, **`@rbac`** in titles when you add them); see **`docs/TEST_STRATEGY.md`**.
-- **What is already exercised** — auth (register + login), doctor catalog, **J1** booking slice in smoke (**pending** + `GET …/my`), **J3** confirm + slot invariant, **J2** reject, **N1** double-book `409 SLOT_TAKEN`, patient cancel + slot freed, `422 INVALID_TRANSITION`, extended RBAC (`appointments.rbac.patient`, `appointments.rbac.cross-doctor`), waitlist lifecycle + auto-promotion, rate limits (`@rate-limit`; require env override), chaos smoke + 503 body + health exempt (`@chaos`), security — IDOR + JWT tamper (`@security`; caught a real unintentional vulnerability), accessibility on login + register + booking pages (`@a11y`; axe-core, zero violations except documented color-contrast debt), UI gate + login + register forms, E2E cross-layer booking / conflict / confirm, **doctor UI confirm** (`doctor-confirm.e2e.test.js` `@e2e`) — patient books via API → doctor logs in, clicks Confirm in the doctor UI → success banner → patient sees confirmed via API; first test covering the doctor persona in a real browser; catches JavaScript wiring errors the API layer cannot see, **performance baseline** — k6 booking flow (50 VUs, p95 thresholds; `k6/booking-flow.js`), **DB-state assertions** — direct SQLite queries via `utils/dbClient.js` embedded inline in `appointments.mini.j1`, `appointments.confirm.j3`, `appointments.cancel.patient`, `appointments.waitlist`, `appointments.waitlist.promotion` — verifies `slot.isAvailable`, `appointment.status`, and waitlist row presence/absence after each operation, **mobile viewport** — `mobile-chrome` project (`Pixel 7`) re-runs all `tests/ui/**` on a 412 × 915 viewport; API tests run on `chromium` only, **patient WS notifications** (`patient-notifications.e2e.test.js` `@e2e`) — WebSocket connected → doctor confirms via API → `appointment.confirmed` notification item appears in patient browser in real time; proves server correctly routes events to the patient channel, **consultations cross-layer** (`consultations.cross-layer.test.js` `@e2e`) — patient books consultation via UI → API list confirms record → DB consultation row + payment row verified; skip guard: `PAYMENT_MODE=mock_success`, **waitlist cross-layer** (`waitlist.cross-layer.test.js` `@e2e`) — join via API → UI shows waitlist entry → leave via UI → API verifies removal → DB confirms row deleted, **guest gate — consultations** (`consultations.test.js` `@ui`) — unauthenticated user reaches `/patient/consultations` and sees sign-in gate instead of the booking form, **guest gate — notifications** (`patient-notifications.test.js` `@ui`) — unauthenticated user reaches `/patient/notifications` and sees sign-in gate instead of the live feed.
+- **What is already exercised** — auth (register + login), doctor catalog, **J1** booking slice in smoke (**pending** + `GET …/my`), **J3** confirm + slot invariant, **J2** reject, **N1** double-book `409 SLOT_TAKEN`, patient cancel + slot freed, `422 INVALID_TRANSITION`, extended RBAC (`appointments.rbac.patient`, `appointments.rbac.cross-doctor`), waitlist lifecycle + auto-promotion, rate limits (`@rate-limit`; require env override), chaos smoke + 503 body + health exempt (`@chaos`), security — IDOR + JWT tamper (`@security`; caught a real unintentional vulnerability), accessibility on login + register + booking pages (`@a11y`; axe-core, zero violations except documented color-contrast debt), UI gate + login + register forms, E2E cross-layer booking / conflict / confirm, **doctor UI confirm** (`doctor-confirm.e2e.test.js` `@e2e`) — patient books via API → doctor logs in, clicks Confirm in the doctor UI → success banner → patient sees confirmed via API; first test covering the doctor persona in a real browser; catches JavaScript wiring errors the API layer cannot see, **performance baseline** — k6 booking flow (50 VUs, p95 thresholds; `k6/booking-flow.js`), **DB-state assertions** — direct SQLite queries via `utils/dbClient.js` embedded inline in `appointments.mini.j1`, `appointments.confirm.j3`, `appointments.cancel.patient`, `appointments.waitlist`, `appointments.waitlist.promotion` — verifies `slot.isAvailable`, `appointment.status`, and waitlist row presence/absence after each operation, **mobile viewport** — `mobile-chrome` project (`Pixel 7`) re-runs all `tests/ui/**` on a 412 × 915 viewport; API tests run on `chromium` only, **patient WS notifications** (`patient-notifications.e2e.test.js` `@e2e`) — WebSocket connected → doctor confirms via API → `appointment.confirmed` notification item appears in patient browser in real time; proves server correctly routes events to the patient channel, **consultations cross-layer** (`consultations.cross-layer.test.js` `@e2e`) — patient books consultation via UI → API list confirms record → DB consultation row + payment row verified; skip guard: `PAYMENT_MODE=mock_success`, **waitlist cross-layer** (`waitlist.cross-layer.test.js` `@e2e`) — join via API → UI shows waitlist entry → leave via UI → API verifies removal → DB confirms row deleted, **guest gate — consultations** (`consultations.test.js` `@ui`) — unauthenticated user reaches `/patient/consultations` and sees sign-in gate instead of the booking form, **guest gate — notifications** (`patient-notifications.test.js` `@ui`) — unauthenticated user reaches `/patient/notifications` and sees sign-in gate instead of the live feed, **LLM judge** (`ai.recommend.test.js` `@rag`) — second Claude call evaluates whether `reasoning` logically justifies the recommended specialty; catches semantically wrong reasoning that schema assertions cannot detect, **RAG completeness metrics** (`ai.recommend.test.js` `@rag`) — calls `retrieve()` locally to know what was sent to the model, counts how many retrieved specialty names appear in the AI's `reasoning`; asserts recommended specialty present + coverage ≥ 50%; results surfaced as Allure parameters and JSON attachment; skipped in mock mode, **RAG pipeline unit tests** (`unit/ai.retrieval.test.js` `@unit`) — 4 pure unit tests: retrieval scoring returns correct specialty for known symptoms, unknown symptoms produce empty result, `buildPrompt` includes retrieved specialty + description in the Claude prompt; no HTTP, no API key required.
 
 ### Test metrics (lightweight — for interviews, not “enterprise BI”)
 
@@ -116,7 +116,8 @@ clinic-booking-api-tests/
 └── tests/
     ├── api/                   # Contract & negative paths vs REST
     ├── ui/                    # Single-page / widget behaviour (forms, nav, guest gates)
-    └── e2e/                   # Full journeys (register → book → list → cancel, doctor flow, …)
+    ├── e2e/                   # Full journeys (register → book → list → cancel, doctor flow, …)
+    └── unit/                  # Pure unit tests for SUT modules (no HTTP, no browser)
 ```
 
 ### Framework architecture (diagram)
@@ -233,7 +234,20 @@ cp .env.example .env
 # edit .env — BASE_URL must point at running SUT (default http://localhost:3000)
 ```
 
-Start the SUT in the other repo (`npm run dev`). Optional: `npm run db:seed` there for known demo users.
+**Option A — Docker (recommended, matches CI exactly):**
+
+```bash
+cd ../sut
+mkdir -p data
+docker compose -f docker-compose.test.yml up -d --wait
+```
+
+**Option B — bare Node:**
+
+```bash
+cd ../sut
+npm run dev   # or: npm run db:seed && npm start
+```
 
 ---
 
@@ -289,7 +303,7 @@ smoke  →  api   (tests/api)
        allure-report  (merges all results → GitHub Pages)
 ```
 
-- **SUT:** second checkout (default **`Ariless/clinic-booking-api`**). Override with repo variable **`SUT_GITHUB_REPOSITORY`** (`owner/repo`) under Settings → Actions → Variables.
+- **SUT:** checked out from **`Ariless/clinic-booking-api`** (override: repo variable **`SUT_GITHUB_REPOSITORY`** under Settings → Actions → Variables), then started via `docker compose -f sut/docker-compose.test.yml up -d --wait` — same image as local, healthcheck-gated startup, `docker compose down` on cleanup.
 - **E2E job** uses `--pass-with-no-tests` — stays green until `tests/e2e` / `tests/ui` are committed; picks them up automatically once pushed.
 - **Allure** merges results from all three jobs and deploys even if a job fails (`if: always()`).
 
@@ -313,11 +327,12 @@ npm run test:smoke          # @smoke only
 npm run test:api            # tests/api only
 npm run test:ui             # tests/ui only
 npm run test:e2e            # tests/e2e only
+npm run test:unit           # tests/unit only (no SUT needed)
 npm run test:chaos          # @chaos (set CHAOS_ENABLED=true + restart SUT first)
 npm run report              # allure generate + open
 ```
 
-**Interview line:** *”Smoke is the gate — if it fails, API and E2E don’t start. API and E2E run in parallel on separate SUT instances. Chaos is a separate manual workflow. Allure always publishes, even on failure.”*
+**Interview line:** *”Smoke is the gate — if it fails, API and E2E don’t start. The SUT runs as a Docker container in every CI job: same image as local, no curl loop, no orphan processes. API and E2E run in parallel. Chaos is a separate manual workflow. Allure always publishes, even on failure.”*
 
 ---
 
@@ -326,6 +341,12 @@ npm run report              # allure generate + open
 - **`DESIGN_PRINCIPLES.md`** — how we write tests and framework code (**SRP**, **DRY**, POM, clients, data, flakes, non-goals).
 - **`docs/TEST_STRATEGY.md`** — risk-first strategy (API-first + **§9** UI/e2e backlog in **`E2E_TEST_PLAN.md`**), `@smoke` / `@api`, J1/J2/J3 split, planned conflict + cancel files.
 - **`docs/RISK_ANALYSIS.md`** — short **impact × likelihood** table mapped to test files (and gaps).
+- **`docs/KNOWN_ISSUES.md`** — bug register: 4 fixed (IDOR, a11y, WS ClinicCore, banner timing) + 2 open (retrieval ranking, empty doctors) + 3 design debt items; each with business impact, severity, how found, fix plan.
+- **`docs/TEST_SUMMARY_STAKEHOLDER.md`** — one-page non-technical summary for PM/stakeholder: traffic-light status per area, bugs in plain English, open issues with options, release recommendation.
+- **`docs/BUSINESS_RULES.md`** — all domain rules in one place (accounts, state machine, slots, waitlist, RBAC, AI, payments, error contract); each rule numbered and testable; gap list of rules without test coverage.
+- **`docs/ACCEPTANCE_CRITERIA.md`** — "feature is done when..." for all 21 features; written as shift-left artifact; gap table of criteria not yet covered by automated tests.
+- **`utils/aiBugReporter.js`** — on test failure, calls Claude Haiku with test name + error + stack; returns structured bug report (severity, steps to reproduce, actual vs expected); attached to Allure result card via `testInfo.attach()` + saved to `bug-reports/`; silent no-op when `ANTHROPIC_API_KEY` is absent.
+- **`docs/AI_GAP_ANALYSIS.md`** — AI-generated coverage gap analysis: endpoints with no tests, error codes not exercised, additional scenarios worth adding. Produced by `scripts/ai-gap-analysis.js` (`npm run ai:gap-analysis`); regenerate before each release cycle.
 - The SUT repo’s **`quality-strategy.md`** stays the contract for **`data-qa`** and product-side quality notes; this repo’s `docs/` stay **automation- and portfolio-facing**.
 
 ---
