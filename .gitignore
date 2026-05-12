@@ -10,4 +10,5 @@ reports/
 bug-reports/
 .DS_Store
 .idea/
-data/clinic.dbdata/clinic.db
+data/
+.hypothesis/
