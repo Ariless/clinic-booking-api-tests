@@ -1,0 +1,74 @@
+# k6 performance gate — manual trigger only.
+# Runs the booking flow load test (50 VUs, ~50s) against the SUT.
+# Fails if any threshold is breached:
+#   - p(95) all requests < 200ms
+#   - p(95) booking endpoint < 500ms
+#   - error rate < 1%
+#
+# Usage: Actions tab → "Performance (k6)" → Run workflow
+name: Performance (k6)
+
+on:
+  workflow_dispatch:
+
+env:
+  BASE_URL: http://127.0.0.1:3000
+
+jobs:
+  k6:
+    name: k6 booking flow
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
+          path: sut
+
+      - name: Start SUT (rate limits elevated for load test)
+        run: |
+          mkdir -p sut/data
+          # Override booking rate limit so 50 VUs don't exhaust the default 1000/min cap
+          cat > /tmp/docker-compose.k6.yml << 'EOF'
+          services:
+            sut:
+              environment:
+                RATE_LIMIT_BOOKING_MAX: "100000"
+                RATE_LIMIT_BOOKING_WINDOW_MS: "60000"
+                RATE_LIMIT_LOGIN_MAX: "100000"
+          EOF
+          docker compose \
+            -f sut/docker-compose.test.yml \
+            -f /tmp/docker-compose.k6.yml \
+            up -d --wait
+
+      - name: Install k6
+        run: |
+          curl -fsSL https://pkg.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -q && sudo apt-get install -q k6
+
+      - name: Run k6 booking flow
+        run: |
+          k6 run \
+            --env BASE_URL=${{ env.BASE_URL }} \
+            --out json=k6-results.json \
+            k6/booking-flow.js
+        # k6 exits 1 if any threshold is breached → job fails automatically
+
+      - name: Upload k6 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-results
+          path: k6-results.json
+          if-no-files-found: warn
+
+      - name: Stop SUT
+        if: always()
+        run: docker compose -f sut/docker-compose.test.yml down

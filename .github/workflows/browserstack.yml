@@ -1,0 +1,55 @@
+# BrowserStack cross-browser UI tests — manual trigger only.
+# Runs UI tests (excluding visual regression) on two platforms in parallel:
+#   - playwright-webkit on macOS Sequoia
+#   - playwright-firefox on Windows 11
+# Visual tests excluded: snapshots are OS-specific (darwin vs linux), covered by main CI.
+#
+# Requires GitHub secrets: BROWSERSTACK_USERNAME, BROWSERSTACK_ACCESS_KEY
+# Usage: Actions tab → "BrowserStack (cross-browser)" → Run workflow
+name: BrowserStack (cross-browser)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  browserstack:
+    name: Cross-browser UI tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
+          path: sut
+
+      - name: Start SUT
+        run: |
+          mkdir -p sut/data
+          docker compose -f sut/docker-compose.test.yml up -d --wait
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: tests
+
+      - name: Run BrowserStack UI tests
+        run: npx browserstack-node-sdk playwright test tests/ui/ --grep-invert @visual
+        working-directory: tests
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          BASE_URL: http://localhost:3000
+
+      - name: Stop SUT
+        if: always()
+        run: docker compose -f sut/docker-compose.test.yml down

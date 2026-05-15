@@ -1,0 +1,21 @@
+userName: ${BROWSERSTACK_USERNAME}
+accessKey: ${BROWSERSTACK_ACCESS_KEY}
+
+browserstackLocal: true
+testObservability: true
+parallelsPerPlatform: 1
+
+platforms:
+  - browser: playwright-webkit
+    os: OS X
+    os_version: Sequoia
+  - browser: playwright-firefox
+    os: Windows
+    os_version: 11
+
+testSuiteOptions:
+  specs:
+    - "tests/ui/login.test.js"
+    - "tests/ui/register-patient.test.js"
+    - "tests/ui/guest-gates.test.js"
+    - "tests/ui/accessibility.test.js"
