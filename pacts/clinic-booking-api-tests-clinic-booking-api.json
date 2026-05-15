@@ -1,0 +1,196 @@
+{
+  "consumer": {
+    "name": "clinic-booking-api-tests"
+  },
+  "interactions": [
+    {
+      "description": "a POST with empty symptoms",
+      "request": {
+        "body": {
+          "symptoms": ""
+        },
+        "headers": {
+          "Authorization": "Bearer consumer-test-token",
+          "Content-Type": "application/json"
+        },
+        "method": "POST",
+        "path": "/api/v1/ai/recommend-doctor"
+      },
+      "response": {
+        "body": {
+          "errorCode": "VALIDATION_ERROR",
+          "message": "symptoms must be a non-empty string",
+          "requestId": "req-abc123"
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$.message": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.requestId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 400
+      }
+    },
+    {
+      "description": "a POST with unrecognised symptoms",
+      "request": {
+        "body": {
+          "symptoms": "xyzzy gibberish"
+        },
+        "headers": {
+          "Authorization": "Bearer consumer-test-token",
+          "Content-Type": "application/json"
+        },
+        "method": "POST",
+        "path": "/api/v1/ai/recommend-doctor"
+      },
+      "response": {
+        "body": {
+          "errorCode": "UNKNOWN_SPECIALTY",
+          "message": "Could not map symptoms to a known specialty",
+          "requestId": "req-abc123"
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$.message": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.requestId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 422
+      }
+    },
+    {
+      "description": "a POST with valid symptoms",
+      "request": {
+        "body": {
+          "symptoms": "heart palpitations"
+        },
+        "headers": {
+          "Authorization": "Bearer consumer-test-token",
+          "Content-Type": "application/json"
+        },
+        "method": "POST",
+        "path": "/api/v1/ai/recommend-doctor"
+      },
+      "response": {
+        "body": {
+          "doctors": [
+            {
+              "id": 1,
+              "name": "John Doe",
+              "specialty": "Cardiologist"
+            }
+          ],
+          "reasoning": "Based on the symptoms, a Cardiologist is recommended.",
+          "recommendedSpecialty": "Cardiologist"
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$.doctors": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$.doctors[*].id": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            },
+            "$.doctors[*].name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.doctors[*].specialty": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.reasoning": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.recommendedSpecialty": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    }
+  ],
+  "metadata": {
+    "pact-js": {
+      "version": "16.4.0"
+    },
+    "pactRust": {
+      "ffi": "0.5.4",
+      "models": "1.3.11"
+    },
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  },
+  "provider": {
+    "name": "clinic-booking-api"
+  }
+}

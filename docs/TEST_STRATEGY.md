@@ -1,6 +1,6 @@
 # Test strategy — clinic-booking-api-tests
 
-This document is the **risk- and portfolio-facing** view of the full suite (API + UI + E2E). **How** we build (pyramid, flakes, clients) stays in **`../DESIGN_PRINCIPLES.md`**. **What** we run as UI/E2E journeys stays in **`../E2E_TEST_PLAN.md`**.
+This document is the **risk- and portfolio-facing** view of the full suite (API + UI + E2E). **How** we build (pyramid, flakes, clients) stays in **`../DESIGN_PRINCIPLES.md`**.
 
 **SUT contract (state machine, `errorCode`, RBAC):** use the system-under-test repo — `API_ENDPOINTS.md`, `CONTRACT_PACK.md`, `TESTING_AGAINST_THIS_SUT.md`, OpenAPI.
 
@@ -77,7 +77,7 @@ Prove **high-impact failures** early, not maximize endpoint coverage:
 | **`@negative`** | Invalid input / expected `4xx` / contract violations (use sparingly; avoid duplicating every field validator) | PR or with `@api` grep |
 | **`@rbac`** | Optional extra marker on access-boundary tests (today **`appointments.rbac.doctor`** is `@smoke` only — add `@rbac` in the title when you want `grep @rbac`) | Smoke or regression |
 | **`@ui`** | Pure UI state checks — no API assertion; headed Chromium | PR or nightly alongside `@api` |
-| **`@e2e`** | Cross-layer journeys — UI action + API assertion (or vice-versa); `workers: 1` | PR or nightly; see **`E2E_TEST_PLAN.md`** |
+| **`@e2e`** | Cross-layer journeys — UI action + API assertion (or vice-versa); `workers: 1` | PR or nightly |
 | **`@chaos`** | Chaos mode feature verification — requires a **chaos-enabled server** (see §12); never runs in normal smoke/api jobs | Separate CI job or local manual run |
 | **`@unit`** | Pure unit tests — no HTTP, no SUT, no browser; test SUT modules in isolation (retrieval scoring, prompt construction) | Always — no env setup needed |
 
@@ -494,9 +494,17 @@ k6 run k6/booking-flow.js
 k6 run --env BASE_URL=http://localhost:3000 k6/booking-flow.js
 ```
 
-**CI gate:** planned — `performance` job in `api-tests.yml` after smoke; fails build if thresholds are breached.
+**CI gate — added 2026-05-12:**
 
-**Interview line:** *"I separate the rate limiter from the performance test — rate limits protect production, not benchmark runs. I authenticate once in `setup()` so the JWT is shared across all 50 VUs, same as a real user who logs in once and stays logged in. `409` under load is correct behavior, so I exclude it from the error rate — otherwise the threshold would always fail."*
+**Before:** k6 ran locally only. Status: "I have a load test script." Thresholds existed in the script but nothing enforced them automatically.
+
+**After:** `performance.yml` workflow (manual trigger via Actions tab). Starts SUT via docker-compose with `RATE_LIMIT_BOOKING_MAX=100000` override (inline compose override written in the workflow step — no new file committed). Runs `k6/booking-flow.js`. k6 exits non-zero if any threshold is breached → CI job fails automatically. Results saved as `k6-results.json` artifact.
+
+**Why separate workflow, not a job in `api-tests.yml`:** Load tests take ~50s and produce contention/noise in the DB. Running them on every push would slow the main feedback loop and interfere with parallel API/E2E jobs sharing the same SUT. Manual trigger = deliberate execution before releases or after perf-sensitive changes.
+
+**Why the rate limit override matters:** At 50 VUs, the default `RATE_LIMIT_BOOKING_MAX=1000/min` would be exhausted after ~1000 booking attempts. The override raises it to 100,000 so rate-limiter 429s don't pollute the latency metrics or inflate `http_req_failed`.
+
+**Interview line:** *"I separate the rate limiter from the performance test — rate limits protect production, not benchmark runs. I authenticate once in `setup()` so the JWT is shared across all 50 VUs, same as a real user who logs in once and stays logged in. `409` under load is correct business behavior, so I exclude it from the error rate. The CI gate is a separate manual workflow — running 50 VUs on every push would slow the feedback loop and create DB contention with parallel jobs."*
 
 ### 14.5 AI testing strategy — RAG (`@ai`, `@rag`)
 
@@ -547,6 +555,9 @@ Example: `"chest pain and palpitations"` → Cardiologist scores 3 (matches `che
 | Wrong API key / Claude unreachable → `503` graceful error | Degradation path |
 | Claude returns malformed JSON → `422 UNKNOWN_SPECIALTY` | Parse failure handled |
 | E2E: patient types symptoms → reasoning appears in UI | Full user journey `@e2e @rag` |
+| **Bias: same condition rephrased differently → consistent specialty ≥3/4** | Rephrasing invariance — model doesn't depend on exact wording |
+| **Bias: demographic context (age/gender) doesn't shift specialty ≥3/4** | Demographic neutrality — irrelevant context doesn't alter core recommendation (adult demographics only) |
+| **Bias: child demographic appropriately shifts recommendation to Pediatrician ≥3/4** | Clinically relevant demographic — child/infant/toddler context should shift to Pediatrician; tests the boundary between neutral and meaningful demographic signals |
 
 **Env vars:**
 ```
@@ -569,7 +580,7 @@ ANTHROPIC_API_KEY=<key> npx playwright test tests/api/ai.recommend.test.js
 
 All AI tests skip automatically if neither `AI_MOCK_RESPONSE=true` nor `ANTHROPIC_API_KEY` is set.
 
-**Interview line:** *"I upgraded the recommendation endpoint to RAG and wrote tests covering six patterns: schema validation and invariant assertions for non-determinism, an LLM eval golden dataset, an LLM-as-a-judge test where a second Claude evaluates whether the reasoning logically justifies the recommendation, RAG completeness metrics that measure how many retrieved specialties appear in the model's reasoning, prompt injection resilience, and graceful degradation. I also have pure unit tests for the retrieval layer itself — retrieval scoring and prompt construction tested in isolation, no HTTP, no API key. RAG tests skip automatically without `ANTHROPIC_API_KEY`."*
+**Interview line:** *"I upgraded the recommendation endpoint to RAG and wrote tests covering nine patterns: schema validation and invariant assertions for non-determinism, an LLM eval golden dataset, an LLM-as-a-judge test where a second Claude evaluates whether the reasoning logically justifies the recommendation, RAG completeness metrics that measure how many retrieved specialties appear in the model's reasoning, prompt injection resilience, graceful degradation, and three bias validation tests — rephrasing invariance, demographic neutrality for adult patients, and a third test that verifies child demographic correctly shifts the recommendation to Pediatrician. That third test came from recognising that 'demographic neutrality' isn't a universal rule in a medical system — the boundary is domain-specific. I also have pure unit tests for the retrieval layer itself — retrieval scoring and prompt construction tested in isolation, no HTTP, no API key. RAG tests skip automatically without `ANTHROPIC_API_KEY`."*
 
 ---
 
@@ -730,6 +741,58 @@ What it does NOT catch: response body shape mismatches (requires dredd/spectral 
 
 ---
 
+### 15.8 API fuzzing — Schemathesis (added 2026-05-12) ✅
+
+**What:** CLI tool that reads the live OpenAPI spec and auto-generates test cases — boundary values, special characters, null, wrong types, malformed headers. No test code written; the spec is the test definition.
+
+**Before:** API contract was validated by manually written tests. Gaps existed wherever a developer hadn't thought to test a specific input combination.
+
+**After:** `schemathesis run http://localhost:3000/api/openapi.yaml --checks all` generates 400+ scenarios from 35 operations and finds cases the manual test suite never covered.
+
+**Run locally:**
+```bash
+pip install schemathesis
+schemathesis run http://localhost:3000/api/openapi.yaml --checks all
+# With auth token:
+schemathesis run http://localhost:3000/api/openapi.yaml --checks all \
+  --header "Authorization: Bearer <token>"
+```
+
+**What it found on first run (2026-05-12):**
+- **Malformed JWT → `400 <EMPTY>`** — error contract violation. When Authorization header contains invalid-format bytes, middleware returns 400 with no body. All existing security tests only test missing or unauthorized tokens — never a malformed one.
+- **TRACE → 404 not 405** — HTTP compliance gap, systemic across all 35 endpoints.
+- **`401` undocumented in spec** for several auth-required endpoints.
+
+Full findings: `SYSTEM_WEAKNESS_REPORT.md` §5.
+
+**Why this matters:** The malformed JWT bug exists in the middleware layer, before the route handler runs. It can only be found by sending garbage that no developer would think to test manually. Fuzzing covers the input space that manual test design misses.
+
+**Interview line:** *"I added Schemathesis — it reads the OpenAPI spec and generates test cases automatically. On first run it found a bug my 80+ manual tests missed: a malformed Authorization header causes the middleware to return 400 with an empty body, breaking the error contract that every error response must contain errorCode, message, and requestId. The bug lives in the middleware layer, before the route handler even runs. No developer thinks to test that input — but a fuzzer always will."*
+
+---
+
+### 15.9 OWASP ZAP security scan (added 2026-05-12) ✅
+
+**What:** Docker-based OWASP ZAP baseline scan runs against the SUT and checks for OWASP Top 10 vulnerabilities, missing security headers, information disclosure, and known misconfigurations.
+
+**Before:** `security.test.js` covers known scenarios (IDOR, BOLA, JWT tamper). Known attack patterns, written by a human who decides what to test.
+
+**After:** ZAP searches independently — it doesn't know the business logic or what was intentionally tested. Different class of security coverage.
+
+**What ZAP checks (baseline scan):**
+- Missing security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`)
+- Information disclosure in headers or error messages
+- CORS misconfigurations
+- Known CVEs in server-side libraries
+
+**CI:** `security-scan.yml` — manual trigger only (`workflow_dispatch`). Produces HTML + JSON report saved as artifact. `-I` flag: only fails on HIGH alerts, not warnings.
+
+**Why manual trigger:** ZAP scans the full surface (not just documented endpoints). Running on every push would produce noise from expected 401s on auth-required routes and slow the feedback loop. Deliberate execution before releases.
+
+**Interview line:** *"I have two layers of security testing. `security.test.js` tests known scenarios — IDOR, BOLA, JWT tamper. OWASP ZAP searches independently — it doesn't know what I tested, so it covers gaps I didn't think of: missing security headers, CORS issues, information disclosure. Different tools answering different questions."*
+
+---
+
 ## 16. Narrative & depth layer — backlog (agreed 2026-04-30)
 
 These four items add the "system thinking" layer on top of the existing framework. Planned in order.
@@ -768,7 +831,7 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `appointments.rbac.cross-doctor.test.js` | RBAC: cross-doctor data isolation — doctor cannot access another doctor's appointments (IDOR) |
 | `appointments.booking.rate-limit.test.js` | Rate limiting — booking endpoint enforces per-token request window *(local only — requires env override)* |
 | `doctors.list.test.js` | Doctor listing — availability data integrity, correct shape |
-| `ai.recommend.test.js` | AI feature contract — feature flag, error codes, response schema, rate limit; `reasoning` field present, specialty-invariant (never hallucinates outside `ALLOWED_SPECIALTIES`) *(tests skip unless `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` set)* |
+| `ai.recommend.test.js` | AI feature contract — feature flag, error codes, response schema, rate limit; `reasoning` field present, specialty-invariant (never hallucinates outside `ALLOWED_SPECIALTIES`); bias validation: rephrasing invariance + demographic neutrality *(tests skip unless `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` set)* |
 | `pact/ai.recommend.pact.consumer.test.js` | Consumer-driven contract — shape of 200/400/422 responses formalized as a pact; runs against Pact mock server (no SUT needed) |
 | `pact/ai.recommend.pact.provider.test.js` | Provider contract verification — SUT satisfies all consumer interactions in `pacts/` JSON; skip guard: requires `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` |
 | `contract.drift.test.js` | OpenAPI contract drift guard — spec reachable, all paths/error codes/schemas documented; Swagger UI reachable |

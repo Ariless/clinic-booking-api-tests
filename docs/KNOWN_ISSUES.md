@@ -79,8 +79,8 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | **Root cause** | Keyword-overlap scoring in `retrieval.js`: "pain" matches Orthopedist keyword list; "chest" also triggers a match. Orthopedist total score > Cardiologist score for the input "chest pain". The LLM corrects this in real Claude mode (model has broader context), but in mock mode the raw retrieval result is returned directly — wrong specialty. |
 | **Workaround** | Use `AI_MOCK_RESPONSE=false` with a real API key for the recommendation endpoint. In mock mode, the retrieval ranking is the final answer. |
 | **Fix plan** | Improve retrieval scoring: add term specificity weighting (rare terms score higher than generic ones like "pain"); or add a symptom-to-specialty override table for high-confidence mappings. Regression test: `retrieve("chest pain")` → Cardiologist as top-1 in `unit/ai.retrieval.test.js`. |
-| **Test gap** | No regression test for ambiguous symptoms. Tracked in `BACKLOG.md`. |
-| **Where** | `SYSTEM_WEAKNESS_REPORT.md` §5.1 · `BACKLOG.md` (Regression: "chest pain" → Cardiologist) · `PORTFOLIO_NARRATIVE.md` |
+| **Test gap** | No regression test for ambiguous symptoms. Tracked in `../BACKLOG.md`. |
+| **Where** | `SYSTEM_WEAKNESS_REPORT.md` §5.1 · `../BACKLOG.md` (Regression: "chest pain" → Cardiologist) · `PORTFOLIO_NARRATIVE.md` |
 
 ---
 
@@ -95,8 +95,8 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | **Root cause** | `ALLOWED_SPECIALTIES` and the knowledge base include 6 specialties. Seed data (`seed.js`) only seeds 3 doctors: Cardiologist (John Doe), Dermatologist (Jane Smith), Neurologist (Jim Beam). Orthopedist and Pediatrician have zero doctors in DB. |
 | **Workaround** | Avoid recommending Orthopedist/Pediatrician by ensuring retrieval returns one of the 3 seeded specialties. In practice: use unambiguous symptoms that map cleanly to Cardiologist/Dermatologist/Neurologist. |
 | **Fix plan** | Option A — seed all 6 specialties. Option B — return `404 DOCTORS_UNAVAILABLE` when `doctors: []` after a valid recommendation, instead of silent 200. Option B is the more honest API contract. |
-| **Test gap** | No test that asserts `doctors.length > 0` after any recommendation. Tracked in `BACKLOG.md`. |
-| **Where** | `SYSTEM_WEAKNESS_REPORT.md` §5.2 · `BACKLOG.md` (Regression: doctors.length > 0) · `PORTFOLIO_NARRATIVE.md` |
+| **Test gap** | No test that asserts `doctors.length > 0` after any recommendation. Tracked in `../BACKLOG.md`. |
+| **Where** | `SYSTEM_WEAKNESS_REPORT.md` §5.2 · `../BACKLOG.md` (Regression: doctors.length > 0) · `PORTFOLIO_NARRATIVE.md` |
 
 ---
 

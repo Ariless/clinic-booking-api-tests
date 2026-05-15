@@ -7,7 +7,6 @@
 
 **Normative design rules** (pyramid / determinism / state ownership / one-behaviour tests / failure transparency / minimalism + SRP, DRY, POM, review checklist): **`DESIGN_PRINCIPLES.md`**.
 
-**E2E & journey scenarios (golden / negative / state machine / AI / cross-layer — no code):** **`E2E_TEST_PLAN.md`**.
 
 **Risk-based strategy + J1/J2/J3 ownership + planned high-impact cases:** **`docs/TEST_STRATEGY.md`** (includes appointment state machine diagram, CI pipeline diagram, portfolio differentiators plan). **Impact × likelihood matrix → files:** **`docs/RISK_ANALYSIS.md`** (includes risk heatmap). **Architectural vulnerabilities, race conditions, state gaps:** **`docs/SYSTEM_WEAKNESS_REPORT.md`**.
 
@@ -98,7 +97,7 @@ Run the API locally (`npm run dev` in the SUT repo) before UI or hybrid tests. *
 clinic-booking-api-tests/
 ├── README.md
 ├── DESIGN_PRINCIPLES.md        # SRP, DRY, POM, clients, data, flakes — team norms
-├── E2E_TEST_PLAN.md            # Journey & E2E scenario design (no test code)
+├── BACKLOG.md                  # Working backlog — features, tests, career actions
 ├── docs/
 │   ├── TEST_STRATEGY.md        # Risk-first scope, tags, J1/J2/J3 narrative, planned cases
 │   └── RISK_ANALYSIS.md        # Impact × likelihood → existing / planned tests
@@ -339,10 +338,12 @@ npm run report              # allure generate + open
 ## Quality & design docs in this repo
 
 - **`DESIGN_PRINCIPLES.md`** — how we write tests and framework code (**SRP**, **DRY**, POM, clients, data, flakes, non-goals).
-- **`docs/TEST_STRATEGY.md`** — risk-first strategy (API-first + **§9** UI/e2e backlog in **`E2E_TEST_PLAN.md`**), `@smoke` / `@api`, J1/J2/J3 split, planned conflict + cancel files.
+- **`docs/TEST_STRATEGY.md`** — risk-first strategy, `@smoke` / `@api`, J1/J2/J3 split, CI pipeline, portfolio differentiators.
 - **`docs/RISK_ANALYSIS.md`** — short **impact × likelihood** table mapped to test files (and gaps).
 - **`docs/KNOWN_ISSUES.md`** — bug register: 4 fixed (IDOR, a11y, WS ClinicCore, banner timing) + 2 open (retrieval ranking, empty doctors) + 3 design debt items; each with business impact, severity, how found, fix plan.
 - **`docs/TEST_SUMMARY_STAKEHOLDER.md`** — one-page non-technical summary for PM/stakeholder: traffic-light status per area, bugs in plain English, open issues with options, release recommendation.
+- **`docs/GO_NO_GO.md`** — release recommendation: Conditional Go; 4 fixed bugs, 2 open AI issues requiring product decision, reschedule flagged as controlled rollout, post-release monitoring signals.
+- **`docs/RTM.md`** — requirements traceability matrix: 55 requirements across 10 areas mapped to test files; 87% covered; 6 gaps documented with explicit reasons.
 - **`docs/BUSINESS_RULES.md`** — all domain rules in one place (accounts, state machine, slots, waitlist, RBAC, AI, payments, error contract); each rule numbered and testable; gap list of rules without test coverage.
 - **`docs/ACCEPTANCE_CRITERIA.md`** — "feature is done when..." for all 21 features; written as shift-left artifact; gap table of criteria not yet covered by automated tests.
 - **`utils/aiBugReporter.js`** — on test failure, calls Claude Haiku with test name + error + stack; returns structured bug report (severity, steps to reproduce, actual vs expected); attached to Allure result card via `testInfo.attach()` + saved to `bug-reports/`; silent no-op when `ANTHROPIC_API_KEY` is absent.

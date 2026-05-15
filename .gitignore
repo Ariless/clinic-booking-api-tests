@@ -12,3 +12,5 @@ bug-reports/
 .idea/
 data/
 .hypothesis/
+local.log
+log/

@@ -80,7 +80,6 @@ For two specialties in the system (Orthopaedist, Paediatrician), there are curre
 | Area | Reason not tested yet | When |
 |---|---|---|
 | Rescheduling appointments (full test suite) | Feature is built and working; full automated test suite planned after a technical upgrade in progress | Next sprint |
-| Performance gate in automated pipeline | Load tests exist and pass; not yet wired as an automatic release block | Planned |
 
 ---
 

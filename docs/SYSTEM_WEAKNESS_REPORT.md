@@ -162,7 +162,53 @@
 
 ---
 
-## 5. AI recommendation risks
+## 5. API fuzzing findings — Schemathesis (found 2026-05-12)
+
+### 5.1 Malformed JWT → `400 <EMPTY>` — error contract violation
+
+**Risk:** When a request arrives with a malformed `Authorization` header (present but not a valid JWT format), the middleware fires before the route handler and returns `400 Bad Request` with an empty body. This breaks the error contract: every error response must contain `{ errorCode, message, requestId }`.
+
+**Found by:** Schemathesis — generated a random-bytes Authorization header, sent it to auth-required endpoints. Expected: `401` with JSON body. Received: `400` with empty body.
+
+**Architectural note:** JWT parse failure happens at the Express middleware level (`express-jwt` or custom auth middleware) before the route handler can format the error. The route handler's error formatting never runs.
+
+**Affected endpoints:** All auth-required routes — `GET /appointments/my`, `GET /appointments/doctor`, `GET /appointments/waitlist/me`, `DELETE /appointments/waitlist/:id`, `PATCH /appointments/:id/cancel`, and others.
+
+**Severity:** Medium — real clients using correctly formatted tokens will never hit this. A security scanner or attacker probing the API will see inconsistent error responses.
+
+**Test coverage:** ❌ Existing `security.test.js` tests missing auth header or uses valid-but-unauthorized tokens — never tests malformed token. Schemathesis is the first tool to cover this path.
+
+**Fix direction:** Add error handler in auth middleware that catches JWT parse errors and returns `401 { errorCode: "AUTH_INVALID", message: "...", requestId: "..." }`.
+
+---
+
+### 5.2 TRACE method returns 404 instead of 405
+
+**Risk:** Sending `TRACE <any-endpoint>` returns `404 NOT_FOUND` rather than `405 Method Not Allowed`. HTTP spec (RFC 7231) requires `405` for methods not supported by a route.
+
+**Found by:** Schemathesis — automatically probes unsupported methods on every operation.
+
+**Scope:** Systemic — affects all 35 endpoints.
+
+**Severity:** Low — no security impact, no data risk. Pure HTTP compliance.
+
+**Fix direction:** Add `app.use((req, res, next) => { if (req.method === 'TRACE') return res.status(405).end(); next(); })` at the top of the Express app.
+
+---
+
+### 5.3 `POST /consultations` — `401` not documented in OpenAPI spec
+
+**Risk:** The consultations endpoint returns `401 AUTH_REQUIRED` (missing auth) and `401 AUTH_INVALID` (user deleted mid-session), but neither `401` code appears in the spec's documented responses. Spec-compliant clients may not handle this case.
+
+**Found by:** Schemathesis — used a valid-format token whose user no longer existed in DB.
+
+**Severity:** Low — spec doc gap, not a runtime bug.
+
+**Fix direction:** Add `401` response to all auth-required endpoints in `openapi.yaml`.
+
+---
+
+## 6. AI recommendation risks
 
 ### 5.1 Retrieval quality — wrong specialty for common symptoms (found 2026-05-08)
 
@@ -221,3 +267,6 @@
 | Retrieval quality — ambiguous symptoms route to wrong specialty | Medium | Partial — LLM may correct; mock mode exposes raw retrieval | ❌ no regression test for ambiguous symptoms (found 2026-05-08, Pact) |
 | Specialty/seed data mismatch — `doctors: []` on valid 200 | Medium | ❌ no guard | ❌ no test; silent failure (found 2026-05-08, Pact) |
 | Reschedule free+promote+book atomicity | Low | ✅ single transaction + unique index | ❌ concurrency test planned |
+| Malformed JWT → `400 <EMPTY>` — error contract violation | Medium | ❌ middleware fires before route handler, returns raw 400 | ❌ found by Schemathesis 2026-05-12 — no test for malformed (vs missing) auth header |
+| TRACE method returns 404 instead of 405 | Low | ❌ Express default | ❌ not tested — HTTP spec requires 405 for unsupported methods |
+| `POST /consultations` missing `401` in OpenAPI spec | Low | N/A — spec doc gap | ❌ spec does not document 401 for auth-required endpoints |

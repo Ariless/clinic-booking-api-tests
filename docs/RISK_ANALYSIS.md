@@ -88,7 +88,7 @@ Pure UI state checks — no API assertions. Tag: `@ui`.
 
 ## 4. E2E risks
 
-Cross-layer journeys — UI action + API assertion (or vice-versa). Tag: `@e2e`. Workers: 1 (SQLite). See **`E2E_TEST_PLAN.md`** for full spec.
+Cross-layer journeys — UI action + API assertion (or vice-versa). Tag: `@e2e`. Workers: 1 (SQLite).
 
 | Risk | I | L | Score | Coverage today |
 | --- | :-: | :-: | :-: | --- |
