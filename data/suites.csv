@@ -1,0 +1,7 @@
+"DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
+"","199","POST /api/v1/auth/login — 200 patient login returns token + user @smoke","chromium","2026-05-16","passed","2026-05-16","","api/auth.login.test.ts","",""
+"","10","GET /api/v1/error-test — 418 with structured error body @smoke","chromium","2026-05-16","passed","2026-05-16","","api/infrastructure.test.ts","",""
+"","232","POST /api/v1/appointments — 201 patient books slot, GET /my shows pending @smoke","chromium","2026-05-16","failed","2026-05-16","","api/appointments.mini.j1.test.ts","",""
+"","13","GET /api/v1/doctors — list doctors @smoke","chromium","2026-05-16","passed","2026-05-16","","api/doctors.list.test.ts","",""
+"","12","GET /api/v1/doctors — 200 chaos off by default, API works normally @smoke","chromium","2026-05-16","passed","2026-05-16","","api/chaos.test.ts","",""
+"","9","GET /health — 200 ok, database check passes @smoke","chromium","2026-05-16","passed","2026-05-16","","api/infrastructure.test.ts","",""
