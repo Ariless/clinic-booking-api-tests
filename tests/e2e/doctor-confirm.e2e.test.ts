@@ -27,9 +27,9 @@ test("doctor confirms via UI — appointment confirmed in API @e2e", async ({ re
     page.on("dialog", (dialog) => dialog.accept());
     await doctorPage.confirmButton(bookBody.id).click();
 
-    // 5. ASSERT success banner
-    await expect(doctorPage.bannerSuccess).toBeVisible();
-    await expect(doctorPage.bannerSuccess).toHaveText("Visit confirmed for the patient.");
+    // 5. ASSERT success toast
+    await expect(doctorPage.toastSuccess).toBeVisible();
+    await expect(doctorPage.toastSuccess).toHaveText("Visit confirmed for the patient.");
 
     // 6. VERIFY cross-layer — patient sees confirmed status via API
     const { status: myStatus, body: myBody } = await appointments.listMy(patientAuth);

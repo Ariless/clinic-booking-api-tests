@@ -44,7 +44,8 @@ test("patient books via UI — appointment appears as pending in API @e2e", asyn
     // 9. VERIFY via API — appointment exists with status pending
     const response = await request.get("/api/v1/appointments/my", patientAuth);
     expect(response.status()).toBe(200);
-    const appointments = await response.json();
+    const body = await response.json();
+    const appointments = Array.isArray(body) ? body : (body?.data ?? []);
     const pending = appointments.find((a: { status: string }) => a.status === "pending");
     expect(pending).toBeTruthy();
 });
