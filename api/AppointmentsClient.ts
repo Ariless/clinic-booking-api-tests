@@ -33,6 +33,17 @@ export class AppointmentsClient extends BaseClient {
         const response = await this.request.get(endpoints.appointmentsMy, {
             headers: { ...(opts.headers ?? {}) },
         });
+        const { status, body } = await this.parseResponse(response);
+        const data = Array.isArray(body) ? body : (body?.data ?? body);
+        return { status, body: data };
+    }
+
+    async listMyPaginated(page?: number, limit?: number, opts: RequestOpts = {}) {
+        const params = new URLSearchParams();
+        if (page !== undefined) params.set("page", String(page));
+        if (limit !== undefined) params.set("limit", String(limit));
+        const url = endpoints.appointmentsMy + (params.toString() ? `?${params}` : "");
+        const response = await this.request.get(url, { headers: { ...(opts.headers ?? {}) } });
         return this.parseResponse(response);
     }
 
@@ -62,12 +73,31 @@ export class AppointmentsClient extends BaseClient {
         const response = await this.request.get(endpoints.appointmentsDoctor, {
             headers: { ...(opts.headers ?? {}) },
         });
+        const { status, body } = await this.parseResponse(response);
+        const data = Array.isArray(body) ? body : (body?.data ?? body);
+        return { status, body: data };
+    }
+
+    async listDoctorPaginated(page?: number, limit?: number, opts: RequestOpts = {}) {
+        const params = new URLSearchParams();
+        if (page !== undefined) params.set("page", String(page));
+        if (limit !== undefined) params.set("limit", String(limit));
+        const url = endpoints.appointmentsDoctor + (params.toString() ? `?${params}` : "");
+        const response = await this.request.get(url, { headers: { ...(opts.headers ?? {}) } });
         return this.parseResponse(response);
     }
 
     async cancelAsDoctor(appointmentId: number, opts: RequestOpts = {}) {
         return this.parseResponse(
             await this.request.patch(endpoints.appointmentCancelAsDoctor(appointmentId), {
+                headers: { ...(opts.headers ?? {}) },
+            }),
+        );
+    }
+
+    async completeAppointment(appointmentId: number, opts: RequestOpts = {}) {
+        return this.parseResponse(
+            await this.request.patch(endpoints.appointmentComplete(appointmentId), {
                 headers: { ...(opts.headers ?? {}) },
             }),
         );

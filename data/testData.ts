@@ -36,6 +36,7 @@ export const endpoints = {
     appointmentConfirm: (id: number | string) => `${API_V1}/appointments/${id}/confirm`,
     appointmentReject: (id: number | string) => `${API_V1}/appointments/${id}/reject`,
     appointmentCancelAsDoctor: (id: number | string) => `${API_V1}/appointments/${id}/cancel-as-doctor`,
+    appointmentComplete: (id: number | string) => `${API_V1}/appointments/${id}/complete`,
 
     consultations: `${API_V1}/consultations`,
     consultationsMe: `${API_V1}/consultations/me`,
