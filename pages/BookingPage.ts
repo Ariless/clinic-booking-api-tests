@@ -11,6 +11,7 @@ export class BookingPage extends BasePage {
     readonly submitBookingButton = this.page.getByTestId("booking-submit");
     readonly bookingSuccessMessage = this.page.getByTestId("booking-success-message");
     readonly bookingFormMessage = this.page.getByTestId("booking-form-message");
+    readonly bookingErrorBanner = this.page.getByTestId("booking-banner-error");
 
     constructor(page: Page) {
         super(page);

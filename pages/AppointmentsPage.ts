@@ -1,10 +1,20 @@
 import { Page } from "@playwright/test";
 import { BasePage } from "./BasePage";
 
-type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "rejected";
+type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "rejected" | "completed";
+
+const STATUS_LABELS: Record<AppointmentStatus, string> = {
+    pending: "Waiting on clinic",
+    confirmed: "Confirmed",
+    cancelled: "Cancelled",
+    rejected: "Rejected",
+    completed: "Completed",
+};
 
 export class AppointmentsPage extends BasePage {
     readonly appointmentsList = this.page.getByTestId("patient-appt-list");
+    readonly errorBanner = this.page.getByTestId("patient-appt-banner");
+    readonly cancelButton = this.page.getByTestId("patient-appt-cancel").first();
     readonly waitlistSection = this.page.getByTestId("patient-waitlist-section");
     readonly waitlistList = this.page.getByTestId("patient-waitlist-list");
     readonly offersSection = this.page.getByTestId("patient-offers-section");
@@ -16,13 +26,13 @@ export class AppointmentsPage extends BasePage {
     }
 
     appointmentByStatus(status: AppointmentStatus) {
-        const labels: Record<AppointmentStatus, string> = {
-            pending: "Waiting on clinic",
-            confirmed: "Confirmed",
-            cancelled: "Cancelled",
-            rejected: "Rejected",
-        };
-        return this.appointmentsList.getByText(labels[status]);
+        return this.appointmentsList.getByText(STATUS_LABELS[status]);
+    }
+
+    badgeByStatus(status: AppointmentStatus) {
+        return this.appointmentsList
+            .locator('[data-qa="status-badge"]')
+            .filter({ hasText: STATUS_LABELS[status] });
     }
 
     waitlistItem() { return this.waitlistList.getByTestId("patient-waitlist-item"); }

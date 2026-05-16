@@ -3,7 +3,7 @@ import { BasePage } from "./BasePage";
 
 export class DoctorAppointmentsPage extends BasePage {
     readonly appointmentsList = this.page.getByTestId("doctor-appt-list");
-    readonly bannerSuccess = this.page.getByTestId("doctor-appt-banner-success");
+    readonly toastSuccess = this.page.locator(".toast.toast--success");
     readonly wsStatus = this.page.locator("[data-qa='doctor-ws-status']");
     readonly wsToast = this.page.locator("[data-qa='doctor-ws-toast']");
 
