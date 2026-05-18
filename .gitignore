@@ -14,3 +14,7 @@ data/
 .hypothesis/
 local.log
 log/
+docs/PORTFOLIO_NARRATIVE.md
+docs/DEFENSE_NOTES.md
+docs/ROGUELIKE.md
+BACKLOG.md
