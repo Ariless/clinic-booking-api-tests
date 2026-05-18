@@ -19,6 +19,12 @@ export class AppointmentsPage extends BasePage {
     readonly waitlistList = this.page.getByTestId("patient-waitlist-list");
     readonly offersSection = this.page.getByTestId("patient-offers-section");
     readonly offersList = this.page.getByTestId("patient-offers-list");
+    readonly toastSuccess = this.page.locator(".toast.toast--success");
+    readonly pagination = this.page.getByTestId("patient-appt-pagination");
+    readonly pageInfo = this.page.getByTestId("patient-appt-page-info");
+    readonly prevPageButton = this.page.getByTestId("patient-appt-prev-page");
+    readonly nextPageButton = this.page.getByTestId("patient-appt-next-page");
+    readonly pageSizeSelect = this.page.getByTestId("patient-appt-page-size");
 
     constructor(page: Page) {
         super(page);
