@@ -35,6 +35,14 @@ async function globalTeardown() {
     db.prepare("DELETE FROM users WHERE email LIKE 'test_%@example.com'").run();
 
     console.log(`[global-teardown] removed ${testUsers.length} orphaned test user(s)`);
+  } catch (err: any) {
+    // In CI the DB is owned by the Docker container (root) — host runner has no write access.
+    // The DB is ephemeral there anyway, so skipping cleanup is safe.
+    if (err?.code === 'SQLITE_READONLY') {
+      console.log('[global-teardown] DB is readonly — skipping cleanup (CI ephemeral DB)');
+      return;
+    }
+    throw err;
   } finally {
     db.close();
   }
