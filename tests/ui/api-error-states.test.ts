@@ -70,7 +70,7 @@ test.describe("API error states — page.route() @ui", () => {
         const loginPage = new LoginPage(page);
         await loginPage.login(user.email, user.password);
 
-        await page.route("**/api/v1/appointments/my", (route) => route.abort());
+        await page.route("**/api/v1/appointments/my**", (route) => route.abort());
 
         const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
