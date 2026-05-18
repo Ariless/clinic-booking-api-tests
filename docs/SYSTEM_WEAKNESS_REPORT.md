@@ -232,18 +232,20 @@
 
 ### 1.4 Reschedule compound operation (free + promote + book)
 
-**Risk:** `PATCH /reschedule` must atomically: (1) free old slot, (2) trigger waitlist promotion on old slot, (3) book new slot. If any step fails mid-way, the system must roll back to a consistent state.
+**Risk:** `PATCH /reschedule` must atomically: (1) book new slot, (2) free old slot, (3) trigger waitlist promotion on old slot. The **order** of operations within the transaction is a correctness invariant, not just an implementation detail.
 
 **How the system protects itself:**
 - All three steps run inside a single `db.transaction()`.
 - SQLite rolls back the entire transaction on any failure — no partial state (e.g. old slot freed but new slot not booked).
 - The unique index `idx_appointments_one_active_per_slot` catches concurrent booking of the new slot that slips past the availability check.
 
-**Residual weakness:** If two patients race to reschedule to the same new slot, the second request receives `409 SLOT_TAKEN` via the unique constraint — same protection as original booking. However, the first patient's old slot is already freed and promoted before the constraint fires in the second transaction — this is correct behavior, not a bug.
+**Bug found and fixed (2026-05-16 — B-07):** Original implementation ran `promoteFromWaitlist(oldSlotId)` **before** moving the appointment to the new slot. With an active waitlist patient, `promoteFromWaitlist` inserted a new appointment on `oldSlotId` while the rescheduled appointment still referenced `oldSlotId` → UNIQUE constraint violation → incorrect `409 SLOT_TAKEN`. The 7 tests without waitlist were no-ops for `promoteFromWaitlist` — bug was invisible until test 8 added a waitlist patient. Fix: reorder to (1) mark new slot unavailable, (2) move appointment, (3) free old slot, (4) promote.
 
-**Severity:** Low — the transaction boundary is correctly drawn and the constraint provides a backstop.
+**Residual weakness:** If two patients race to reschedule to the same new slot, the second request receives `409 SLOT_TAKEN` via the unique constraint — same protection as original booking. Concurrency scenario not yet explicitly tested.
 
-**Test coverage:** ❌ planned (after TS migration) — concurrency test: two patients reschedule to the same slot simultaneously; only one should succeed.
+**Severity:** Low — transaction boundary is correctly drawn; constraint provides a backstop. Operation ordering is now correct.
+
+**Test coverage:** ✅ `appointments.reschedule.test.ts` (8 tests) — covers happy path (pending→new slot), confirmed→pending reset, 409 SLOT_TAKEN, 422 INVALID_TRANSITION/DOCTOR_MISMATCH/SAME_SLOT, 403 FORBIDDEN, and waitlist cascade (the test that found B-07). Concurrency test (two patients, same new slot simultaneously) ❌ planned.
 
 ---
 
@@ -266,7 +268,7 @@
 | Color contrast below WCAG AA | Low | ❌ known design debt (#64748b) | ⚠️ excluded from axe run, documented |
 | Retrieval quality — ambiguous symptoms route to wrong specialty | Medium | Partial — LLM may correct; mock mode exposes raw retrieval | ❌ no regression test for ambiguous symptoms (found 2026-05-08, Pact) |
 | Specialty/seed data mismatch — `doctors: []` on valid 200 | Medium | ❌ no guard | ❌ no test; silent failure (found 2026-05-08, Pact) |
-| Reschedule free+promote+book atomicity | Low | ✅ single transaction + unique index | ❌ concurrency test planned |
+| Reschedule free+promote+book atomicity | Low | ✅ single transaction + unique index; operation order fixed (B-07) | ✅ 8 tests; concurrency scenario planned |
 | Malformed JWT → `400 <EMPTY>` — error contract violation | Medium | ❌ middleware fires before route handler, returns raw 400 | ❌ found by Schemathesis 2026-05-12 — no test for malformed (vs missing) auth header |
 | TRACE method returns 404 instead of 405 | Low | ❌ Express default | ❌ not tested — HTTP spec requires 405 for unsupported methods |
 | `POST /consultations` missing `401` in OpenAPI spec | Low | N/A — spec doc gap | ❌ spec does not document 401 for auth-required endpoints |

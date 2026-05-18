@@ -1,8 +1,8 @@
 # Requirements Traceability Matrix — Clinic Booking API
 
 **Purpose:** trace every business requirement to the test file(s) that verify it, and confirm coverage status.  
-**Last updated:** 2026-05-12  
-**Suite:** 111 automated tests across 7 layers
+**Last updated:** 2026-05-16  
+**Suite:** 118 automated tests across 7 layers
 
 Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 
@@ -34,9 +34,34 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | L-06 | Doctor can cancel a confirmed appointment | `appointments.rbac.doctor.test.js` | ✅ |
 | L-07 | Cancelled slot is freed and available for rebooking | `appointments.cancel.patient.test.js` (DB assertion) | ✅ |
 | L-08 | Invalid state transitions return 422 INVALID_TRANSITION | `appointments.invalid-transition.test.js` | ✅ |
-| L-09 | Patient can reschedule pending or confirmed appointment | SUT implemented; 0 tests — **awaiting TS migration** | ❌ |
-| L-10 | Reschedule is atomic: old slot freed, new slot booked, waitlist promoted | SUT implemented; 0 tests | ❌ |
-| L-11 | Reschedule to a different doctor returns 422 DOCTOR_MISMATCH | SUT implemented; 0 tests | ❌ |
+| L-09 | Patient can reschedule pending or confirmed appointment | `appointments.reschedule.test.ts` | ✅ |
+| L-10 | Reschedule is atomic: old slot freed, new slot booked, waitlist promoted | `appointments.reschedule.test.ts` (waitlist cascade test) | ✅ |
+| L-11 | Reschedule to a different doctor returns 422 DOCTOR_MISMATCH | `appointments.reschedule.test.ts` | ✅ |
+| L-12 | Patient can book a recurring series of weekly appointments | `appointments.recurring.test.ts`, `appointments.recurring.e2e.test.ts` | ✅ |
+| L-13 | Patient can cancel an entire recurring series | `appointments.recurring.test.ts`, `appointments.recurring.e2e.test.ts` | ✅ |
+| L-14 | Doctor can mark confirmed appointment as completed | `appointments.confirm.j3.test.ts` | ✅ |
+
+---
+
+## Appointment list & pagination
+
+| ID | Requirement | Test file(s) | Status |
+|----|-------------|--------------|--------|
+| AP-01 | `GET /appointments/my` returns paginated envelope `{data, total, page, limit, totalPages}` | `appointments.pagination.test.ts` | ✅ |
+| AP-02 | `GET /appointments/doctor` returns paginated envelope (doctor JWT) | `appointments.pagination.test.ts` | ✅ |
+| AP-03 | `page=2&limit=1` returns correct offset — no off-by-one | `appointments.pagination.test.ts` | ✅ |
+| AP-04 | Invalid pagination params (page=0, limit=0, non-integer) return 400 VALIDATION_ERROR | `appointments.pagination.test.ts` | ✅ |
+
+---
+
+## Doctor schedule
+
+| ID | Requirement | Test file(s) | Status |
+|----|-------------|--------------|--------|
+| DS-01 | Doctor can set working hours per day of week via `PUT /me/schedule` | `doctors.schedule.test.ts` | ✅ |
+| DS-02 | Slot booking outside doctor's working hours returns 422 OUTSIDE_WORKING_HOURS | `doctors.schedule.test.ts` | ✅ |
+| DS-03 | Doctor schedule UI saves and reloads correctly | `doctor.schedule.ui.test.ts` | ✅ |
+| DS-04 | Schedule set via UI is confirmed by API and persisted in DB | `doctor.schedule.cross-layer.test.ts` | ✅ |
 
 ---
 
@@ -138,7 +163,9 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | Area | Total requirements | Covered | Partial | Not covered |
 |------|--------------------|---------|---------|-------------|
 | Authentication | 7 | 6 | 0 | 1 |
-| Appointment lifecycle | 11 | 8 | 0 | 3 |
+| Appointment lifecycle | 14 | 14 | 0 | 0 |
+| Appointment list & pagination | 4 | 4 | 0 | 0 |
+| Doctor schedule | 4 | 4 | 0 | 0 |
 | Waitlist | 6 | 6 | 0 | 0 |
 | Access control | 5 | 5 | 0 | 0 |
 | Real-time notifications | 5 | 5 | 0 | 0 |
@@ -147,13 +174,12 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | Error contract | 3 | 3 | 0 | 0 |
 | Performance | 5 | 5 | 0 | 0 |
 | Accessibility | 2 | 1 | 1 | 0 |
-| **Total** | **55** | **48 (87%)** | **1 (2%)** | **6 (11%)** |
+| **Total** | **66** | **62 (94%)** | **1 (2%)** | **3 (5%)** |
 
 **Not covered — known reasons:**
 
 | ID | Gap | Reason |
 |----|-----|--------|
 | A-07 | Malformed JWT error contract | Found by Schemathesis 2026-05-12 — fix in next cycle |
-| L-09–L-11 | Reschedule tests | Deferred — awaiting TypeScript migration |
 | AI-07 | "chest pain" → Cardiologist | B-05 open bug — retrieval scoring fix needed first |
 | AI-08 | `doctors.length > 0` assertion | B-06 open bug — product decision on seeding or error code |

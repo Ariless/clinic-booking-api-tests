@@ -830,6 +830,10 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `appointments.rbac.patient.test.js` | RBAC: patient forbidden on doctor-only actions (confirm, reject); doctor forbidden on patient-only route |
 | `appointments.rbac.cross-doctor.test.js` | RBAC: cross-doctor data isolation — doctor cannot access another doctor's appointments (IDOR) |
 | `appointments.booking.rate-limit.test.js` | Rate limiting — booking endpoint enforces per-token request window *(local only — requires env override)* |
+| `appointments.reschedule.test.ts` | Reschedule correctness — pending→new slot, confirmed→resets to pending, 409 SLOT_TAKEN, 422 DOCTOR_MISMATCH/SAME_SLOT, 403 FORBIDDEN, waitlist cascade on reschedule |
+| `appointments.pagination.test.ts` | Pagination contract — envelope shape `{data,total,page,limit,totalPages}`, offset correctness, invalid param rejection (page=0, limit=0, NaN) |
+| `appointments.recurring.test.ts` | Recurring series — 201 all slots booked + seriesId on each, 201 partial booking, 404 SLOT_NOT_FOUND, 400 VALIDATION_ERROR, count boundaries (1/13), 401, 200 cancel series, 404 SERIES_NOT_FOUND |
+| `doctors.schedule.test.ts` | Doctor schedule management — PUT/GET working hours, slot creation blocked outside schedule, boundary start/end times, timezone offset |
 | `doctors.list.test.js` | Doctor listing — availability data integrity, correct shape |
 | `ai.recommend.test.js` | AI feature contract — feature flag, error codes, response schema, rate limit; `reasoning` field present, specialty-invariant (never hallucinates outside `ALLOWED_SPECIALTIES`); bias validation: rephrasing invariance + demographic neutrality *(tests skip unless `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` set)* |
 | `pact/ai.recommend.pact.consumer.test.js` | Consumer-driven contract — shape of 200/400/422 responses formalized as a pact; runs against Pact mock server (no SUT needed) |
@@ -863,6 +867,8 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `consultations.cross-layer.test.js` | Payment + consultation cross-layer — payment result visible in UI and consultation record created |
 | `patient-notifications.e2e.test.js` | Patient notification receipt — notification appears in UI after booking event |
 | `doctor-notifications.e2e.test.js` | Doctor real-time UI — booking/cancellation toast appears in doctor browser without page reload; also caught real SUT bug (`window.ClinicCore` undefined — WS never connected before fix) |
+| `doctor.schedule.cross-layer.test.ts` | Doctor schedule cross-layer — schedule set via UI, verified via API + DB; slot creation respects working hours |
+| `appointments.recurring.e2e.test.ts` | Recurring series cross-layer — book via API → both appointments visible in UI with series tag + DB seriesId confirmed; cancel series via UI → API status + DB status both cancelled |
 
 ### UI layer
 
@@ -873,5 +879,37 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `visual.test.js` | Visual regression — pixel-level baseline comparison for login (empty + error) and register pages across Chromium and mobile-chrome; catches CSS/layout regressions invisible to behavioural tests |
 | `guest-gates.test.js` | Auth guard — unauthenticated users cannot access protected pages (booking, consultations, notifications) |
 | `accessibility.test.js` | WCAG compliance — axe-core audit on login, register, booking pages |
+| `api-error-states.test.ts` | Error display routing — server 500 and network abort surface to correct UI zones (booking form message vs appointment banner); `page.route()` mocking without SUT changes |
+| `doctor.schedule.ui.test.ts` | Doctor schedule form — 7 day checkboxes, checkbox enables inputs, save shows toast, saved data loads on revisit, OUTSIDE_WORKING_HOURS shown when booking outside schedule |
+| `reschedule.ui.test.ts` | Reschedule button visibility — shown for pending/confirmed only; reschedule flow refreshes list to pending + shows toast |
+| `patient-appointments.pagination.test.ts` | Patient pagination controls — hidden when single page, page info correct, prev disabled on page 1, next requests page=2, page size resets to page=1 |
+| `doctor-appointments.pagination.test.ts` | Doctor pagination controls — same coverage for doctor workspace |
+| `appointments.recurring.ui.test.ts` | Recurring series UI — series tag visible when seriesId present; cancel-series button shown for pending/confirmed+seriesId only; cancel flow: confirm dialog → list reloads → toast "Series cancelled."; API error → inline notice |
+| `ui-disabled-states.test.ts` | Form disabled state cascade — doctor select disabled until specialty chosen; offer accept button re-enabled after API error (not stuck in disabled state) |
+
+## 18. Architecture decisions — было / стало / почему
+
+### 18.1 Page Object instantiation → fixture injection (май 2026)
+
+**Before:** каждый тест вручную создавал page objects:
+```ts
+const loginPage = new LoginPage(page)
+const appointmentsPage = new AppointmentsPage(page)
+```
+При 100+ тестах — повторяющийся boilerplate в каждом файле. При переименовании класса — правки во всех тестах.
+
+**After:** все page objects вынесены в `fixtures/pages.ts` через `base.extend<Pages>()`:
+```ts
+export const test = base.extend<Pages>({
+  loginPage: async ({ page }, use) => use(new LoginPage(page)),
+  appointmentsPage: async ({ page }, use) => use(new AppointmentsPage(page)),
+  // ...все 7 страниц
+});
+```
+Тесты просто деструктурируют нужное: `{ loginPage, appointmentsPage }`. Никаких `new()` в тест-файлах.
+
+**Why:** сделано во время TypeScript-миграции (май 2026). POM отвечает за domain clarity (локаторы + методы), fixtures отвечают за DX (wiring). Используются вместе, не вместо.
+
+**Interview line:** *"Moved all page object instantiation into a pages fixture using base.extend(). Specs just destructure what they need — zero new() calls in test files. POM for domain clarity, fixtures for DX."*
 
 **Why this matters:** every file answers a question that no other file asks. Adding a new test file should cover a new risk dimension — if it doesn't, it's either a duplicate or it belongs in an existing file.

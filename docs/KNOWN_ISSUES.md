@@ -84,6 +84,20 @@ Living document. Every bug found during testing — fixed or open — recorded h
 
 ---
 
+### B-07 — Wrong operation order in reschedule causes 409 SLOT_TAKEN with active waitlist (✅ Fixed 2026-05-16)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-05-16 |
+| **Found by** | `appointments.reschedule.test.ts` — test 8 (waitlist cascade); 7/8 passed, test 8 returned `409 SLOT_TAKEN` for a free slot |
+| **Severity** | High |
+| **Business impact** | All reschedule operations when an active waitlist existed returned incorrect `409 SLOT_TAKEN`. Patient could not change appointment time — error said "slot taken" for a slot that was free. The 7 non-waitlist tests passed silently; the bug was invisible without a waitlist scenario. |
+| **Root cause** | `rescheduleAppointment` in `appointmentsRepository.js` freed the old slot and called `promoteFromWaitlist(oldSlotId)` **before** moving the appointment to the new slot. `promoteFromWaitlist` inserted a new appointment on `oldSlotId` while the rescheduled appointment still referenced `oldSlotId` — two active appointments on the same slot → UNIQUE constraint `idx_appointments_one_active_per_slot` fired → `409 SLOT_TAKEN`. |
+| **Fix** | Reordered operations inside `db.transaction()`: (1) mark new slot unavailable, (2) move appointment to new slot, (3) mark old slot available, (4) call `promoteFromWaitlist`. Appointment leaves old slot before promotion can insert into it. |
+| **Where** | `SYSTEM_WEAKNESS_REPORT.md` §1.4 · `appointments.reschedule.test.ts` test 8 · `sut/src/repositories/appointmentsRepository.js` |
+
+---
+
 ### B-06 (open) — Valid 200 response returns `doctors: []` for unseeded specialties
 
 | Field | Value |
@@ -137,6 +151,20 @@ Living document. Every bug found during testing — fixed or open — recorded h
 
 ---
 
+### DEAD-01 — `INVALID_PATTERN` errorCode unreachable via HTTP — dead code in repository layer (found 2026-05-17)
+
+| Field | Value |
+|---|---|
+| **Status** | ⚠️ Design debt — dead code, not a production bug |
+| **Found by** | `appointments.recurring.test.ts` — expected `INVALID_PATTERN`, received `VALIDATION_ERROR` |
+| **Severity** | Low |
+| **Root cause** | Validation is duplicated across two layers. `appointmentsRoutes.js` checks `slotPattern !== "weekly"` and returns `VALIDATION_ERROR` before calling the repository. `appointmentsRepository.js` has its own check that returns `INVALID_PATTERN` — but this code is never reached via HTTP because the route layer intercepts first. |
+| **Fix** | Remove the duplicate check in the repository, or remove it from the route and let the repository own the validation. No functional change — just dead code elimination. |
+| **Where** | `src/routes/appointmentsRoutes.js` (PATCH recurring) · `src/repositories/appointmentsRepository.js` |
+| **Portfolio note** | Test on specific `errorCode` (not just HTTP status) exposed a validation layer inconsistency. "Test as specification" — the test revealed that the system has two conflicting specifications for the same check. |
+
+---
+
 ## CI / environment issues
 
 ### CI-01 — Rate limit test gets 400 instead of 429 in CI (2026-05-11)
@@ -149,6 +177,19 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | **Fix** | Add skip guard: if `RATE_LIMIT_REGISTER_MAX > 5` → skip test. Or set `RATE_LIMIT_REGISTER_MAX=3` in `docker-compose.test.yml` but only for this test step. |
 | **Category** | CI environment configuration — not a product bug |
 | **Portfolio note** | Classic "passes locally, fails in CI" — environment variable difference causes middleware ordering to change observable behaviour |
+
+### CI-03 — Route pattern without trailing `**` stopped matching paginated URL (✅ Fixed 2026-05-16)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-05-16 |
+| **Symptom** | `patient appointments — network drop on load, error banner shown @ui` expected error banner to be visible, received hidden — after adding `?page=1&limit=20` query params to the appointments URL |
+| **Root cause** | `page.route("**/api/v1/appointments/my", ...)` glob pattern without trailing `**` matches the path exactly. Adding query params changed the URL from `/appointments/my` to `/appointments/my?page=1&limit=20` — route handler was registered but never triggered. Fetch hit the real API, got an empty list, no error banner appeared. |
+| **Fix** | Changed pattern to `"**/api/v1/appointments/my**"` — trailing `**` matches any suffix including query strings. |
+| **Category** | Test infrastructure — route pattern brittle to URL shape changes |
+| **Portfolio note** | Silent test degradation: test ran, route registered, handler called 0 times. One character fix. Demonstrates that `page.route()` patterns must be verified when URL construction changes. |
+
+---
 
 ### CI-02 — Flaky SLOT_OVERLAP in `appointments.waitlist.offers.test.js` (2026-05-11)
 
@@ -173,8 +214,11 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | B-04 | Confirm banner hidden in <1ms | ✅ Fixed 2026-05-03 | Low | `doctor-confirm.e2e.test.js` |
 | B-05 | "chest pain" → Orthopedist (wrong retrieval ranking) | 🔴 Open | Medium | Pact provider verification |
 | B-06 | `doctors: []` on valid 200 (unseeded specialties) | 🔴 Open | Medium | Pact provider verification |
+| B-07 | Wrong operation order in reschedule → 409 with active waitlist | ✅ Fixed 2026-05-16 | High | `appointments.reschedule.test.ts` |
 | CI-01 | Rate limit test: 400 instead of 429 in CI | 🔴 Open | Low | CI run 2026-05-11 |
 | CI-02 | Flaky SLOT_OVERLAP in waitlist offers test | 🔴 Open | Low | CI run 2026-05-11 |
+| CI-03 | Route pattern broke on paginated URL (missing `**`) | ✅ Fixed 2026-05-16 | Low | `api-error-states.test.ts` |
 | D-01 | Color contrast below WCAG AA | ⚠️ Design debt | Low | `accessibility.test.js` |
 | D-02 | Doctor self-registration — no `doctorRecordId` validation | ⚠️ Design debt | High (prod) | Manual review |
 | D-03 | Rate limiting per-IP only | ⚠️ Design debt | Low | Manual review |
+| DEAD-01 | `INVALID_PATTERN` errorCode unreachable — dead code in repository layer | ⚠️ Design debt | Low | `appointments.recurring.test.ts` 2026-05-17 |

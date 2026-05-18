@@ -3,7 +3,7 @@
 [![Playwright tests](https://github.com/Ariless/clinic-booking-api-tests/actions/workflows/api-tests.yml/badge.svg)](https://github.com/Ariless/clinic-booking-api-tests/actions/workflows/api-tests.yml)
 [![Allure Report](https://img.shields.io/badge/Test_Report-Allure-orange)](https://ariless.github.io/clinic-booking-api-tests/)
 
-**Playwright (JavaScript)** automation for **[clinic-booking-api](https://github.com/Ariless/clinic-booking-api)**. Controlled **SUT**: REST + demo UI under `public/`. Same engineering habits as a production-grade framework: **POM**, **API client layer**, **tagged suites**, **schema-style checks**, **no sleeps**, **`data-qa`** selectors.
+**Playwright (TypeScript)** automation for **[clinic-booking-api](https://github.com/Ariless/clinic-booking-api)**. Controlled **SUT**: REST + demo UI under `public/`. Same engineering habits as a production-grade framework: **POM**, **API client layer**, **tagged suites**, **AJV schema validation**, **no sleeps**, **`data-qa`** selectors.
 
 **Normative design rules** (pyramid / determinism / state ownership / one-behaviour tests / failure transparency / minimalism + SRP, DRY, POM, review checklist): **`DESIGN_PRINCIPLES.md`**.
 
@@ -14,7 +14,7 @@
 
 - **Risk-first API checks** — what hurts users and the business (double booking, RBAC, lifecycle) before chasing coverage metrics; see **`docs/RISK_ANALYSIS.md`**.
 - **Clear ownership** — J1 / J2 / J3 style files + **`@smoke`** / **`@api`** (optional **`@negative`**, **`@regression`**, **`@rbac`** in titles when you add them); see **`docs/TEST_STRATEGY.md`**.
-- **What is already exercised** — auth (register + login), doctor catalog, **J1** booking slice in smoke (**pending** + `GET …/my`), **J3** confirm + slot invariant, **J2** reject, **N1** double-book `409 SLOT_TAKEN`, patient cancel + slot freed, `422 INVALID_TRANSITION`, extended RBAC (`appointments.rbac.patient`, `appointments.rbac.cross-doctor`), waitlist lifecycle + auto-promotion, rate limits (`@rate-limit`; require env override), chaos smoke + 503 body + health exempt (`@chaos`), security — IDOR + JWT tamper (`@security`; caught a real unintentional vulnerability), accessibility on login + register + booking pages (`@a11y`; axe-core, zero violations except documented color-contrast debt), UI gate + login + register forms, E2E cross-layer booking / conflict / confirm, **doctor UI confirm** (`doctor-confirm.e2e.test.js` `@e2e`) — patient books via API → doctor logs in, clicks Confirm in the doctor UI → success banner → patient sees confirmed via API; first test covering the doctor persona in a real browser; catches JavaScript wiring errors the API layer cannot see, **performance baseline** — k6 booking flow (50 VUs, p95 thresholds; `k6/booking-flow.js`), **DB-state assertions** — direct SQLite queries via `utils/dbClient.js` embedded inline in `appointments.mini.j1`, `appointments.confirm.j3`, `appointments.cancel.patient`, `appointments.waitlist`, `appointments.waitlist.promotion` — verifies `slot.isAvailable`, `appointment.status`, and waitlist row presence/absence after each operation, **mobile viewport** — `mobile-chrome` project (`Pixel 7`) re-runs all `tests/ui/**` on a 412 × 915 viewport; API tests run on `chromium` only, **patient WS notifications** (`patient-notifications.e2e.test.js` `@e2e`) — WebSocket connected → doctor confirms via API → `appointment.confirmed` notification item appears in patient browser in real time; proves server correctly routes events to the patient channel, **consultations cross-layer** (`consultations.cross-layer.test.js` `@e2e`) — patient books consultation via UI → API list confirms record → DB consultation row + payment row verified; skip guard: `PAYMENT_MODE=mock_success`, **waitlist cross-layer** (`waitlist.cross-layer.test.js` `@e2e`) — join via API → UI shows waitlist entry → leave via UI → API verifies removal → DB confirms row deleted, **guest gate — consultations** (`consultations.test.js` `@ui`) — unauthenticated user reaches `/patient/consultations` and sees sign-in gate instead of the booking form, **guest gate — notifications** (`patient-notifications.test.js` `@ui`) — unauthenticated user reaches `/patient/notifications` and sees sign-in gate instead of the live feed, **LLM judge** (`ai.recommend.test.js` `@rag`) — second Claude call evaluates whether `reasoning` logically justifies the recommended specialty; catches semantically wrong reasoning that schema assertions cannot detect, **RAG completeness metrics** (`ai.recommend.test.js` `@rag`) — calls `retrieve()` locally to know what was sent to the model, counts how many retrieved specialty names appear in the AI's `reasoning`; asserts recommended specialty present + coverage ≥ 50%; results surfaced as Allure parameters and JSON attachment; skipped in mock mode, **RAG pipeline unit tests** (`unit/ai.retrieval.test.js` `@unit`) — 4 pure unit tests: retrieval scoring returns correct specialty for known symptoms, unknown symptoms produce empty result, `buildPrompt` includes retrieved specialty + description in the Claude prompt; no HTTP, no API key required.
+- **What is already exercised** — auth (register + login), doctor catalog, **J1** booking slice in smoke (**pending** + `GET …/my`), **J3** confirm + slot invariant, **J2** reject, **N1** double-book `409 SLOT_TAKEN`, patient cancel + slot freed, `422 INVALID_TRANSITION`, extended RBAC (`appointments.rbac.patient`, `appointments.rbac.cross-doctor`), waitlist lifecycle + auto-promotion, rate limits (`@rate-limit`; require env override), chaos smoke + 503 body + health exempt (`@chaos`), security — IDOR + JWT tamper (`@security`; caught a real unintentional vulnerability), accessibility on login + register + booking pages (`@a11y`; axe-core, zero violations except documented color-contrast debt), UI gate + login + register forms, E2E cross-layer booking / conflict / confirm, **doctor UI confirm** (`doctor-confirm.e2e.test.ts` `@e2e`) — patient books via API → doctor logs in, clicks Confirm in the doctor UI → success banner → patient sees confirmed via API; first test covering the doctor persona in a real browser; catches JavaScript wiring errors the API layer cannot see, **performance baseline** — k6 booking flow (50 VUs, p95 thresholds; `k6/booking-flow.js`), **DB-state assertions** — direct SQLite queries via `utils/dbClient.ts` embedded inline in `appointments.mini.j1`, `appointments.confirm.j3`, `appointments.cancel.patient`, `appointments.waitlist`, `appointments.waitlist.promotion` — verifies `slot.isAvailable`, `appointment.status`, and waitlist row presence/absence after each operation, **mobile viewport** — `mobile-chrome` project (`Pixel 7`) re-runs all `tests/ui/**` on a 412 × 915 viewport; API tests run on `chromium` only, **patient WS notifications** (`patient-notifications.e2e.test.ts` `@e2e`) — WebSocket connected → doctor confirms via API → `appointment.confirmed` notification item appears in patient browser in real time; proves server correctly routes events to the patient channel, **consultations cross-layer** (`consultations.cross-layer.test.ts` `@e2e`) — patient books consultation via UI → API list confirms record → DB consultation row + payment row verified; skip guard: `PAYMENT_MODE=mock_success`, **waitlist cross-layer** (`waitlist.cross-layer.test.ts` `@e2e`) — join via API → UI shows waitlist entry → leave via UI → API verifies removal → DB confirms row deleted, **guest gate — consultations** (`consultations.test.ts` `@ui`) — unauthenticated user reaches `/patient/consultations` and sees sign-in gate instead of the booking form, **guest gate — notifications** (`patient-notifications.test.ts` `@ui`) — unauthenticated user reaches `/patient/notifications` and sees sign-in gate instead of the live feed, **LLM judge** (`ai.recommend.test.ts` `@rag`) — second Claude call evaluates whether `reasoning` logically justifies the recommended specialty; catches semantically wrong reasoning that schema assertions cannot detect, **RAG completeness metrics** (`ai.recommend.test.ts` `@rag`) — calls `retrieve()` locally to know what was sent to the model, counts how many retrieved specialty names appear in the AI's `reasoning`; asserts recommended specialty present + coverage ≥ 50%; results surfaced as Allure parameters and JSON attachment; skipped in mock mode, **RAG pipeline unit tests** (`unit/ai.retrieval.test.ts` `@unit`) — 4 pure unit tests: retrieval scoring returns correct specialty for known symptoms, unknown symptoms produce empty result, `buildPrompt` includes retrieved specialty + description in the Claude prompt; no HTTP, no API key required, **TypeScript migration** — full suite migrated to `.ts` (`strict: true`); all 79 JS files replaced; JS and TS coexist via `allowJs: true`; `npx tsc --noEmit` is the zero-errors bar, **doctor schedule / working hours** (`doctors.schedule.test.ts` `@api`, `doctor.schedule.ui.test.ts` `@ui`, `doctor.schedule.cross-layer.test.ts` `@e2e`) — 10 API tests (PUT/GET schedule, within/outside hours, boundary start/end, partial overlap, no schedule, timezone offset), 5 UI tests (7-day form renders, checkbox enables inputs, save shows success, saved schedule loads into form, OUTSIDE_WORKING_HOURS shown in slot form), 1 E2E: set via UI → verified via API + DB; catches UTC comparison bugs the API layer alone can't surface, **global teardown on crash** (`global-teardown.ts`) — removes `test_%@example.com` users + linked payments, consultations, appointments, waitlist entries after a partial run; restores slot availability; wired via `globalTeardown` in `playwright.config.ts`, **visual regression** (`visual.test.ts` `@ui`) — badge state assertions via `getComputedStyle.backgroundColor`; `badgeByStatus()` page object method; 10 tests across chromium + mobile-chrome, **API error states** (`api-error-states.test.ts` `@ui`) — 3 tests using `page.route()` to inject 500 and network abort; booking 500, cancel 500, network abort; verifies error banners without touching the DB, **Pact consumer + provider** (`pact/ai.recommend.pact.*.test.ts` `@pact`) — consumer defines AI recommendation contract; provider verifies it; generated contracts in `pacts/`; proves contract drift is caught before integration, **BrowserStack cross-browser** (`.github/workflows/browserstack.yml`) — smoke suite runs on remote browsers via BrowserStack Automate; key finding: `safari` is not a valid Playwright project name — use `webkit` instead.
 
 ### Test metrics (lightweight — for interviews, not “enterprise BI”)
 
@@ -38,21 +38,21 @@ How this suite knows the system broke — and what each failure means:
 
 | Signal | What it means | Mapped to |
 | --- | --- | --- |
-| Smoke fails on `POST /appointments` → `201` | Core booking path is down — product unusable | `appointments.mini.j1.test.js` |
-| Smoke fails on `GET /api/v1/doctors` → `200` | Catalog unreachable — patients can't pick a doctor | `doctors.list.test.js` |
-| Smoke fails on `POST /auth/login` → `200` | Auth broken — no one can log in | `auth.login.test.js` |
-| `409 SLOT_TAKEN` not returned on double book | Double-sale invariant broken — two patients own one slot | `appointments.booking.conflict.test.js` |
-| `403` not returned on cross-role access | RBAC boundary broken — data leaks across roles | `appointments.rbac.*.test.js` |
-| `422 INVALID_TRANSITION` missing | State machine accepts illegal transitions — corrupted lifecycle | `appointments.invalid-transition.test.js` |
-| Cancel returns `200` but slot stays unavailable | Slot not freed — capacity lost silently | `appointments.cancel.patient.test.js` |
-| Second cancel returns `200` instead of `422` | Double-cancel accepted — state machine not enforced | `appointments.concurrency.test.js` |
-| Waitlist patient promoted twice after concurrent cancels | `promoteFromWaitlist` not atomic — patient double-booked | `appointments.concurrency.test.js` |
-| `GET /health` returns non-`200` | DB connection lost or SUT crashed | `infrastructure.test.js` |
-| `503 CHAOS_ERROR` on non-chaos run | Chaos middleware left enabled in production config | `chaos.test.js` (smoke case) |
-| axe violations on login / register / booking | Accessibility regression — landmark or heading structure broken | `accessibility.test.js` (`@a11y`) |
-| `GET /appointments/:id` returns `200` with no token | IDOR regression — auth guard removed from route | `security.test.js` (`@security`) |
+| Smoke fails on `POST /appointments` → `201` | Core booking path is down — product unusable | `appointments.mini.j1.test.ts` |
+| Smoke fails on `GET /api/v1/doctors` → `200` | Catalog unreachable — patients can't pick a doctor | `doctors.list.test.ts` |
+| Smoke fails on `POST /auth/login` → `200` | Auth broken — no one can log in | `auth.login.test.ts` |
+| `409 SLOT_TAKEN` not returned on double book | Double-sale invariant broken — two patients own one slot | `appointments.booking.conflict.test.ts` |
+| `403` not returned on cross-role access | RBAC boundary broken — data leaks across roles | `appointments.rbac.*.test.ts` |
+| `422 INVALID_TRANSITION` missing | State machine accepts illegal transitions — corrupted lifecycle | `appointments.invalid-transition.test.ts` |
+| Cancel returns `200` but slot stays unavailable | Slot not freed — capacity lost silently | `appointments.cancel.patient.test.ts` |
+| Second cancel returns `200` instead of `422` | Double-cancel accepted — state machine not enforced | `appointments.concurrency.test.ts` |
+| Waitlist patient promoted twice after concurrent cancels | `promoteFromWaitlist` not atomic — patient double-booked | `appointments.concurrency.test.ts` |
+| `GET /health` returns non-`200` | DB connection lost or SUT crashed | `infrastructure.test.ts` |
+| `503 CHAOS_ERROR` on non-chaos run | Chaos middleware left enabled in production config | `chaos.test.ts` (smoke case) |
+| axe violations on login / register / booking | Accessibility regression — landmark or heading structure broken | `accessibility.test.ts` (`@a11y`) |
+| `GET /appointments/:id` returns `200` with no token | IDOR regression — auth guard removed from route | `security.test.ts` (`@security`) |
 | k6 `p(95) > 200ms` or `error_rate > 1%` threshold breached | Performance regression — latency spike or increased error rate under load | `k6/booking-flow.js` |
-| Doctor UI confirm button does nothing or returns error | JavaScript event handler broken or endpoint wired incorrectly — doctors can't confirm from the browser | `doctor-confirm.e2e.test.js` |
+| Doctor UI confirm button does nothing or returns error | JavaScript event handler broken or endpoint wired incorrectly — doctors can't confirm from the browser | `doctor-confirm.e2e.test.ts` |
 
 **Invalid states** — if any of these exist in the DB, something is broken:
 - `slot.isAvailable = 0` with no active appointment referencing it
@@ -81,11 +81,18 @@ Run the API locally (`npm run dev` in the SUT repo) before UI or hybrid tests. *
 | Piece | Role |
 | --- | --- |
 | **Playwright** (`@playwright/test`) | UI + **built-in `request`** for API tests |
-| **Node.js / JavaScript** (CommonJS) | Same style as the SUT |
-| **Chromium only** | `playwright.config.js` — avoids frozen WebKit on macOS 14 arm64 |
-| **dotenv** | `BASE_URL` and future secrets from `.env` (not in git) |
-| **AJV** (optional, planned) | JSON validation for API bodies — align with OpenAPI fragments |
-| **Allure** | Second reporting channel next to HTML + traces — **wired** (`allure-playwright` reporter, `allure-commandline`); report published to GitHub Pages on every `main` run |
+| **Node.js / TypeScript** | `strict: true`; gradual migration from JS — all new files in TS |
+| **Chromium + mobile-chrome** | `playwright.config.ts` — Pixel 7 viewport re-runs all UI tests; avoids frozen WebKit on macOS 14 arm64 |
+| **dotenv** | `BASE_URL` and secrets from `.env` (not in git) |
+| **AJV** | JSON schema validation — wired; schemas in `data/schemas/` |
+| **better-sqlite3** | Direct DB assertions in E2E tests via `utils/dbClient.ts` |
+| **Allure** | Second reporting channel next to HTML + traces — wired (`allure-playwright` reporter); report published to GitHub Pages on every `main` run |
+| **k6** | Performance gate — 50 VUs booking flow; p95 + error rate thresholds (`k6/booking-flow.js`) |
+| **BrowserStack** | Cross-browser CI workflow (`.github/workflows/browserstack.yml`) |
+| **Pact** | Consumer-driven contract tests for AI recommendation endpoint |
+| **fast-check** | Property-based tests — schedule boundary arbitraries |
+| **Stryker** | Mutation testing — validates test suite sensitivity |
+| **OWASP ZAP** | Automated security scan in CI (`.github/workflows/security-scan.yml`) |
 
 ---
 
@@ -101,22 +108,24 @@ clinic-booking-api-tests/
 ├── docs/
 │   ├── TEST_STRATEGY.md        # Risk-first scope, tags, J1/J2/J3 narrative, planned cases
 │   └── RISK_ANALYSIS.md        # Impact × likelihood → existing / planned tests
-├── playwright.config.js       # Chromium, testIdAttribute: data-qa, BASE_URL, CI retries
+├── playwright.config.ts       # Chromium + mobile-chrome, testIdAttribute: data-qa, BASE_URL, CI retries
+├── global-teardown.ts         # Removes orphaned test users + linked data after crash
 ├── package.json
 ├── .env.example
 ├── .gitignore
 ├── config/
-│   └── environments/          # Optional: baseUrl, flags per env (ci, local)
-├── api/                       # API Client Layer — endpoints + auth hidden from specs
-├── data/                      # Shared constants (routes, messages), optional OpenAPI snippets
-├── fixtures/                  # `userFixture.js` — `user`, `loggedInPage` (same pattern as legacy UI+API framework)
-├── pages/                     # Page Objects + BasePage (shared navigation / helpers)
-├── utils/                     # Pure helpers (generators, parsers, requestId helpers)
+│   └── env.ts                 # BASE_URL from process.env
+├── api/                       # API Client Layer — one TS class per resource
+├── data/                      # testData.ts (endpoints), seedAccounts.ts, schemas/
+├── fixtures/                  # Playwright fixtures — user, slot, twoUsers
+├── flows/                     # Multi-step API sequences reused across tests
+├── pages/                     # Page Objects + BasePage (TS)
+├── utils/                     # dbClient, schemaValidator, slotAssertion, webhookTestServer, aiBugReporter
 └── tests/
-    ├── api/                   # Contract & negative paths vs REST
-    ├── ui/                    # Single-page / widget behaviour (forms, nav, guest gates)
+    ├── api/                   # Contract & negative paths vs REST (+ concurrency/, pact/)
+    ├── ui/                    # Single-page / widget behaviour (forms, nav, guest gates, error states)
     ├── e2e/                   # Full journeys (register → book → list → cancel, doctor flow, …)
-    └── unit/                  # Pure unit tests for SUT modules (no HTTP, no browser)
+    └── unit/                  # Pure unit tests (ai.retrieval, bug-reporter.demo)
 ```
 
 ### Framework architecture (diagram)
@@ -131,8 +140,8 @@ flowchart TB
     E["tests/e2e"]
   end
   subgraph F [Reuse layer]
-    C["api/*Client.js"]
-    P["pages/*Page.js"]
+    C["api/*Client.ts"]
+    P["pages/*Page.ts"]
     X["fixtures"]
     M["utils + data"]
   end
@@ -194,8 +203,8 @@ flowchart TB
 | Decision | Rationale |
 | --- | --- |
 | **Playwright `request` for API tests** | Same timeouts/traces as UI runs; no extra HTTP client unless a library clearly pays off. |
-| **Dedicated `api/*Client.js` layer** | SUT URLs and payloads change in one place; specs stay readable. |
-| **Chromium only** | Stable local/CI runs; avoids frozen WebKit on macOS 14 arm64. |
+| **Dedicated `api/*Client.ts` layer** | SUT URLs and payloads change in one place; specs stay readable. |
+| **Chromium + mobile-chrome** | Stable local/CI runs; Pixel 7 viewport re-runs all UI tests; avoids frozen WebKit on macOS 14 arm64. |
 | **`testIdAttribute: 'data-qa'`** | Matches SUT contract (`quality-strategy.md` in the API repo). |
 | **No PageFactory** | Playwright locators are lazy; a thin `new Page(page)` wrapper adds little — use fixtures / `beforeEach` when small. |
 | **`tests/api` · `tests/ui` · `tests/e2e`** | Clear intent: contract vs screen vs journey (same split as the previous framework). |
@@ -212,9 +221,9 @@ flowchart TB
 
 Summarised here for onboarding; **full detail and review checklist:** **`DESIGN_PRINCIPLES.md`**.
 
-- **Page Object Model** — `pages/*Page.js`, shared **`BasePage`**.
+- **Page Object Model** — `pages/*Page.ts`, shared **`BasePage`**.
 - **No PageFactory** — instantiate pages in fixtures / `beforeEach` when still readable.
-- **API client layer** — `api/*Client.js`; specs do not own raw URLs.
+- **API client layer** — `api/*Client.ts`; specs do not own raw URLs.
 - **DRY / SRP** — `utils/`, `data/`, single responsibility per file type.
 - **Fixtures + atomic tests** — no cross-test order dependency.
 - **Tags** — `@smoke`, `@api`, `@ui`, `@e2e`; `--grep`.
@@ -346,7 +355,7 @@ npm run report              # allure generate + open
 - **`docs/RTM.md`** — requirements traceability matrix: 55 requirements across 10 areas mapped to test files; 87% covered; 6 gaps documented with explicit reasons.
 - **`docs/BUSINESS_RULES.md`** — all domain rules in one place (accounts, state machine, slots, waitlist, RBAC, AI, payments, error contract); each rule numbered and testable; gap list of rules without test coverage.
 - **`docs/ACCEPTANCE_CRITERIA.md`** — "feature is done when..." for all 21 features; written as shift-left artifact; gap table of criteria not yet covered by automated tests.
-- **`utils/aiBugReporter.js`** — on test failure, calls Claude Haiku with test name + error + stack; returns structured bug report (severity, steps to reproduce, actual vs expected); attached to Allure result card via `testInfo.attach()` + saved to `bug-reports/`; silent no-op when `ANTHROPIC_API_KEY` is absent.
+- **`utils/aiBugReporter.ts`** — on test failure, calls Claude Haiku with test name + error + stack; returns structured bug report (severity, steps to reproduce, actual vs expected); attached to Allure result card via `testInfo.attach()` + saved to `bug-reports/`; silent no-op when `ANTHROPIC_API_KEY` is absent.
 - **`docs/AI_GAP_ANALYSIS.md`** — AI-generated coverage gap analysis: endpoints with no tests, error codes not exercised, additional scenarios worth adding. Produced by `scripts/ai-gap-analysis.js` (`npm run ai:gap-analysis`); regenerate before each release cycle.
 - The SUT repo’s **`quality-strategy.md`** stays the contract for **`data-qa`** and product-side quality notes; this repo’s `docs/` stay **automation- and portfolio-facing**.
 
@@ -373,21 +382,21 @@ These features were added to the SUT to enable meaningful UI/E2E coverage and to
 
 | Removed | Reason |
 | --- | --- |
-| `doctors.list.test.js` — "idempotent, repeated call returns same data" | Tested REST contract semantics (GET idempotency), not a business risk specific to this system. Adds test count without adding confidence in anything that could actually fail. |
-| `security.test.js` — `POST /api/v1/appointments — 401 with no auth token` | Duplicate of the GET 401 test above it. Both verify the same auth middleware is applied. One test proves the middleware is wired; a second on a different verb adds marginal confidence that doesn't justify the maintenance cost. |
+| `doctors.list.test.ts` — "idempotent, repeated call returns same data" | Tested REST contract semantics (GET idempotency), not a business risk specific to this system. Adds test count without adding confidence in anything that could actually fail. |
+| `security.test.ts` — `POST /api/v1/appointments — 401 with no auth token` | Duplicate of the GET 401 test above it. Both verify the same auth middleware is applied. One test proves the middleware is wired; a second on a different verb adds marginal confidence that doesn't justify the maintenance cost. |
 
 ### Why UI tests only cover error paths
 
-All business logic is exercised at the API layer (fast, deterministic, no browser overhead). UI tests cover only what the API cannot verify: error message rendering, form validation display, guest gates, accessibility. Successful login and successful registration are covered by `auth.login.test.js` and `auth.register.test.js` at API level — adding UI duplicates of the same happy paths would be testing the framework, not the product.
+All business logic is exercised at the API layer (fast, deterministic, no browser overhead). UI tests cover only what the API cannot verify: error message rendering, form validation display, guest gates, accessibility. Successful login and successful registration are covered by `auth.login.test.ts` and `auth.register.test.ts` at API level — adding UI duplicates of the same happy paths would be testing the framework, not the product.
 
 **Interview line:** *"I test at the lowest layer that gives me confidence. Business logic belongs in API tests. UI tests catch rendering and wiring bugs — things only a browser can see."*
 
 ### Why the doctor UI E2E test was added
 
-`confirm.cross-layer.test.js` already calls `confirmAppointment()` via the API client. That test proves the HTTP endpoint works. It does not prove the doctor's browser can confirm appointments — a broken `addEventListener`, a wrong `data-appt-id`, or a missing `window.confirm` handler would all pass the API test and fail in the real UI. `doctor-confirm.e2e.test.js` fills that gap and is the only test where the doctor persona interacts with a real browser.
+`confirm.cross-layer.test.ts` already calls `confirmAppointment()` via the API client. That test proves the HTTP endpoint works. It does not prove the doctor's browser can confirm appointments — a broken `addEventListener`, a wrong `data-appt-id`, or a missing `window.confirm` handler would all pass the API test and fail in the real UI. `doctor-confirm.e2e.test.ts` fills that gap and is the only test where the doctor persona interacts with a real browser.
 
 ---
 
 ## Author
 
-QA automation | Playwright | JavaScript | API + UI against a real SUT contract.
+QA automation | Playwright | TypeScript | API + UI + E2E against a real SUT contract.
