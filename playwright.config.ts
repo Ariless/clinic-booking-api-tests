@@ -6,6 +6,7 @@ import "dotenv/config";
 // Mobile project uses Pixel 7 (Android Chrome) — no WebKit dependency.
 export default defineConfig({
   testDir: "./tests",
+  globalTeardown: "./global-teardown",
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,
