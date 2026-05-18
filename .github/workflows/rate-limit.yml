@@ -42,6 +42,7 @@ jobs:
         with:
           repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
           path: sut
+          token: ${{ secrets.SUT_GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
