@@ -29,6 +29,15 @@ test.describe("RAG pipeline — retrieval → prompt unit tests", () => {
         expect(results[0].specialty).toBe("Dermatologist");
     });
 
+    test("retrieve: bare 'chest pain' — Orthopedist mismatch, expected Cardiologist — bug B-05 @unit", () => {
+        // Generic "pain" keyword scores Orthopedist above Cardiologist for minimal 2-word input.
+        // "chest pain shortness of breath" works (more terms tip the score). Bare "chest pain" does not.
+        test.fail();
+        const results = retrieve("chest pain", specialtyKnowledge, 3);
+        expect(results.length).toBeGreaterThan(0);
+        expect(results[0].specialty).toBe("Cardiologist");
+    });
+
     test("retrieve: unknown symptoms → empty result (no match) @unit", () => {
         const results = retrieve("xyzzy gibberish", specialtyKnowledge, 3);
         expect(results.length).toBe(0);

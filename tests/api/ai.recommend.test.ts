@@ -52,6 +52,16 @@ test.describe("POST /api/v1/ai/recommend-doctor", () => {
         }
     });
 
+    test("200: doctors array is non-empty when specialty is seeded in DB @api", async ({ request, user }) => {
+        // Regression for B-06: 200 with doctors:[] = silent failure (patient can't book anyone)
+        // "chest pain and shortness of breath" reliably maps to Cardiologist (seeded in DB)
+        const ai = new AiRecommendClient(request);
+        const { status, body } = await ai.recommend("chest pain and shortness of breath", user.token);
+        expect(status).toBe(200);
+        expect(body.recommendedSpecialty).toBe("Cardiologist");
+        expect(body.doctors.length).toBeGreaterThan(0);
+    });
+
     test("422 UNKNOWN_SPECIALTY: symptoms cannot be mapped @api", async ({ request, user }) => {
         const ai = new AiRecommendClient(request);
         const { status, body } = await ai.recommend("xyzzy gibberish", user.token);
