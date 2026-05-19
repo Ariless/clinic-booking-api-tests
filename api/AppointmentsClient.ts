@@ -6,18 +6,24 @@ interface RequestOpts {
 }
 
 export class AppointmentsClient extends BaseClient {
-    async createAppointment(slotId: number, opts: RequestOpts = {}) {
+    async createAppointment(slotId: number, opts: RequestOpts & { type?: string } = {}) {
+        const { type, ...reqOpts } = opts;
+        const body: Record<string, unknown> = { slotId };
+        if (type !== undefined) body.type = type;
         const response = await this.request.post(endpoints.appointments, {
-            data: JSON.stringify({ slotId }),
-            headers: { "Content-Type": "application/json", ...(opts.headers ?? {}) },
+            data: JSON.stringify(body),
+            headers: { "Content-Type": "application/json", ...(reqOpts.headers ?? {}) },
         });
         return this.parseResponse(response);
     }
 
-    async createAppointmentFull(slotId: number, opts: RequestOpts = {}) {
+    async createAppointmentFull(slotId: number, opts: RequestOpts & { type?: string } = {}) {
+        const { type, ...reqOpts } = opts;
+        const body: Record<string, unknown> = { slotId };
+        if (type !== undefined) body.type = type;
         const response = await this.request.post(endpoints.appointments, {
-            data: JSON.stringify({ slotId }),
-            headers: { "Content-Type": "application/json", ...(opts.headers ?? {}) },
+            data: JSON.stringify(body),
+            headers: { "Content-Type": "application/json", ...(reqOpts.headers ?? {}) },
         });
         return this.parseResponseFull(response);
     }
@@ -36,6 +42,13 @@ export class AppointmentsClient extends BaseClient {
         const { status, body } = await this.parseResponse(response);
         const data = Array.isArray(body) ? body : (body?.data ?? body);
         return { status, body: data };
+    }
+
+    async listMyFiltered(params: Record<string, string>, opts: RequestOpts = {}) {
+        const qs = new URLSearchParams(params);
+        const url = endpoints.appointmentsMy + (qs.toString() ? `?${qs}` : '');
+        const response = await this.request.get(url, { headers: { ...(opts.headers ?? {}) } });
+        return this.parseResponse(response);
     }
 
     async listMyPaginated(page?: number, limit?: number, opts: RequestOpts = {}) {
@@ -98,6 +111,58 @@ export class AppointmentsClient extends BaseClient {
     async completeAppointment(appointmentId: number, opts: RequestOpts = {}) {
         return this.parseResponse(
             await this.request.patch(endpoints.appointmentComplete(appointmentId), {
+                headers: { ...(opts.headers ?? {}) },
+            }),
+        );
+    }
+
+    async bookRecurring(startSlotId: number, slotPattern: string, count: number, opts: RequestOpts = {}) {
+        return this.parseResponse(
+            await this.request.post(endpoints.appointmentsRecurring, {
+                data: JSON.stringify({ startSlotId, slotPattern, count }),
+                headers: { "Content-Type": "application/json", ...(opts.headers ?? {}) },
+            }),
+        );
+    }
+
+    async cancelSeries(seriesId: string, opts: RequestOpts = {}) {
+        return this.parseResponse(
+            await this.request.patch(endpoints.appointmentSeriesCancel(seriesId), {
+                headers: { ...(opts.headers ?? {}) },
+            }),
+        );
+    }
+
+    async rescheduleAppointment(appointmentId: number, newSlotId: number, opts: RequestOpts = {}) {
+        return this.parseResponse(
+            await this.request.patch(endpoints.appointmentReschedule(appointmentId), {
+                data: JSON.stringify({ newSlotId }),
+                headers: { "Content-Type": "application/json", ...(opts.headers ?? {}) },
+            }),
+        );
+    }
+
+    async addNote(appointmentId: number, content: string, opts: RequestOpts = {}) {
+        return this.parseResponse(
+            await this.request.post(endpoints.appointmentNotes(appointmentId), {
+                data: JSON.stringify({ content }),
+                headers: { "Content-Type": "application/json", ...(opts.headers ?? {}) },
+            }),
+        );
+    }
+
+    async rateAppointment(appointmentId: number, score: number, comment?: string, opts: RequestOpts = {}) {
+        return this.parseResponse(
+            await this.request.post(endpoints.appointmentRate(appointmentId), {
+                data: JSON.stringify({ score, ...(comment !== undefined ? { comment } : {}) }),
+                headers: { "Content-Type": "application/json", ...(opts.headers ?? {}) },
+            }),
+        );
+    }
+
+    async getNotes(appointmentId: number, opts: RequestOpts = {}) {
+        return this.parseResponse(
+            await this.request.get(endpoints.appointmentNotes(appointmentId), {
                 headers: { ...(opts.headers ?? {}) },
             }),
         );

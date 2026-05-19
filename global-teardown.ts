@@ -20,6 +20,16 @@ async function globalTeardown() {
 
     db.prepare(`DELETE FROM payments WHERE patientId IN (${ph})`).run(...ids);
     db.prepare(`DELETE FROM consultations WHERE patientId IN (${ph})`).run(...ids);
+    db.prepare(`
+      DELETE FROM ratings WHERE appointmentId IN (
+        SELECT id FROM appointments WHERE patientId IN (${ph})
+      )
+    `).run(...ids);
+    db.prepare(`
+      DELETE FROM appointment_notes WHERE appointmentId IN (
+        SELECT id FROM appointments WHERE patientId IN (${ph})
+      )
+    `).run(...ids);
 
     // Free slots still held by test appointments (cancelled/completed already freed by SUT)
     db.prepare(`
