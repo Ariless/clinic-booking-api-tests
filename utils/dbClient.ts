@@ -48,6 +48,22 @@ interface CountRow {
   count: number;
 }
 
+interface ScheduleRow {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  [key: string]: unknown;
+}
+
+interface UserRow {
+  id: number;
+  email: string;
+  role: string;
+  name: string;
+  deletedAt: string | null;
+  [key: string]: unknown;
+}
+
 let _db: Database.Database | undefined;
 
 function db(): Database.Database {
@@ -102,7 +118,18 @@ const dbClient = {
       .get(idempotencyKey, patientId) as CountRow;
     return row.count;
   },
+
+  getScheduleByDoctorId(doctorId: number): ScheduleRow[] {
+    return db()
+      .prepare('SELECT dayOfWeek, startTime, endTime FROM doctor_schedules WHERE doctorId = ? ORDER BY dayOfWeek')
+      .all(doctorId) as ScheduleRow[];
+  },
+
+  // Reads user regardless of soft-delete status — for verifying deletedAt is set.
+  getUserById(id: number): UserRow | undefined {
+    return db().prepare('SELECT id, email, role, name, deletedAt FROM users WHERE id = ?').get(id) as UserRow | undefined;
+  },
 };
 
 export { dbClient };
-export type { SlotRow, AppointmentRow, WaitlistRow, ConsultationRow, PaymentRow };
+export type { SlotRow, AppointmentRow, WaitlistRow, ConsultationRow, PaymentRow, ScheduleRow, UserRow };

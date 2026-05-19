@@ -32,4 +32,24 @@ export class DoctorsClient extends BaseClient {
         });
         return this.parseResponse(response);
     }
+
+    async getSchedule(doctorId: number) {
+        const response = await this.request.get(endpoints.doctorSchedule(doctorId));
+        return this.parseResponse(response);
+    }
+
+    async setSchedule(entries: { dayOfWeek: number; startTime: string; endTime: string }[], opts: RequestOpts = {}) {
+        const response = await this.request.put(endpoints.doctorsMeSchedule, {
+            data: JSON.stringify({ schedule: entries }),
+            headers: { "Content-Type": "application/json", ...(opts.headers ?? {}) },
+        });
+        return this.parseResponse(response);
+    }
+
+    async getDoctorRating(doctorRecordId: number, opts: RequestOpts = {}) {
+        const response = await this.request.get(endpoints.doctorRating(doctorRecordId), {
+            headers: { ...(opts.headers ?? {}) },
+        });
+        return this.parseResponse(response);
+    }
 }

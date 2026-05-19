@@ -20,6 +20,8 @@ export const endpoints = {
     doctorsMeSlots: `${API_V1}/doctors/me/slots`,
     doctorsMeSlot: (slotId: number | string) => `${API_V1}/doctors/me/slots/${slotId}`,
     doctorSlotsCreate: (doctorRecordId: number | string) => `${API_V1}/doctors/${doctorRecordId}/slots`,
+    doctorSchedule: (id: number | string) => `${API_V1}/doctors/${id}/schedule`,
+    doctorsMeSchedule: `${API_V1}/doctors/me/schedule`,
 
     appointments: `${API_V1}/appointments`,
     appointmentsMy: `${API_V1}/appointments/my`,
@@ -37,6 +39,12 @@ export const endpoints = {
     appointmentReject: (id: number | string) => `${API_V1}/appointments/${id}/reject`,
     appointmentCancelAsDoctor: (id: number | string) => `${API_V1}/appointments/${id}/cancel-as-doctor`,
     appointmentComplete: (id: number | string) => `${API_V1}/appointments/${id}/complete`,
+    appointmentReschedule: (id: number | string) => `${API_V1}/appointments/${id}/reschedule`,
+    appointmentNotes: (id: number | string) => `${API_V1}/appointments/${id}/notes`,
+    appointmentRate: (id: number | string) => `${API_V1}/appointments/${id}/rate`,
+    doctorRating: (id: number | string) => `${API_V1}/doctors/${id}/rating`,
+    appointmentsRecurring: `${API_V1}/appointments/recurring`,
+    appointmentSeriesCancel: (seriesId: string) => `${API_V1}/appointments/series/${seriesId}/cancel`,
 
     consultations: `${API_V1}/consultations`,
     consultationsMe: `${API_V1}/consultations/me`,
