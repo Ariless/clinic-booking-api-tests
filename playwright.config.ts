@@ -15,6 +15,7 @@ export default defineConfig({
     ? [
         ["github"],
         ["html", { open: "never", outputFolder: "playwright-report" }],
+        ["json", { outputFile: "test-results.json" }],
         ["allure-playwright"],
       ]
     : [
