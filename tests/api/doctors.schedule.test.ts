@@ -62,12 +62,14 @@ test.describe("doctor schedule", () => {
         await doctors.setSchedule(weekSchedule("09:00", "18:00"), {
             headers: { Authorization: `Bearer ${doctorToken}` },
         });
+        const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
         const { startTime, endTime } = slotAt(1, 10, 11); // Tuesday 10:00–11:00 UTC
-        const { status } = await doctors.createSlot(
+        const { status, body } = await doctors.createSlot(
             doctor.doctorRecordId, startTime, endTime, true,
-            { headers: { Authorization: `Bearer ${doctorToken}` } },
+            doctorAuth,
         );
         expect(status).toBe(201);
+        await doctors.deleteSlot((body as { id: number }).id, doctorAuth);
     });
 
     test("POST /doctors/me/slots — 422 OUTSIDE_WORKING_HOURS slot outside schedule hours @api", async () => {
@@ -98,27 +100,27 @@ test.describe("doctor schedule", () => {
     });
 
     test("POST /doctors/me/slots — 201 slot at exact boundary start (09:00–10:00) @api", async () => {
-        await doctors.setSchedule(weekSchedule("09:00", "17:00"), {
-            headers: { Authorization: `Bearer ${doctorToken}` },
-        });
+        const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
+        await doctors.setSchedule(weekSchedule("09:00", "17:00"), doctorAuth);
         const { startTime, endTime } = slotAt(3, 9, 10); // Wednesday 09:00–10:00 — boundary start
-        const { status } = await doctors.createSlot(
+        const { status, body } = await doctors.createSlot(
             doctor.doctorRecordId, startTime, endTime, true,
-            { headers: { Authorization: `Bearer ${doctorToken}` } },
+            doctorAuth,
         );
         expect(status).toBe(201);
+        await doctors.deleteSlot((body as { id: number }).id, doctorAuth);
     });
 
     test("POST /doctors/me/slots — 201 slot at exact boundary end (16:00–17:00) @api", async () => {
-        await doctors.setSchedule(weekSchedule("09:00", "17:00"), {
-            headers: { Authorization: `Bearer ${doctorToken}` },
-        });
+        const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
+        await doctors.setSchedule(weekSchedule("09:00", "17:00"), doctorAuth);
         const { startTime, endTime } = slotAt(3, 16, 17); // Wednesday 16:00–17:00 — boundary end
-        const { status } = await doctors.createSlot(
+        const { status, body } = await doctors.createSlot(
             doctor.doctorRecordId, startTime, endTime, true,
-            { headers: { Authorization: `Bearer ${doctorToken}` } },
+            doctorAuth,
         );
         expect(status).toBe(201);
+        await doctors.deleteSlot((body as { id: number }).id, doctorAuth);
     });
 
     test("POST /doctors/me/slots — 422 OUTSIDE_WORKING_HOURS slot ends after schedule (16:00–18:00) @api", async () => {
@@ -136,12 +138,14 @@ test.describe("doctor schedule", () => {
 
     test("POST /doctors/me/slots — 201 no schedule set → always allowed @api", async () => {
         // schedule cleared in beforeEach
+        const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
         const { startTime, endTime } = slotAt(4, 10, 11);
-        const { status } = await doctors.createSlot(
+        const { status, body } = await doctors.createSlot(
             doctor.doctorRecordId, startTime, endTime, true,
-            { headers: { Authorization: `Bearer ${doctorToken}` } },
+            doctorAuth,
         );
         expect(status).toBe(201);
+        await doctors.deleteSlot((body as { id: number }).id, doctorAuth);
     });
 
     test("POST /doctors/me/slots — 422 OUTSIDE_WORKING_HOURS timezone offset resolves to UTC outside hours @api", async () => {

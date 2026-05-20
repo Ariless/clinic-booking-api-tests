@@ -249,6 +249,44 @@
 
 ---
 
+## 7. Fixture infrastructure weaknesses (found 2026-05-20)
+
+### 7.1 FK enforcement gap in `deleteOwnedSlotIfUnused` transaction (fixed — B-08)
+
+**Risk:** SQLite FK enforcement (`PRAGMA foreign_keys = 1`) was active. `deleteOwnedSlotIfUnused` deleted `appointments` then `slots` — but `waitlist_offers.slotId` also referenced `slots.id`. With FK enforcement ON, `DELETE FROM slots` raises `SQLITE_CONSTRAINT_FOREIGNKEY` when offers exist. Exception propagated to the HTTP layer as `500`, which teardown code silently ignored. Slot was never deleted.
+
+**Effect:** Stale slots accumulated across test runs. Since `nextSeedSlotWindow()` generates deterministic time windows, next-run fixtures collided at the same timestamps → `SLOT_OVERLAP` → fixture setup failed.
+
+**How the system protects itself (after fix):** `DELETE FROM waitlist_offers WHERE slotId = ?` now runs first in the transaction, before deleting appointments and the slot. FK violation is impossible.
+
+**Portfolio note:** FK constraints are defensive — but they can silently invalidate older code written before FK enforcement was switched on. The bug was invisible because the HTTP teardown discarded the 500 response.
+
+**Test coverage:** All waitlist-related teardowns now pass clean across consecutive runs. `slotFixture.ts` now logs `console.error` on any non-204 response from `deleteSlot`.
+
+---
+
+### 7.2 `softDeleteUser` cascade gap — waitlist entries survive soft-delete (fixed — B-09)
+
+**Risk:** `softDeleteUser` set `deletedAt` on the user record but did not remove their `slot_waitlist` entries. The system has a feature (`promoteFromWaitlist`) that runs as a side effect of any slot being freed. If a soft-deleted user's waitlist entry survived, they could be promoted to a new pending appointment after their account was deleted.
+
+**How the system protects itself (after fix):** `softDeleteUser` transaction now atomically deletes `slot_waitlist WHERE patientId = ?` before setting `deletedAt`.
+
+**Residual weakness:** Active appointments for the deleted user are NOT cancelled by `softDeleteUser`. Teardown of the slot fixture handles this (cancels active appointments then deletes slot), but in production a "delete account" flow would leave orphan pending appointments referencing a soft-deleted patient.
+
+**Test coverage:** `appointments.waitlist.promotion.test.ts`, `appointments.waitlist.offers.test.ts` — teardown passes clean.
+
+---
+
+### 7.3 `promoteFromWaitlist` side effect not accounted for in single-pass teardown (fixed — CI-07)
+
+**Risk:** Any operation that frees a slot (cancel, reject, reschedule) triggers `promoteFromWaitlist` as a side effect. Teardown code that cancels appointments to free a slot — and then calls `deleteSlot` in one pass — doesn't account for the possibility that `promoteFromWaitlist` re-booked the slot with another patient between cancel and delete.
+
+**How the system protects itself (after fix):** `slotFixture.ts` teardown uses a loop (up to 5 passes) that re-lists appointments after each cancellation and repeats until no active appointments remain. Each pass empties one waitlist entry.
+
+**Residual weakness:** If more than 5 patients are on the waitlist for a doctor when teardown runs, the loop would terminate early and `deleteSlot` would still fail. In practice tests use at most 2 patients.
+
+---
+
 ## 6. Summary table
 
 | Weakness | Severity | Mitigated? | Test exists? |
@@ -272,3 +310,6 @@
 | Malformed JWT → `400 <EMPTY>` — error contract violation | Medium | ❌ middleware fires before route handler, returns raw 400 | ❌ found by Schemathesis 2026-05-12 — no test for malformed (vs missing) auth header |
 | TRACE method returns 404 instead of 405 | Low | ❌ Express default | ❌ not tested — HTTP spec requires 405 for unsupported methods |
 | `POST /consultations` missing `401` in OpenAPI spec | Low | N/A — spec doc gap | ❌ spec does not document 401 for auth-required endpoints |
+| FK enforcement gap in `deleteOwnedSlotIfUnused` | Medium | ✅ fixed B-08: `waitlist_offers` deleted first in transaction | ✅ all waitlist teardowns pass clean (2026-05-20) |
+| `softDeleteUser` missing waitlist cascade | Medium | ✅ fixed B-09: slot_waitlist cleared in softDelete transaction | ✅ twoUsersFixture teardown passes clean (2026-05-20) |
+| `promoteFromWaitlist` side effect in teardown | Low | ✅ fixed CI-07: retry loop in slotFixture teardown | ✅ offers + promotion tests teardown clean (2026-05-20) |

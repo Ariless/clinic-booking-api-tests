@@ -1,3 +1,4 @@
+import { APIRequestContext } from '@playwright/test';
 import { test, expect } from '../../fixtures/twoUsersFixture';
 import { AppointmentsClient } from '../../api/AppointmentsClient';
 import { DoctorsClient } from '../../api/DoctorsClient';
@@ -14,6 +15,7 @@ interface SlotBody {
 }
 
 async function withSecondSlot(
+    request: APIRequestContext,
     doctors: DoctorsClient,
     doctor: SeedDoctor,
     doctorAuth: AuthOpts,
@@ -27,6 +29,15 @@ async function withSecondSlot(
     try {
         return await fn(slot2 as SlotBody);
     } finally {
+        const appts = new AppointmentsClient(request);
+        const { body: doctorAppts } = await appts.listDoctor(doctorAuth);
+        const active = (Array.isArray(doctorAppts) ? doctorAppts : []).filter(
+            (a: Record<string, unknown>) =>
+                a.slotId === (slot2 as SlotBody).id && ['pending', 'confirmed'].includes(a.status as string),
+        );
+        for (const appt of active) {
+            await appts.cancelAsDoctor(appt.id as number, doctorAuth);
+        }
         await doctors.deleteSlot((slot2 as SlotBody).id, doctorAuth);
     }
 }
@@ -39,7 +50,7 @@ test("GET /api/v1/appointments/waitlist-offers — returns pending offers for pa
     const patient2Auth = { headers: { Authorization: `Bearer ${user2.token}` } };
     const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
 
-    await withSecondSlot(doctors, doctor, doctorAuth, async (slot2) => {
+    await withSecondSlot(request, doctors, doctor, doctorAuth, async (slot2) => {
         const { status: book1Status } = await appointments.createAppointment(slot1Body.id, patientAuth);
         expect(book1Status).toBe(201);
 
@@ -72,7 +83,7 @@ test("POST /waitlist-offers/:id/accept — old booking cancelled, new booking cr
     const patient2Auth = { headers: { Authorization: `Bearer ${user2.token}` } };
     const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
 
-    await withSecondSlot(doctors, doctor, doctorAuth, async (slot2) => {
+    await withSecondSlot(request, doctors, doctor, doctorAuth, async (slot2) => {
         const { status: book1Status, body: book1Body } = await appointments.createAppointment(slot1Body.id, patientAuth);
         expect(book1Status).toBe(201);
 
@@ -115,7 +126,7 @@ test("POST /waitlist-offers/:id/decline — old booking unchanged, patient stays
     const patient2Auth = { headers: { Authorization: `Bearer ${user2.token}` } };
     const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
 
-    await withSecondSlot(doctors, doctor, doctorAuth, async (slot2) => {
+    await withSecondSlot(request, doctors, doctor, doctorAuth, async (slot2) => {
         const { status: book1Status, body: book1Body } = await appointments.createAppointment(slot1Body.id, patientAuth);
         expect(book1Status).toBe(201);
 
@@ -153,7 +164,7 @@ test("POST /waitlist-offers/:id/accept — 409 OFFER_ALREADY_RESOLVED when offer
     const patient2Auth = { headers: { Authorization: `Bearer ${user2.token}` } };
     const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
 
-    await withSecondSlot(doctors, doctor, doctorAuth, async (slot2) => {
+    await withSecondSlot(request, doctors, doctor, doctorAuth, async (slot2) => {
         await appointments.createAppointment(slot1Body.id, patientAuth);
         const { body: book2Body } = await appointments.createAppointment(slot2.id, patient2Auth);
         await appointments.joinWaitlist(doctor.doctorRecordId, patientAuth);

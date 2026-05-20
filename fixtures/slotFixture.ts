@@ -45,14 +45,22 @@ export const test = base.extend<{ slot: SlotFixturePayload }>({
 
         const appts = new AppointmentsClient(request);
         const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
-        const { body: doctorAppts } = await appts.listDoctor(doctorAuth);
-        const activeOnSlot = (Array.isArray(doctorAppts) ? doctorAppts : []).filter(
-            (a: Record<string, unknown>) => a.slotId === slotBody.id && ["pending", "confirmed"].includes(a.status as string),
-        );
-        for (const appt of activeOnSlot) {
-            await appts.cancelAsDoctor(appt.id as number, doctorAuth);
+        // Loop because cancelAsDoctor triggers promoteFromWaitlist, which may create a new
+        // pending appointment on the same slot if a patient is still on the waitlist.
+        for (let pass = 0; pass < 5; pass++) {
+            const { body: doctorAppts } = await appts.listDoctor(doctorAuth);
+            const activeOnSlot = (Array.isArray(doctorAppts) ? doctorAppts : []).filter(
+                (a: Record<string, unknown>) => a.slotId === slotBody.id && ["pending", "confirmed"].includes(a.status as string),
+            );
+            if (activeOnSlot.length === 0) break;
+            for (const appt of activeOnSlot) {
+                await appts.cancelAsDoctor(appt.id as number, doctorAuth);
+            }
         }
-        await doctors.deleteSlot(slotBody.id as number, doctorAuth);
+        const { status: deleteStatus, body: deleteBody } = await doctors.deleteSlot(slotBody.id as number, doctorAuth);
+        if (deleteStatus !== 204) {
+            console.error(`slotFixture teardown: deleteSlot(${slotBody.id}) failed — ${deleteStatus} ${JSON.stringify(deleteBody)}`);
+        }
     },
 });
 
