@@ -184,7 +184,7 @@ async function main() {
         fs.writeFileSync(OUTPUT_PATH, full);
         console.log(`[ai-ci-summary] AI summary saved: ${OUTPUT_PATH}`);
     } catch (err) {
-        console.warn(`[ai-ci-summary] Claude call failed (${err.message}) — writing plain summary.`);
+        console.log(`[ai-ci-summary] Claude unavailable (${err.message}) — writing plain summary.`);
         fs.writeFileSync(OUTPUT_PATH, buildFallbackSummary(stats, failures, runLabel));
         console.log(`[ai-ci-summary] Fallback summary saved: ${OUTPUT_PATH}`);
     }
