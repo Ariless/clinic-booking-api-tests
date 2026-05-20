@@ -29,11 +29,17 @@ export class UserClient extends BaseClient {
         return this.parseResponse(response);
     }
 
+    async getMe(accessToken: string) {
+        const response = await this.request.get(endpoints.authMe, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        return this.parseResponse(response);
+    }
+
     async deleteMyAccount(accessToken: string) {
         const response = await this.deleteWithBearer(endpoints.authMe, accessToken);
         const status = response.status();
-        if (status === 204) return { status };
-        const body = await response.json().catch(() => ({}));
+        const body = status !== 204 ? await response.json().catch(() => ({})) : null;
         return { status, body };
     }
 }
