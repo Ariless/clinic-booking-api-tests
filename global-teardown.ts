@@ -44,6 +44,26 @@ async function globalTeardown() {
     db.prepare(`DELETE FROM slot_waitlist WHERE patientId IN (${ph})`).run(...ids);
     db.prepare("DELETE FROM users WHERE email LIKE 'test_%@example.com'").run();
 
+    // Remove orphaned test slots (future-dated, no seed patient appointments).
+    // These accumulate when fixture teardowns fail silently (e.g. SLOT_IN_USE).
+    // The seed data uses 2026-04-21 dates; any future slot is test-created.
+    const seedCutoff = "2026-05-01T00:00:00.000Z";
+    db.prepare(`
+      DELETE FROM waitlist_offers WHERE slotId IN (
+        SELECT id FROM slots WHERE startTime > ?
+      )
+    `).run(seedCutoff);
+    db.prepare(`
+      DELETE FROM appointments WHERE slotId IN (
+        SELECT id FROM slots WHERE startTime > ?
+      )
+    `).run(seedCutoff);
+    db.prepare("DELETE FROM slots WHERE startTime > ?").run(seedCutoff);
+
+    // Clear doctor schedules set during tests (doctors.schedule.test.ts).
+    // Seed data has no schedules; any schedule in doctor_schedules is test-created.
+    db.prepare("DELETE FROM doctor_schedules").run();
+
     console.log(`[global-teardown] removed ${testUsers.length} orphaned test user(s)`);
   } catch (err: any) {
     // In CI the DB is owned by the Docker container (root) — host runner has no write access.

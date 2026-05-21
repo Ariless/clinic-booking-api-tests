@@ -34,8 +34,14 @@ test.describe("doctor schedule", () => {
         const { body } = await auth.verifyLogin(doctor.email, doctor.password);
         doctorToken = body.token;
         doctors = new DoctorsClient(request);
-        // clear schedule before each test
         await doctors.setSchedule([], { headers: { Authorization: `Bearer ${doctorToken}` } });
+    });
+
+    test.afterAll(async ({ request }) => {
+        const auth = new AuthClient(request);
+        const { body } = await auth.verifyLogin(doctor.email, doctor.password);
+        const token = body.token;
+        await new DoctorsClient(request).setSchedule([], { headers: { Authorization: `Bearer ${token}` } });
     });
 
     test("PUT /doctors/me/schedule — 200 sets weekly schedule @smoke @api", async () => {

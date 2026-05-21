@@ -78,8 +78,11 @@ test.describe("POST /appointments — appointment type @api", () => {
             const appointments = new AppointmentsClient(request);
             const doctors = new DoctorsClient(request);
 
-            // Create a 15-minute slot — too short for a procedure (60min required)
-            const start = new Date(Date.now() + 49 * 60 * 60 * 1000);
+            // Create a 15-minute slot at 11:00 UTC, 3+ days out.
+            // 11:00 is intentionally between nextSeedSlotWindow windows (10:00–11:00, 12:00–13:00)
+            // to avoid SLOT_OVERLAP with fixture slots from other tests in the suite.
+            const start = new Date(Date.now() + 72 * 60 * 60 * 1000);
+            start.setUTCHours(11, 0, 0, 0);
             const end = new Date(start.getTime() + 15 * 60 * 1000);
             const { body: shortSlot } = await doctors.createSlot(
                 slot.doctor.doctorRecordId,
