@@ -4,44 +4,24 @@ import { BookingPage } from "../../pages/BookingPage";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
 import { createWebhookTestServer } from "../../utils/webhookTestServer";
 
-test("patient books via UI — appointment appears as pending in API @e2e", async ({ request, page, user, slot }) => {
+test("patient books via UI wizard — appointment appears as pending in API @e2e", async ({ request, page, user, slot }) => {
     const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
 
     // 1. LOGIN via UI
     const loginPage = new LoginPage(page);
     await loginPage.login(user.email, user.password);
 
-    // 2. NAVIGATE to booking page — wait for doctors API to finish loading
+    // 2. WALK through all 4 wizard steps (specialty → doctor → slot → confirm)
     const bookingPage = new BookingPage(page);
-    await bookingPage.open();
+    await bookingPage.walkWizard(slot.doctor.specialty, slot.doctor.name);
 
-    // 3. SELECT specialty — wait for doctors wrap to confirm options are in DOM
-    await expect(bookingPage.bookingDoctorWrap).toBeVisible();
-    await bookingPage.bookingSpeciality.selectOption(slot.doctor.specialty);
-
-    // 4. WAIT for doctor dropdown to be enabled, then select
-    await expect(bookingPage.bookingDoctor).toBeEnabled();
-    await bookingPage.bookingDoctor.selectOption(slot.doctor.name);
-
-    // 5. WAIT for slot pickers to appear, then select first available day
-    await expect(bookingPage.bookingSlotPicker).toBeVisible();
-    const slotDay = bookingPage.bookingDaySlot;
-    const firstDay = await slotDay.locator("option").nth(1).getAttribute("value");
-    await slotDay.selectOption(firstDay);
-
-    // 6. WAIT for time dropdown to be enabled, then select first available time
-    const slotTime = bookingPage.bookingTimeSlot;
-    await expect(slotTime).toBeEnabled();
-    const firstTime = await slotTime.locator("option").nth(1).getAttribute("value");
-    await slotTime.selectOption(firstTime);
-
-    // 7. SUBMIT booking
+    // 3. SUBMIT booking on step 4
     await bookingPage.submitBookingButton.click();
 
-    // 8. ASSERT success message visible in UI
+    // 4. ASSERT success message visible in UI
     await expect(bookingPage.bookingSuccessMessage).toBeVisible();
 
-    // 9. VERIFY via API — appointment exists with status pending
+    // 5. VERIFY via API — appointment exists with status pending
     const response = await request.get("/api/v1/appointments/my", patientAuth);
     expect(response.status()).toBe(200);
     const body = await response.json();

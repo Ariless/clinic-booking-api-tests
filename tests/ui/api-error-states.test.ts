@@ -8,25 +8,20 @@ const SERVER_ERROR = { status: 500, body: JSON.stringify({ errorCode: "INTERNAL_
 
 test.describe("API error states — page.route() @ui", () => {
 
-    test("booking page — POST /appointments 500, error banner visible, page intact @ui", async ({ request, page, user, slot }) => {
+    test("booking wizard step 4 — POST /appointments 500, error message visible, submit still present @ui", async ({ page, user, slot }) => {
         const { slot: slotBody, doctor } = slot;
 
         const loginPage = new LoginPage(page);
         await loginPage.login(user.email, user.password);
 
+        // Navigate directly to step 4 with all wizard params populated
         const bookingPage = new BookingPage(page);
-        await bookingPage.open();
-
-        await expect(bookingPage.bookingDoctorWrap).toBeVisible();
-        await bookingPage.bookingSpeciality.selectOption(doctor.specialty);
-        await expect(bookingPage.bookingDoctor).toBeEnabled();
-        await bookingPage.bookingDoctor.selectOption(doctor.name);
-        await expect(bookingPage.bookingSlotPicker).toBeVisible();
-        const firstDay = await bookingPage.bookingDaySlot.locator("option").nth(1).getAttribute("value");
-        await bookingPage.bookingDaySlot.selectOption(firstDay!);
-        await expect(bookingPage.bookingTimeSlot).toBeEnabled();
-        const firstTime = await bookingPage.bookingTimeSlot.locator("option").nth(1).getAttribute("value");
-        await bookingPage.bookingTimeSlot.selectOption(firstTime!);
+        await bookingPage.openAtStep(4, {
+            specialty: doctor.specialty,
+            doctorId: String(doctor.doctorRecordId),
+            slotId: String(slotBody.id),
+        });
+        await page.waitForLoadState("networkidle");
 
         await page.route("**/api/v1/appointments", (route) => {
             if (route.request().method() === "POST") {
