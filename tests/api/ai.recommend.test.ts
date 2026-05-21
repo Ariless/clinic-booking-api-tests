@@ -285,3 +285,18 @@ test.describe("POST /api/v1/ai/recommend-doctor — degradation @rag", () => {
         expect(body.requestId).toBeTruthy();
     });
 });
+
+test.describe("POST /api/v1/ai/recommend-doctor — ai-service unreachable @api", () => {
+    test.beforeEach(() => {
+        // Requires SUT started with AI_SERVICE_DEGRADE=true (points to port 9999)
+        if (!process.env.AI_SERVICE_DEGRADE) test.skip();
+    });
+
+    test("503 AI_SERVICE_UNAVAILABLE: ai-service unreachable @api", async ({ request, user }) => {
+        const ai = new AiRecommendClient(request);
+        const { status, body } = await ai.recommend("chest pain", user.token);
+        expect(status).toBe(503);
+        expect(body.errorCode).toBe("AI_SERVICE_UNAVAILABLE");
+        expect(body.requestId).toBeTruthy();
+    });
+});
