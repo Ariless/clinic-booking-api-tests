@@ -1,2 +1,0 @@
-[11:46:35.756] WARN (5051): pact@16.4.0: no state handler found for state: ""
-
