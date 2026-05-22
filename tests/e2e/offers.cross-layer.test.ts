@@ -73,6 +73,16 @@ test("offer accept — patient sees offer in UI, accepts, booking swapped @e2e",
         const dbWaitlist = dbClient.getWaitlistByPatient(user.user.id);
         expect(dbWaitlist.some((w: { doctorId: number }) => w.doctorId === doctor.doctorRecordId), "DB: waitlist entry must be removed after accept").toBe(false);
     } finally {
+        // Cancel any active appointments on slot2 before deleting (accept creates a pending appointment there)
+        const appts = new AppointmentsClient(request);
+        const { body: doctorAppts } = await appts.listDoctor(doctorAuth);
+        const active = (Array.isArray(doctorAppts) ? doctorAppts : []).filter(
+            (a: Record<string, unknown>) =>
+                a.slotId === slot2.id && ['pending', 'confirmed'].includes(a.status as string),
+        );
+        for (const appt of active) {
+            await appts.cancelAsDoctor(appt.id as number, doctorAuth);
+        }
         await doctors.deleteSlot(slot2.id, doctorAuth);
     }
 });
