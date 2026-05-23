@@ -1,1 +1,0 @@
-2026-05-22T06:52:44.548539Z  WARN ThreadId(01) pact_models::pact: Note: Existing pact is an older specification version (V3), and will be upgraded
