@@ -13,7 +13,23 @@ async function globalTeardown() {
       .prepare("SELECT id FROM users WHERE email LIKE 'test_%@example.com'")
       .all() as { id: number }[];
 
-    if (testUsers.length === 0) return;
+    // Reset doctor schedules to seed state (09:00–18:00 every day for doctors 1–3).
+    // Always runs — doctors.schedule.test.ts clears schedules during its run, and the
+    // slotFixture also mutates them. Restore here so the next run starts clean.
+    db.prepare("DELETE FROM doctor_schedules").run();
+    const insertSched = db.prepare(
+      "INSERT INTO doctor_schedules (doctorId, dayOfWeek, startTime, endTime) VALUES (?, ?, ?, ?)"
+    );
+    for (const doctorId of [1, 2, 3]) {
+      for (let dow = 0; dow <= 6; dow++) {
+        insertSched.run(doctorId, dow, "09:00", "18:00");
+      }
+    }
+
+    if (testUsers.length === 0) {
+      console.log(`[global-teardown] schedules reset; no orphaned test users`);
+      return;
+    }
 
     const ids = testUsers.map(u => u.id);
     const ph = ids.map(() => '?').join(',');
@@ -59,10 +75,6 @@ async function globalTeardown() {
       )
     `).run(seedCutoff);
     db.prepare("DELETE FROM slots WHERE startTime > ?").run(seedCutoff);
-
-    // Clear doctor schedules set during tests (doctors.schedule.test.ts).
-    // Seed data has no schedules; any schedule in doctor_schedules is test-created.
-    db.prepare("DELETE FROM doctor_schedules").run();
 
     console.log(`[global-teardown] removed ${testUsers.length} orphaned test user(s)`);
   } catch (err: any) {

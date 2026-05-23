@@ -148,9 +148,10 @@ test.describe('appointment filter @api', () => {
 
     const doctors = new DoctorsClient(request);
     const { seedSlotStart, seedSlotEnd } = nextSeedSlotWindow();
-    const { body: slot2 } = await doctors.createSlot(doctor2.doctorRecordId, seedSlotStart, seedSlotEnd, true, doctorAuth2);
-    const { body: appt2 } = await appointments.createAppointment(slot2.id, patientAuth);
-    await appointments.confirmAppointment(appt2.id, doctorAuth2);
+    const { status: slotStatus, body: slot2 } = await doctors.createSlot(doctor2.doctorRecordId, seedSlotStart, seedSlotEnd, true, doctorAuth2);
+    expect(slotStatus, `slot2 setup failed: ${JSON.stringify(slot2)}`).toBe(201);
+    const { body: appt2 } = await appointments.createAppointment(slot2.id as number, patientAuth);
+    await appointments.confirmAppointment(appt2.id as number, doctorAuth2);
 
     try {
       const { body: pendingResult } = await appointments.listMyFiltered({ status: 'pending' }, patientAuth);

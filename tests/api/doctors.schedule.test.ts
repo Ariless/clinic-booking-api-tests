@@ -142,16 +142,16 @@ test.describe("doctor schedule", () => {
         expect(body.errorCode).toBe("OUTSIDE_WORKING_HOURS");
     });
 
-    test("POST /doctors/me/slots — 201 no schedule set → always allowed @api", async () => {
-        // schedule cleared in beforeEach
+    test("POST /doctors/me/slots — 422 OUTSIDE_WORKING_HOURS when no schedule set @api", async () => {
+        // schedule cleared in beforeEach — empty schedule means no slots allowed
         const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
         const { startTime, endTime } = slotAt(4, 10, 11);
         const { status, body } = await doctors.createSlot(
             doctor.doctorRecordId, startTime, endTime, true,
             doctorAuth,
         );
-        expect(status).toBe(201);
-        await doctors.deleteSlot((body as { id: number }).id, doctorAuth);
+        expect(status).toBe(422);
+        expect(body.errorCode).toBe("OUTSIDE_WORKING_HOURS");
     });
 
     test("POST /doctors/me/slots — 422 OUTSIDE_WORKING_HOURS timezone offset resolves to UTC outside hours @api", async () => {

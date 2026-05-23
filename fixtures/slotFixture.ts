@@ -30,13 +30,21 @@ export const test = base.extend<{ slot: SlotFixturePayload }>({
 
         const { seedSlotStart, seedSlotEnd, seedSlotIsAvailable } = nextSeedSlotWindow();
         const doctors = new DoctorsClient(request);
+        const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
+
+        const fullSchedule = [0, 1, 2, 3, 4, 5, 6].map((dow) => ({
+            dayOfWeek: dow,
+            startTime: "09:00",
+            endTime: "18:00",
+        }));
+        await doctors.setSchedule(fullSchedule, doctorAuth);
 
         const { status, body: slotBody } = await doctors.createSlot(
             doctor.doctorRecordId,
             seedSlotStart,
             seedSlotEnd,
             seedSlotIsAvailable,
-            { headers: { Authorization: `Bearer ${doctorToken}` } },
+            doctorAuth,
         );
 
         if (status !== 201) throw new Error(`slot fixture failed: ${JSON.stringify(slotBody)}`);
@@ -44,7 +52,6 @@ export const test = base.extend<{ slot: SlotFixturePayload }>({
         await use({ slot: slotBody as SlotBody, doctorToken, doctor, seedSlotStart, seedSlotEnd });
 
         const appts = new AppointmentsClient(request);
-        const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
         // Loop because cancelAsDoctor triggers promoteFromWaitlist, which may create a new
         // pending appointment on the same slot if a patient is still on the waitlist.
         for (let pass = 0; pass < 5; pass++) {
@@ -61,6 +68,7 @@ export const test = base.extend<{ slot: SlotFixturePayload }>({
         if (deleteStatus !== 204) {
             console.error(`slotFixture teardown: deleteSlot(${slotBody.id}) failed — ${deleteStatus} ${JSON.stringify(deleteBody)}`);
         }
+        await doctors.setSchedule(fullSchedule, doctorAuth);
     },
 });
 

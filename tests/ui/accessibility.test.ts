@@ -1,6 +1,7 @@
 import { test, expect } from "../../fixtures/pages";
 import { AxeBuilder } from "@axe-core/playwright";
 import { Page } from "@playwright/test";
+import { seedDoctors } from "../../data/seedAccounts";
 
 // color-contrast excluded: .muted uses #64748b (3.9:1 ratio) — below WCAG AA 4.5:1.
 // Known design debt; structural and keyboard violations are fully checked.
@@ -31,6 +32,46 @@ test("register page — no accessibility violations @ui @a11y", async ({ page })
 test("patient booking page — no accessibility violations @ui @a11y", async ({ page, user }) => {
     await setPatientSession(page, user);
     await page.goto("/patient/booking");
+    await page.waitForLoadState("networkidle");
+    const results = await axe(page).analyze();
+    expect(results.violations).toEqual([]);
+});
+
+test("patient appointments page — no accessibility violations @ui @a11y", async ({ page, user }) => {
+    await setPatientSession(page, user);
+    await page.goto("/patient/appointments");
+    await page.waitForLoadState("networkidle");
+    const results = await axe(page).analyze();
+    expect(results.violations).toEqual([]);
+});
+
+test("patient consultations page — no accessibility violations @ui @a11y", async ({ page, user }) => {
+    await setPatientSession(page, user);
+    await page.goto("/patient/consultations");
+    await page.waitForLoadState("networkidle");
+    const results = await axe(page).analyze();
+    expect(results.violations).toEqual([]);
+});
+
+test("patient notifications page — no accessibility violations @ui @a11y", async ({ page, user }) => {
+    await setPatientSession(page, user);
+    await page.goto("/patient/notifications");
+    await page.waitForLoadState("networkidle");
+    const results = await axe(page).analyze();
+    expect(results.violations).toEqual([]);
+});
+
+test("doctor appointments page — no accessibility violations @ui @a11y", async ({ page, loginPage }) => {
+    await loginPage.login(seedDoctors[0].email, seedDoctors[0].password);
+    await page.goto("/doctor/appointments");
+    await page.waitForLoadState("networkidle");
+    const results = await axe(page).analyze();
+    expect(results.violations).toEqual([]);
+});
+
+test("doctor schedule page — no accessibility violations @ui @a11y", async ({ page, loginPage }) => {
+    await loginPage.login(seedDoctors[0].email, seedDoctors[0].password);
+    await page.goto("/doctor/schedule");
     await page.waitForLoadState("networkidle");
     const results = await axe(page).analyze();
     expect(results.violations).toEqual([]);
