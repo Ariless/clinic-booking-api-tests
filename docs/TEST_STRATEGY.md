@@ -698,6 +698,153 @@ ANTHROPIC_API_KEY=<key> npm run ai:gap-analysis
 
 **Interview line:** *"I have a script that feeds the OpenAPI spec and all test names to Claude and gets back a gap analysis — endpoints with zero coverage, error codes never triggered, additional scenarios. It found 10 endpoints with no dedicated tests and ~45 undocumented error code paths on first run. It's not a replacement for a risk-based test strategy, but it's a fast way to catch blind spots before a release."*
 
+### 15.13 Model drift detection (added 2026-05-18) ✅
+
+**What:** A weekly scheduled CI job that re-runs the `@rag` golden dataset against the real Claude API and archives dated results. Detects if a Claude model update changed the AI recommendation behaviour.
+
+**Why it matters:** The SUT uses Claude Haiku for AI recommendations. Model providers update models without notice — a new version may produce different outputs for the same inputs. The golden dataset is a regression test for the AI layer. Without a scheduled re-run, drift goes undetected until a user reports wrong recommendations.
+
+**Golden dataset (in `ai.recommend.test.ts`):**
+
+| Symptoms | Expected specialty |
+|---|---|
+| chest pain and shortness of breath | Cardiologist |
+| skin rash and itching all over body | Dermatologist |
+| severe migraine and light sensitivity | Neurologist |
+| knee pain after running | Orthopedist |
+| my child has high fever and cough | Pediatrician |
+
+Threshold: ≥ 4/5 correct. If the model consistently gets fewer right, the weekly job fails.
+
+**Schedule:** every Monday at 09:00 UTC (`cron: "0 9 * * 1"`). Also has `workflow_dispatch` for on-demand checks.
+
+**Artifact:** `rag-drift-<run_id>/results-YYYY-MM-DD.json` + `summary-YYYY-MM-DD.md`. Retained 90 days. Comparing weekly artifacts shows when drift started — e.g. "results changed between 2026-06-09 and 2026-06-16, that week Anthropic updated haiku".
+
+**No ANTHROPIC_API_KEY:** job prints a clear skip message and exits 0 — never fails because a secret isn't set.
+
+**Relationship to regular @rag tests:** `api-tests.yml` runs with `AI_MOCK_RESPONSE=true` — no real Claude calls, fast, deterministic. Drift detection is the only place real Claude calls run on a schedule.
+
+**Interview line:** *"AI recommendations are non-deterministic, and model providers update models without notice. I have a weekly job that re-runs the golden dataset against the real API and saves dated results. If Anthropic updates Claude Haiku and the Cardiologist/Neurologist distinction shifts, the next Monday run fails and I have dated artifacts showing exactly when the drift started."*
+
+---
+
+### 15.11 AI-generated CI run summary (added 2026-05-18) ✅
+
+**What:** A post-CI script that reads the Playwright JSON report, sends failure data to Claude Haiku, and saves a human-readable markdown summary as a CI artifact.
+
+**Before:** CI run result = GitHub Actions job status (green/red) + raw Playwright HTML report. Identifying failure patterns required opening the report and reading individual test titles. No aggregated view of what failed and why.
+
+**After:** `scripts/ai-ci-summary.js` runs after every API and E2E job (even on failure). It reads `test-results.json`, extracts stats and failure titles + first-line errors, and sends them to Claude. Output: `ci-summary/summary.md` with three sections:
+
+```
+## Status
+## Failures   ← grouped by pattern, not just listed
+## Recommendation   ← what to investigate first, safe to merge?
+```
+
+**Skip guard:** if `ANTHROPIC_API_KEY` is absent or balance is zero, the script writes a plain stats summary instead and exits 0 — CI never fails because of this step.
+
+**CI integration:**
+```yaml
+- name: Generate AI CI summary
+  if: always()
+  env:
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  run: node scripts/ai-ci-summary.js
+
+- name: Upload CI summary
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: ci-summary-api
+    path: ci-summary/
+```
+
+**Requires:** `["json", { outputFile: "test-results.json" }]` reporter in `playwright.config.ts` CI config — added alongside the existing `html` and `allure-playwright` reporters.
+
+**Local usage:**
+```bash
+CI=true npx playwright test tests/api   # generates test-results.json
+npm run ci:summary                       # writes ci-summary/summary.md
+```
+
+**Why this matters:** Transforms "42 tests failed" into "3 auth tests failing — likely SUT startup issue; 1 pagination test with off-by-one — isolated". Different output for all-green runs vs. failure patterns. The grouping is the AI's contribution — a plain stats summary can be generated without a key.
+
+**Interview line:** *"After every CI run, a script reads the Playwright JSON report and asks Claude to group the failures by pattern and give a recommendation — is this safe to merge, or is there a systemic issue? It runs even when tests fail, costs nothing when the key is missing, and produces a one-page summary instead of 'open the HTML report and read 40 test titles'."*
+
+---
+
+### 15.12 Impact Analysis — AI-targeted test selection (added 2026-05-18) ✅
+
+**What:** On every PR, Claude reads the list of changed files and selects the minimum relevant subset of test files to run. Results post as a PR comment with an AI-generated summary.
+
+**Before:** every PR triggered the full test suite (55+ files, ~3–5 min). No connection between "what changed" and "what to test" — always run everything.
+
+**After:** `scripts/impact-analysis.js` + `.github/workflows/impact-analysis.yml`:
+
+1. `git diff --name-only origin/$BASE...HEAD` → `changed-files.txt`
+2. Claude Haiku receives: changed files + full test file list + project structure rules
+3. Claude returns a JSON array of test paths → `impact-tests.txt`
+4. Only those tests run in the `impact` job
+5. `ai-ci-summary.js` generates `ci-summary/summary.md` from results
+6. A PR comment is posted with: selected tests list + AI summary
+
+**Fallback:** no `ANTHROPIC_API_KEY` → `impact-tests.txt` = all test files (safe, runs everything). Claude response with non-existent paths is validated against the real file list before running.
+
+**Relationship to full suite:** impact analysis runs in parallel with `api-tests.yml` (full suite). Not a replacement — a fast early signal. If impact analysis passes, the developer gets targeted feedback in seconds; the full gate continues in the background.
+
+**Docs-only changes:** if only `*.md` / `scripts/` / `docs/` changed, Claude returns `[]` → no tests run → comment says "no impacted test files".
+
+**Interview line:** *"On every PR, a script gets the diff and sends it to Claude: 'here are the changed files, here are all the test files, pick the relevant ones.' Claude returns a subset — usually 3–8 files instead of 55. Those run immediately and post back to the PR as a comment with an AI summary. The full suite still runs in parallel as the merge gate. This is AI reducing feedback time from 5 minutes to under 1."*
+
+---
+
+### 15.14 AI service extraction — microservice split + Pact redesign (added 2026-05-18) ✅
+
+**What:** Extracted the AI recommendation logic from the SUT monolith into a standalone Express microservice (`sut/ai-service/`). The SUT now proxies POST `/api/v1/ai/recommend-doctor` → ai-service POST `/recommend`. Added a second Pact contract layer to verify the new service boundary.
+
+**Before (monolith):**
+```
+tests → POST /api/v1/ai/recommend-doctor → SUT → (inline Claude call) → doctors DB → response
+```
+- SUT contained retrieval logic, Claude API call, specialty validation, and doctor lookup.
+- Pact had one contract: consumer="clinic-booking-api-tests" ↔ provider="clinic-booking-api" (tests→SUT).
+- Both sides of the Pact lived in the same repo — not a real inter-service boundary.
+
+**After (microservice):**
+```
+tests → POST /api/v1/ai/recommend-doctor → SUT → POST /recommend → ai-service → Claude
+                                              ↓ getBySpecialty() ↓
+                                             doctors DB
+```
+- `sut/ai-service/`: standalone Node.js service on port 3001. Handles retrieval, Claude call, specialty validation. Returns `{ ok, specialty, reasoning }` — stateless, no DB access.
+- `sut/src/routes/aiRoutes.js`: now a proxy. Validates input, calls ai-service, enriches with `doctorsRepository.getBySpecialty(body.specialty)`, returns final response.
+- Two new error codes: `AI_SERVICE_UNAVAILABLE` (network timeout to ai-service) and `CLAUDE_UNAVAILABLE` (ai-service reports Claude API down).
+
+**Two Pact contract layers:**
+
+| Contract | Consumer | Provider | File |
+|---|---|---|---|
+| Old (tests→SUT) | clinic-booking-api-tests | clinic-booking-api | `ai.recommend.pact.consumer.test.ts` |
+| New (SUT→ai-service) | clinic-booking-api | ai-service | `ai.service.pact.consumer.test.ts` |
+
+The new consumer test documents exactly what the SUT sends to ai-service and what shape it expects back. The provider test verifies the real ai-service satisfies it.
+
+**AI_SERVICE_DEGRADE test:** SUT started with `AI_SERVICE_DEGRADE=true` points to port 9999 (guaranteed unreachable). Test verifies `503 AI_SERVICE_UNAVAILABLE` — degradation path for total ai-service loss.
+
+**Docker Compose:**
+- `docker-compose.yml`: `ai-service` service with healthcheck; `api` depends on `ai-service`; `ANTHROPIC_API_KEY` passed via env.
+- `docker-compose.test.yml`: `ai-service` with `AI_MOCK_RESPONSE=true`; `sut` sets `AI_SERVICE_URL=http://ai-service:3001`.
+
+**Why this matters:**
+1. Real service boundary → Pact is now a genuine inter-service contract (not same-repo theatre).
+2. Stateless ai-service → can be scaled independently, replaced, versioned.
+3. Two failure modes tested separately: ai-service unreachable (network) vs. Claude API down (upstream). Different error codes, different alerting strategies.
+
+**Interview line:** *"I extracted the AI logic into a separate microservice and redesigned the Pact contracts to reflect the real boundary. Before, we had one Pact between the test suite and the monolith — same repo, same team, not a real contract. After extraction, there's a new SUT→ai-service Pact that lives on a genuine service boundary. I also added two separate degradation error codes: AI_SERVICE_UNAVAILABLE when the microservice is unreachable, and CLAUDE_UNAVAILABLE when the microservice itself can't reach Claude. Different errors, different alerting, different on-call response."*
+
+---
+
 ### 15.7 Observability-driven testing ✅
 
 **What:** Instead of only asserting the HTTP response, assert that the system correctly emitted a structured log event to the internal observability infrastructure (Loki). This tests a different layer — not "did the API return 201" but "did the system correctly record that the booking happened, with the right identifiers."
@@ -722,6 +869,41 @@ expect(entry).toMatchObject({
 - A system can return `201` and still silently fail to log. These two layers fail independently.
 
 **Interview line:** *"I have a test that books an appointment and then queries Loki to assert the structured log entry appeared with the correct requestId, patientId, and event type. It tests a layer that HTTP assertions can't reach — the internal observability model. The two layers fail independently, so you need both."*
+
+### 15.10 AI-generated content stress testing (added 2026-05-18) ✅
+
+**What:** A hybrid approach to content stress testing: static edge cases always run in CI; a separate `@ai-data` test calls Claude Haiku at test time to generate additional cases a human might not anticipate.
+
+**Before:** Registration tests only covered `test_<timestamp>@example.com` — ASCII email, generic name. No coverage of international scripts, special characters, or long inputs.
+
+**After:** `tests/api/content.stress.test.ts` — 11 tests across two describe blocks.
+
+**Static block (always runs, no API key required):**
+Covers known content edge cases and boundary conditions:
+
+| Test | Edge case |
+|---|---|
+| O'Brien | apostrophe in name |
+| Zöe Müller | diacritics / umlauts |
+| 李明 | CJK unicode script |
+| Mary-Jane Watson | hyphen in name |
+| José García | accented Latin characters |
+| 82-char email | long but valid email (limit: 254) |
+| John-François O'Neill | hyphen + apostrophe + diacritic combined |
+| 119-char name | boundary — just under 120-char limit |
+| 121-char name | over limit → `400 VALIDATION_ERROR` |
+| 256-char email | over limit → `400 VALIDATION_ERROR` |
+
+Each success case registers the user, then asserts that `GET /auth/me` returns the exact name (no truncation, no corruption) before cleanup.
+
+**AI-generated block (`@ai-data`, skipped without key):**
+`generateEdgeCaseUsers()` in `utils/aiTestDataGenerator.ts` calls Claude Haiku with a prompt asking for 8 diverse edge-case names covering scripts and combinations the static list might miss. On any API error or missing key, returns the static fallback list — test remains green.
+
+**Why this matters:** Shows AI augmenting test data design, not replacing it. The static tests cover known categories; Claude is asked to think of cases beyond the obvious list. The graceful degradation pattern (`try/catch → static fallback`) means the suite stays green in CI without a key, while a richer set of cases runs when one is available.
+
+**Interview line:** *"I have a content stress test suite with two layers. Static tests cover known categories — apostrophes, diacritics, unicode scripts, boundary lengths. A separate `@ai-data` test calls Claude to generate additional cases I might not have thought of. If there's no API key or no balance, it falls back to the static list silently — CI always stays green. Every success case checks not just the 201, but that `GET /auth/me` returns the exact name — so a storage or encoding bug would surface here."*
+
+---
 
 ### 15.6 Contract drift guard ✅
 
@@ -818,6 +1000,7 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 |---|---|
 | `auth.login.test.js` | Authentication correctness — valid credentials accepted, invalid rejected, token structure valid |
 | `auth.register.test.js` | Registration boundary — duplicate email rejected, weak password rejected, `doctorRecordId` existence enforced |
+| `content.stress.test.ts` | Content stress — international scripts (CJK, Arabic, Cyrillic, diacritics), special chars (apostrophe, hyphen), long inputs, boundary rejection; AI-generated additional cases via `@ai-data` tag |
 | `appointments.mini.j1.test.js` | **J1 journey** — booking happy path + slot lock invariant (slot unavailable after booking) |
 | `appointments.reject.j2.test.js` | **J2 journey** — reject flow + slot release (slot available again after rejection) |
 | `appointments.confirm.j3.test.js` | **J3 journey** — confirm flow + post-confirm slot and diary invariants |
@@ -833,11 +1016,18 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `appointments.reschedule.test.ts` | Reschedule correctness — pending→new slot, confirmed→resets to pending, 409 SLOT_TAKEN, 422 DOCTOR_MISMATCH/SAME_SLOT, 403 FORBIDDEN, waitlist cascade on reschedule |
 | `appointments.pagination.test.ts` | Pagination contract — envelope shape `{data,total,page,limit,totalPages}`, offset correctness, invalid param rejection (page=0, limit=0, NaN) |
 | `appointments.recurring.test.ts` | Recurring series — 201 all slots booked + seriesId on each, 201 partial booking, 404 SLOT_NOT_FOUND, 400 VALIDATION_ERROR, count boundaries (1/13), 401, 200 cancel series, 404 SERIES_NOT_FOUND |
+| `appointments.notes.test.ts` | Appointment notes — 201 create note, 200 list notes, 401/403/400/404/422 error paths; XSS payload rejected (UNSAFE_CONTENT), IDOR protection on GET, state machine: notes only on confirmed/completed |
+| `appointments.ratings.test.ts` | Doctor ratings — 201 rate completed appointment, 200 aggregate (average+count), 401/403/400/404/422/409 error paths; aggregate does not expose individual rater identities |
+| `auth.delete.test.ts` | Account soft delete — 204 close account; access token revoked (401 AUTH_INVALID); refresh token revoked; login blocked; EMAIL_RETIRED on re-register; DB preserves record with deletedAt; other accounts unaffected |
+| `appointments.filter.test.ts` | Appointment filtering — status/doctorId/from/to filters; exclusion boundaries for date range; combined filters; empty result set; filtered total matches data count (count query integrity); 400 validation on invalid status/doctorId/date |
+| `appointments.kafka.test.ts` | Kafka event contract — booked/cancelled/confirmed/rejected/rescheduled/completed/recurring_booked/series_cancelled topics; payload field assertions; graceful degradation when broker absent; skip guard if `KAFKA_BROKER` not set |
 | `doctors.schedule.test.ts` | Doctor schedule management — PUT/GET working hours, slot creation blocked outside schedule, boundary start/end times, timezone offset |
 | `doctors.list.test.js` | Doctor listing — availability data integrity, correct shape |
 | `ai.recommend.test.js` | AI feature contract — feature flag, error codes, response schema, rate limit; `reasoning` field present, specialty-invariant (never hallucinates outside `ALLOWED_SPECIALTIES`); bias validation: rephrasing invariance + demographic neutrality *(tests skip unless `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` set)* |
-| `pact/ai.recommend.pact.consumer.test.js` | Consumer-driven contract — shape of 200/400/422 responses formalized as a pact; runs against Pact mock server (no SUT needed) |
-| `pact/ai.recommend.pact.provider.test.js` | Provider contract verification — SUT satisfies all consumer interactions in `pacts/` JSON; skip guard: requires `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` |
+| `pact/ai.recommend.pact.consumer.test.ts` | Consumer-driven contract (tests→SUT) — shape of 200/400/422 responses from `/api/v1/ai/recommend-doctor` formalized as a pact; runs against Pact mock server (no SUT needed) |
+| `pact/ai.recommend.pact.provider.test.ts` | Provider contract verification (SUT) — SUT satisfies all consumer interactions in `pacts/` JSON; skip guard: requires `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` |
+| `pact/ai.service.pact.consumer.test.ts` | Consumer-driven contract (SUT→ai-service) — shape of 200/422/400 from `/recommend`; consumer="clinic-booking-api", provider="ai-service"; genuine service-to-service boundary |
+| `pact/ai.service.pact.provider.test.ts` | Provider contract verification (ai-service) — ai-service satisfies SUT's expectations; requires ai-service on `AI_SERVICE_URL` with `AI_MOCK_RESPONSE=true` |
 | `contract.drift.test.js` | OpenAPI contract drift guard — spec reachable, all paths/error codes/schemas documented; Swagger UI reachable |
 | `security.test.js` | Security boundary — IDOR on appointment access, JWT tampering rejected |
 | `infrastructure.test.js` | Infrastructure contract — health endpoint, error response format consistency |
@@ -886,6 +1076,10 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `doctor-appointments.pagination.test.ts` | Doctor pagination controls — same coverage for doctor workspace |
 | `appointments.recurring.ui.test.ts` | Recurring series UI — series tag visible when seriesId present; cancel-series button shown for pending/confirmed+seriesId only; cancel flow: confirm dialog → list reloads → toast "Series cancelled."; API error → inline notice |
 | `ui-disabled-states.test.ts` | Form disabled state cascade — doctor select disabled until specialty chosen; offer accept button re-enabled after API error (not stuck in disabled state) |
+| `ui-states.test.ts` | Full UI state matrix — patient empty state (no appointments), filter no-results, cancel toast; booking wizard: empty doctors list, empty slots (step 3), success flow (full walkWizard), slot pickers + time enabled; doctor empty state, doctor error banner; updated to wizard flow |
+| `booking.wizard.test.ts` | Booking wizard UI — step label, Next disabled until selection, URL-skip clamp, back preserves specialty, step 3 Next gating, 409 slot-taken message + back button, progress dots; 7 tests via `page.route()` mocking |
+| `booking.wizard.e2e.test.ts` | Wizard happy path E2E — full 4-step walk creates appointment; success msg visible; button hidden; API + DB cross-check |
+| `booking-conflict.e2e.test.ts` | Race condition E2E — user2 walks wizard to step 4; user1 books same slot via API; user2 submit → 409 slot-taken error; DB: exactly 1 active appointment belongs to user1 |
 
 ## 18. Architecture decisions — было / стало / почему
 

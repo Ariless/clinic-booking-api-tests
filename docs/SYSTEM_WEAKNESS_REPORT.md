@@ -128,11 +128,13 @@
 
 ---
 
-### 3.4 Accessibility violations — ✅ found and fixed (2026-04-30)
+### 3.4 Accessibility violations — ✅ found and fixed (2026-04-30, recurrence fixed 2026-05-22)
 
 **Risk:** Pages lacked semantic HTML structure required by WCAG 2.1 AA — missing `<main>` landmark and `<h1>` on key pages. Screen reader users could not navigate efficiently. EU Accessibility Act compliance risk.
 
 **Known residual:** `color-contrast` excluded — `.muted` is `#64748b` (3.9:1, below WCAG AA 4.5:1). See `KNOWN_ISSUES.md` D-01.
+
+**Recurrence (2026-05-22):** Five pages added since the original fix shipped without `<main>` landmarks (`patient-appointments`, `patient-consultations`, `patient-notifications`, `doctor-appointments`, `doctor-schedule`). Additionally `doctor-schedule` had 14 unlabelled `<input type="time">` elements in the dynamically generated working hours table. Found by extending `accessibility.test.ts` to cover new pages. All fixed.
 
 **→ Bug details, fix, and test coverage:** `KNOWN_ISSUES.md` B-02
 
@@ -302,7 +304,7 @@
 | Rate limit per-IP only | Low | Partial | Partial — 429 contract only |
 | SQLite write bottleneck | Medium | ❌ architectural limit | ⚠️ baseline only — `k6/booking-flow.js`; expiry spike not isolated |
 | No slot soft-lock in UI | Low | ✅ clean 409 error | ✅ `booking-conflict.e2e` |
-| Accessibility violations (missing landmarks, headings) | Medium | ✅ fixed: `<main>` + `<h1>` added | ✅ `accessibility.test.js` (found + fixed 2026-04-30) |
+| Accessibility violations (missing landmarks, headings) | Medium | ✅ fixed: `<main>` + `<h1>` added; recurrence fixed 2026-05-22 (5 new pages + 14 unlabelled inputs) | ✅ `accessibility.test.ts` (found + fixed 2026-04-30; recurrence caught 2026-05-22) |
 | Color contrast below WCAG AA | Low | ❌ known design debt (#64748b) | ⚠️ excluded from axe run, documented |
 | Retrieval quality — ambiguous symptoms route to wrong specialty | Medium | Partial — LLM may correct; mock mode exposes raw retrieval | ❌ no regression test for ambiguous symptoms (found 2026-05-08, Pact) |
 | Specialty/seed data mismatch — `doctors: []` on valid 200 | Medium | ❌ no guard | ❌ no test; silent failure (found 2026-05-08, Pact) |

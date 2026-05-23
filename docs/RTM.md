@@ -1,8 +1,8 @@
 # Requirements Traceability Matrix — Clinic Booking API
 
 **Purpose:** trace every business requirement to the test file(s) that verify it, and confirm coverage status.  
-**Last updated:** 2026-05-16  
-**Suite:** 118 automated tests across 7 layers
+**Last updated:** 2026-05-18  
+**Suite:** 148 automated tests across 7 layers
 
 Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 
@@ -19,6 +19,13 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | A-05 | Protected routes require a valid JWT | `security.test.js`, `appointments.rbac.patient.test.js` | ✅ |
 | A-06 | Tampered JWT is rejected | `security.test.js` | ✅ |
 | A-07 | Malformed JWT returns standard error response | ❌ No test — found by Schemathesis 2026-05-12 | ❌ |
+| A-08 | Patient can close own account (`DELETE /auth/me` → 204) | `auth.delete.test.ts` | ✅ |
+| A-09 | Access token rejected after account deletion (401 AUTH_INVALID) | `auth.delete.test.ts` | ✅ |
+| A-10 | Refresh token rejected after account deletion (401 AUTH_INVALID) | `auth.delete.test.ts` | ✅ |
+| A-11 | Deleted account cannot log in (401 AUTH_INVALID) | `auth.delete.test.ts` | ✅ |
+| A-12 | Deleted account's email cannot be reused (409 EMAIL_RETIRED) | `auth.delete.test.ts` | ✅ |
+| A-13 | User record preserved in DB with `deletedAt` set, not hard-deleted | `auth.delete.test.ts` | ✅ |
+| A-14 | Other accounts unaffected when one account is deleted | `auth.delete.test.ts` | ✅ |
 
 ---
 
@@ -43,6 +50,55 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 
 ---
 
+## Appointment notes
+
+| ID | Requirement | Test file(s) | Status |
+|----|-------------|--------------|--------|
+| AN-01 | Patient can add a note to a confirmed appointment (201 + response fields) | `appointments.notes.test.ts` | ✅ |
+| AN-02 | Patient can retrieve notes list for their own appointment | `appointments.notes.test.ts` | ✅ |
+| AN-03 | Unauthenticated add/read note returns 401 AUTH_REQUIRED | `appointments.notes.test.ts` | ✅ |
+| AN-04 | Patient cannot add note to another patient's appointment (403 FORBIDDEN) | `appointments.notes.test.ts` | ✅ |
+| AN-05 | Empty note content returns 400 VALIDATION_ERROR | `appointments.notes.test.ts` | ✅ |
+| AN-06 | Note on cancelled/rejected appointment returns 422 INVALID_STATUS | `appointments.notes.test.ts` | ✅ |
+| AN-07 | HTML/XSS content in note body is rejected (400 UNSAFE_CONTENT) | `appointments.notes.test.ts` | ✅ |
+| AN-08 | Another authenticated patient cannot read appointment notes (IDOR) | `appointments.notes.test.ts` | ✅ |
+
+---
+
+## Appointment ratings
+
+| ID | Requirement | Test file(s) | Status |
+|----|-------------|--------------|--------|
+| AR-01 | Patient can rate a completed appointment (201 + response fields) | `appointments.ratings.test.ts` | ✅ |
+| AR-02 | `GET /doctors/:id/rating` returns aggregate average and count | `appointments.ratings.test.ts` | ✅ |
+| AR-03 | Unauthenticated rating attempt returns 401 AUTH_REQUIRED | `appointments.ratings.test.ts` | ✅ |
+| AR-04 | Patient cannot rate another patient's appointment (403 FORBIDDEN) | `appointments.ratings.test.ts` | ✅ |
+| AR-05 | Score outside [1–5] range returns 400 VALIDATION_ERROR | `appointments.ratings.test.ts` | ✅ |
+| AR-06 | Rating non-existent appointment returns 404 APPOINTMENT_NOT_FOUND | `appointments.ratings.test.ts` | ✅ |
+| AR-07 | Rating a non-completed appointment returns 422 INVALID_STATUS | `appointments.ratings.test.ts` | ✅ |
+| AR-08 | Duplicate rating returns 409 DUPLICATE_RATING | `appointments.ratings.test.ts` | ✅ |
+| AR-09 | Aggregate rating does not expose individual rater identities | `appointments.ratings.test.ts` | ✅ |
+
+---
+
+## Appointment filtering
+
+| ID | Requirement | Test file(s) | Status |
+|----|-------------|--------------|--------|
+| AF-01 | Patient can filter `GET /appointments/my` by status | `appointments.filter.test.ts` | ✅ |
+| AF-02 | Filter by status returns only appointments with that status | `appointments.filter.test.ts` | ✅ |
+| AF-03 | Patient can filter appointments by doctorId | `appointments.filter.test.ts` | ✅ |
+| AF-04 | Patient can filter by `from` date (slot on or after date) | `appointments.filter.test.ts` | ✅ |
+| AF-05 | Patient can filter by `to` date (slot on or before date) | `appointments.filter.test.ts` | ✅ |
+| AF-06 | Multiple filters can be combined (AND semantics) | `appointments.filter.test.ts` | ✅ |
+| AF-07 | No filter match returns 200 with empty data array | `appointments.filter.test.ts` | ✅ |
+| AF-08 | Unknown status value returns 400 VALIDATION_ERROR | `appointments.filter.test.ts` | ✅ |
+| AF-09 | Non-integer doctorId returns 400 VALIDATION_ERROR | `appointments.filter.test.ts` | ✅ |
+| AF-10 | Invalid date format for `from`/`to` returns 400 VALIDATION_ERROR | `appointments.filter.test.ts` | ✅ |
+| AF-11 | Filtered `total` in paginated response reflects filter, not overall count | `appointments.filter.test.ts` | ✅ |
+
+---
+
 ## Appointment list & pagination
 
 | ID | Requirement | Test file(s) | Status |
@@ -62,6 +118,22 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | DS-02 | Slot booking outside doctor's working hours returns 422 OUTSIDE_WORKING_HOURS | `doctors.schedule.test.ts` | ✅ |
 | DS-03 | Doctor schedule UI saves and reloads correctly | `doctor.schedule.ui.test.ts` | ✅ |
 | DS-04 | Schedule set via UI is confirmed by API and persisted in DB | `doctor.schedule.cross-layer.test.ts` | ✅ |
+
+---
+
+## Booking wizard (UI)
+
+| ID | Requirement | Test file(s) | Status |
+|----|-------------|--------------|--------|
+| BW-01 | Step 1 shows "Step 1 of 4" label and only step 1 section visible on load | `booking.wizard.test.ts` | ✅ |
+| BW-02 | Next button on step 1 disabled until specialty is selected | `booking.wizard.test.ts` | ✅ |
+| BW-03 | URL-skip to step 3 without doctorId silently redirects to step 1 | `booking.wizard.test.ts` | ✅ |
+| BW-04 | Back from step 2 returns to step 1 with specialty preserved in URL | `booking.wizard.test.ts` | ✅ |
+| BW-05 | Step 3 Next disabled until time slot is explicitly selected | `booking.wizard.test.ts` | ✅ |
+| BW-06 | 409 SLOT_TAKEN on step 4 shows "slot just taken" message; back button remains visible | `booking.wizard.test.ts`, `booking-conflict.e2e.test.ts` | ✅ |
+| BW-07 | Progress dots reflect current step (is-active) and completed steps (is-done) | `booking.wizard.test.ts` | ✅ |
+| BW-08 | Full wizard happy path creates appointment; success message + submit hidden | `booking.wizard.e2e.test.ts` | ✅ |
+| BW-09 | Unauthenticated user on step 4 sees sign-in gate instead of booking form | `guest-gates.test.ts` | ✅ |
 
 ---
 
@@ -162,10 +234,14 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 
 | Area | Total requirements | Covered | Partial | Not covered |
 |------|--------------------|---------|---------|-------------|
-| Authentication | 7 | 6 | 0 | 1 |
+| Authentication | 14 | 13 | 0 | 1 |
 | Appointment lifecycle | 14 | 14 | 0 | 0 |
+| Appointment notes | 8 | 8 | 0 | 0 |
+| Appointment ratings | 9 | 9 | 0 | 0 |
+| Appointment filtering | 11 | 11 | 0 | 0 |
 | Appointment list & pagination | 4 | 4 | 0 | 0 |
 | Doctor schedule | 4 | 4 | 0 | 0 |
+| Booking wizard (UI) | 9 | 9 | 0 | 0 |
 | Waitlist | 6 | 6 | 0 | 0 |
 | Access control | 5 | 5 | 0 | 0 |
 | Real-time notifications | 5 | 5 | 0 | 0 |
@@ -174,7 +250,7 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | Error contract | 3 | 3 | 0 | 0 |
 | Performance | 5 | 5 | 0 | 0 |
 | Accessibility | 2 | 1 | 1 | 0 |
-| **Total** | **66** | **62 (94%)** | **1 (2%)** | **3 (5%)** |
+| **Total** | **120** | **116 (97%)** | **1 (1%)** | **3 (2%)** |
 
 **Not covered — known reasons:**
 

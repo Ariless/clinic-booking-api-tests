@@ -35,6 +35,8 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | **Residual** | `color-contrast` excluded — `.muted` is `#64748b` (3.9:1, below WCAG AA 4.5:1). Documented design debt — see B-06. |
 | **Where** | `SYSTEM_WEAKNESS_REPORT.md` §3.4 · `accessibility.test.js` · `PORTFOLIO_NARRATIVE.md` |
 
+**Recurrence — 2026-05-22:** Five pages added since the original fix (`patient-appointments.html`, `patient-consultations.html`, `patient-notifications.html`, `doctor-appointments.html`, `doctor-schedule.html`) were shipped without `<main>` landmarks. Additionally, `doctor-schedule.html` had 14 unlabelled `<input type="time">` elements (working hours table rows generated dynamically via JS template literal — `aria-label` never added). Found by extended `accessibility.test.ts` run. Fixed: `<main>` + visually-hidden `<h1>` added to all five pages; `aria-label="${name} start/end"` added to the time inputs in the JS template.
+
 ---
 
 ### B-03 — WebSocket never connected in browser (`window.ClinicCore` undefined)
