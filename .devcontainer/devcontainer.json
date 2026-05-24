@@ -1,0 +1,28 @@
+{
+  "name": "clinic-booking-api-tests",
+  "image": "mcr.microsoft.com/playwright:v1.49.1-noble",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    }
+  },
+  "postCreateCommand": "npm install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-playwright.playwright",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "playwright.reuseBrowser": false
+      }
+    }
+  },
+  "remoteEnv": {
+    "BASE_URL": "http://host.docker.internal:3000"
+  },
+  "forwardPorts": [3000, 4723]
+}
