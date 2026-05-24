@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { UserClient } from '../../api/UserClient';
 import { generateUser } from '../../utils/userUtils';
-import { generateEdgeCaseUsers } from '../../utils/aiTestDataGenerator';
 
 // Builds a unique email for each edge-case registration so there are no DUPLICATE_EMAIL conflicts
 function edgeEmail(label: string): string {
@@ -126,25 +125,3 @@ test.describe("POST /api/v1/auth/register — content stress (static) @api", () 
   });
 });
 
-// ---------------------------------------------------------------------------
-// AI-generated edge cases — skipped without ANTHROPIC_API_KEY
-// ---------------------------------------------------------------------------
-
-test.describe("POST /api/v1/auth/register — AI-generated edge cases @api @ai-data", () => {
-  test("AI-generated: all edge-case names register and are stored correctly @api @ai-data", async ({ request }) => {
-    test.skip(!process.env.ANTHROPIC_API_KEY, 'Requires ANTHROPIC_API_KEY — Claude generates edge-case names');
-
-    const users = new UserClient(request);
-    const edgeCases = await generateEdgeCaseUsers();
-
-    for (const { name, description } of edgeCases) {
-      const email = edgeEmail(description);
-      const { status, body } = await registerAndCleanup(users, name, email);
-      expect(status, `Expected 201 for "${name}" (${description})`).toBe(201);
-      expect(
-        (body.user as Record<string, unknown>).name,
-        `Name mismatch for "${name}" (${description})`
-      ).toBe(name);
-    }
-  });
-});

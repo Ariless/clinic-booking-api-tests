@@ -1,7 +1,6 @@
 import { test as base } from "@playwright/test";
 import { generateUser } from "../utils/userUtils";
 import { UserClient } from "../api/UserClient";
-import { attachBugReport } from "../utils/aiBugReporter";
 
 export type UserPayload = {
     email: string;
@@ -11,10 +10,6 @@ export type UserPayload = {
     refreshToken: string;
     user: { id: number; email: string; role: string; name: string; [key: string]: unknown };
 };
-
-base.afterEach(async ({}, testInfo) => {
-    await attachBugReport(testInfo);
-});
 
 export const test = base.extend<{ user: UserPayload }>({
     user: async ({ request }, use) => {
