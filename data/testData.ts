@@ -1,3 +1,5 @@
+// New code: import from enums/ by area for typed constants + error codes.
+// This file is kept for backward compatibility — existing tests continue to work.
 const API_V1 = "/api/v1";
 
 export const endpoints = {
@@ -51,3 +53,10 @@ export const endpoints = {
 
     debugSimulateConcurrentBooking: `${API_V1}/debug/simulate-concurrent-booking`,
 };
+
+// Re-export area-specific constants for new tests
+export { AuthEndpoints, AuthErrors }             from "../enums/auth";
+export { AppointmentEndpoints, AppointmentErrors } from "../enums/appointments";
+export { DoctorEndpoints, DoctorErrors }         from "../enums/doctors";
+export { AiEndpoints, AiErrors, ALLOWED_SPECIALTIES } from "../enums/ai";
+export { ConsultationEndpoints, ConsultationErrors } from "../enums/consultations";

@@ -1,0 +1,41 @@
+const API_V1 = "/api/v1";
+
+export const AppointmentEndpoints = {
+    list:                 `${API_V1}/appointments`,
+    my:                   `${API_V1}/appointments/my`,
+    doctor:               `${API_V1}/appointments/doctor`,
+    byId:                 (id: number | string) => `${API_V1}/appointments/${id}`,
+    cancel:               (id: number | string) => `${API_V1}/appointments/${id}/cancel`,
+    confirm:              (id: number | string) => `${API_V1}/appointments/${id}/confirm`,
+    reject:               (id: number | string) => `${API_V1}/appointments/${id}/reject`,
+    cancelAsDoctor:       (id: number | string) => `${API_V1}/appointments/${id}/cancel-as-doctor`,
+    complete:             (id: number | string) => `${API_V1}/appointments/${id}/complete`,
+    reschedule:           (id: number | string) => `${API_V1}/appointments/${id}/reschedule`,
+    notes:                (id: number | string) => `${API_V1}/appointments/${id}/notes`,
+    rate:                 (id: number | string) => `${API_V1}/appointments/${id}/rate`,
+    recurring:            `${API_V1}/appointments/recurring`,
+    seriesCancel:         (seriesId: string) => `${API_V1}/appointments/series/${seriesId}/cancel`,
+    waitlistJoin:         `${API_V1}/appointments/waitlist`,
+    waitlistMe:           `${API_V1}/appointments/waitlist/me`,
+    waitlistDelete:       (id: number | string) => `${API_V1}/appointments/waitlist/${id}`,
+    waitlistOffers:       `${API_V1}/appointments/waitlist-offers`,
+    waitlistOfferAccept:  (id: number | string) => `${API_V1}/appointments/waitlist-offers/${id}/accept`,
+    waitlistOfferDecline: (id: number | string) => `${API_V1}/appointments/waitlist-offers/${id}/decline`,
+    debugConcurrent:      `${API_V1}/debug/simulate-concurrent-booking`,
+} as const;
+
+export const AppointmentErrors = {
+    FORBIDDEN:              "FORBIDDEN",
+    VALIDATION_ERROR:       "VALIDATION_ERROR",
+    SLOT_TAKEN:             "SLOT_TAKEN",
+    SLOT_NOT_FOUND:         "SLOT_NOT_FOUND",
+    SLOT_TOO_SHORT:         "SLOT_TOO_SHORT",
+    OUTSIDE_WORKING_HOURS:  "OUTSIDE_WORKING_HOURS",
+    INVALID_TRANSITION:     "INVALID_TRANSITION",
+    SERIES_NOT_FOUND:       "SERIES_NOT_FOUND",
+    WAITLIST_DUPLICATE:     "WAITLIST_DUPLICATE",
+    OFFER_ALREADY_RESOLVED: "OFFER_ALREADY_RESOLVED",
+    PAYMENT_REQUIRED:       "PAYMENT_REQUIRED",
+    CHAOS_ERROR:            "CHAOS_ERROR",
+    INTERNAL_ERROR:         "INTERNAL_ERROR",
+} as const;
