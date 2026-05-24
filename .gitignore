@@ -24,3 +24,4 @@ skills/
 .claude/
 BACKLOG.md
 BACKLOG.md
+tests/api/pact/
