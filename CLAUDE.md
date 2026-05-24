@@ -27,11 +27,10 @@ data/         testData.ts (endpoints), seedAccounts.ts, schemas/
 fixtures/     Playwright fixtures — userFixture, slotFixture, twoUsersFixture, index
 flows/        multi-step API sequences reused across tests
 pages/        Page Objects — one class per screen, extends BasePage
-utils/        dbClient, schemaValidator, slotAssertion, webhookTestServer, aiBugReporter, userUtils
+utils/        dbClient, schemaValidator, slotAssertion, webhookTestServer, userUtils
 tests/api/    API tests
 tests/e2e/    E2E cross-layer tests
 tests/ui/     UI browser tests
-tests/unit/   Unit tests (ai.retrieval, bug-reporter.demo)
 ```
 
 ## Test naming
@@ -49,6 +48,10 @@ Tags: `@smoke`, `@api`, `@ui`, `@e2e`, `@webhook`, `@ws`, `@chaos`, `@payment`, 
 **Imports** — always import from TS sources (`../../fixtures`, `../../api/AppointmentsClient`), never from node_modules paths.
 
 **Fixtures** — use `user` fixture for patient flows (creates + deletes user automatically). Use `slot` fixture for doctor + slot. Use `twoUsersFixture` when two patients are needed.
+
+**Page Objects** — all 7 page objects are wired via `fixtures/pages.ts` using `base.extend()`. Never instantiate page objects with `new PageClass(page)` in test files — destructure from the fixture instead. POM handles domain clarity (locators + methods), fixture handles wiring.
+
+**BasePage** — all page objects extend `BasePage`. Shared navigation logic (navigate, common waits) belongs in `BasePage`, not in individual page objects.
 
 **API clients** — all HTTP goes through `api/*Client.ts`. Never call `request.post` with raw URLs in test files — use a client method.
 
@@ -69,6 +72,32 @@ Tags: `@smoke`, `@api`, `@ui`, `@e2e`, `@webhook`, `@ws`, `@chaos`, `@payment`, 
 - DB results are `T | undefined` — handle with `!` or guard
 - Run `npx tsc --noEmit` after changes — zero errors is the bar
 
+## UI and E2E scope
+
+UI and E2E tests exist only to cover what API tests physically cannot.
+
+**UI tests cover:** rendering data in the browser, UI behaviour on API errors (`page.route()`), interactivity (click → correct request → correct result on screen), visual states, accessibility.
+
+**E2E tests cover:** cross-layer invariants — action via UI → DB or API assertion (or reverse); scenarios that need a live browser + real server together.
+
+**Never duplicate:** do not assert status codes, errorCodes, or server business logic in a UI test — that belongs in the API layer. Do not write an E2E test if the scenario is fully covered by an API test without a browser.
+
+Before writing a UI/E2E test ask: "can this be verified with an API test?" If yes — don't write UI/E2E. If no (browser required, DB check after UI action) — write it.
+
+## Risk-based test evaluation
+
+Before writing any test ask: "what does the user or business lose if this fails in production?" If the answer is not concrete — don't write the test.
+
+**Write tests that catch:** wrong data returned silently, security/RBAC failures (IDOR, privilege escalation), state machine violations, shape contract breaks, boundary values where real bugs live.
+
+**Don't write tests for:** API design choices (empty array vs 404 — both valid), theoretical edge cases with mathematically guaranteed logic, paths already covered by another test in the same describe block, implementation details rather than observable behaviour.
+
+## DRY and Single Responsibility
+
+**DRY** — if the same sequence appears in two tests, it belongs in a fixture or a flow. Test files contain assertions, not setup logic.
+
+**Single Responsibility** — each fixture does one thing. Each client method does one thing. Each test verifies one behaviour. If a test needs a long comment to explain what it is checking, split it.
+
 ## What NOT to do
 
 - Don't add a new API client method if one already exists
@@ -76,3 +105,4 @@ Tags: `@smoke`, `@api`, `@ui`, `@e2e`, `@webhook`, `@ws`, `@chaos`, `@payment`, 
 - Don't write UI-only assertions for server-side business rules
 - Don't create new JS files — new code goes in TS
 - Don't commit — show the commands, user runs them
+
