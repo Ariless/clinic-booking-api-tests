@@ -13,6 +13,18 @@
           "Authorization": "Bearer consumer-test-token",
           "Content-Type": "application/json"
         },
+        "matchingRules": {
+          "header": {
+            "Authorization": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
         "method": "POST",
         "path": "/api/v1/ai/recommend-doctor"
       },
@@ -27,6 +39,14 @@
         },
         "matchingRules": {
           "body": {
+            "$.errorCode": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
             "$.message": {
               "combine": "AND",
               "matchers": [
@@ -58,6 +78,28 @@
           "Authorization": "Bearer consumer-test-token",
           "Content-Type": "application/json"
         },
+        "matchingRules": {
+          "body": {
+            "$.symptoms": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          },
+          "header": {
+            "Authorization": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
         "method": "POST",
         "path": "/api/v1/ai/recommend-doctor"
       },
@@ -72,6 +114,14 @@
         },
         "matchingRules": {
           "body": {
+            "$.errorCode": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
             "$.message": {
               "combine": "AND",
               "matchers": [
@@ -102,6 +152,28 @@
         "headers": {
           "Authorization": "Bearer consumer-test-token",
           "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$.symptoms": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          },
+          "header": {
+            "Authorization": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
         },
         "method": "POST",
         "path": "/api/v1/ai/recommend-doctor"
@@ -165,6 +237,90 @@
               ]
             },
             "$.recommendedSpecialty": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a login request from the web test suite",
+      "request": {
+        "body": {
+          "email": "patient@example.com",
+          "password": "password123"
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$.email": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.password": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "method": "POST",
+        "path": "/api/v1/auth/login"
+      },
+      "response": {
+        "body": {
+          "token": "eyJhbGciOiJIUzI1NiJ9.test.signature",
+          "user": {
+            "email": "patient@example.com",
+            "id": 1,
+            "role": "patient"
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$.token": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.user.email": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.user.id": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            },
+            "$.user.role": {
               "combine": "AND",
               "matchers": [
                 {
