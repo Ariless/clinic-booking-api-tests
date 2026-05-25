@@ -22,6 +22,7 @@
     "ci:impact": "node scripts/impact-analysis.js",
     "ai:flakiness": "node scripts/flakiness-classifier.js",
     "ai:test-gen": "node scripts/ai-test-generator.js",
+    "mcp:track": "node scripts/mcp-session-tracker.js",
     "test:browserstack": "browserstack-node-sdk playwright test",
     "test:browserstack:ui": "browserstack-node-sdk playwright test tests/ui/"
   },

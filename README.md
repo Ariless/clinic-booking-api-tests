@@ -332,6 +332,15 @@ npm run test:e2e            # tests/e2e only
 npm run report              # allure generate + open
 ```
 
+**AI tooling scripts:**
+```bash
+npm run mcp:track           # launch browser with CDP + coverage tracker; Ctrl+C saves coverage/mcp-session-*.json
+npm run ci:impact           # Claude reads git diff → identifies which tests to run
+npm run ai:gap-analysis     # Claude reads test suite → reports untested endpoints
+npm run ai:flakiness        # Claude classifies flaky test root causes from bug-reports/
+npm run ai:test-gen         # Claude generates test stubs from openapi.yaml
+```
+
 **Interview line:** *”Smoke is the gate — if it fails, API and E2E don’t start. The SUT runs as a Docker container in every CI job: same image as local, no curl loop, no orphan processes. API and E2E run in parallel. Chaos is a separate manual workflow. Allure always publishes, even on failure.”*
 
 ---
