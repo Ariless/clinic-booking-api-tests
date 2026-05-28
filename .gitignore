@@ -26,3 +26,5 @@ skills/
 BACKLOG.md
 BACKLOG.md
 tests/api/pact/
+test-results.json
+test-results.json
