@@ -11,13 +11,15 @@ const ALLOWED_SPECIALTIES = [
     "Pediatrician",
 ];
 
-const isMockMode = process.env.AI_MOCK_RESPONSE === 'true';
-const hasRealKey = !!process.env.ANTHROPIC_API_KEY && !isMockMode;
+const AI_MOCK = process.env.AI_MOCK_RESPONSE === 'true'
+const AI_REAL = !!process.env.ANTHROPIC_API_KEY && !AI_MOCK
 
-test.describe("POST /api/v1/ai/recommend-doctor", () => {
-    test.beforeEach(() => {
-        if (!isMockMode && !hasRealKey) test.skip();
-    });
+// Layer 1–2: contract + domain — run with mock or real Claude
+const contractLayer = (AI_MOCK || AI_REAL) ? test.describe : test.describe.skip
+// Layer 3: metamorphic — meaningful only with real Claude (LLM consistency, not retrieval)
+const qualityLayer = (AI_REAL && !AI_MOCK) ? test.describe : test.describe.skip
+
+contractLayer("POST /api/v1/ai/recommend-doctor — contract + domain @api", () => {
 
     test("200: known symptoms → recommendedSpecialty + doctors @api", async ({ request, user }) => {
         const ai = new AiRecommendClient(request);
@@ -90,10 +92,7 @@ test.describe("POST /api/v1/ai/recommend-doctor", () => {
     });
 });
 
-test.describe("POST /api/v1/ai/recommend-doctor — metamorphic consistency @api", () => {
-    test.beforeEach(() => {
-        if (!isMockMode && !hasRealKey) test.skip();
-    });
+qualityLayer("POST /api/v1/ai/recommend-doctor — metamorphic consistency @api", () => {
 
     // Metamorphic relation: same condition rephrased → same specialty.
     // Tests retrieval-layer consistency in mock mode; LLM consistency with a real key.
