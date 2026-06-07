@@ -79,6 +79,13 @@ contractLayer("POST /api/v1/ai/recommend-doctor — contract + domain @api", () 
         expect(body.errorCode).toBe("VALIDATION_ERROR");
     });
 
+    test("400 VALIDATION_ERROR: symptoms exceed 500 characters @api", async ({ request, user }) => {
+        const ai = new AiRecommendClient(request);
+        const { status, body } = await ai.recommend("a".repeat(501), user.token);
+        expect(status).toBe(400);
+        expect(body.errorCode).toBe("VALIDATION_ERROR");
+    });
+
     test("429 RATE_LIMITED after exceeding per-token limit @api", async ({ request, user }) => {
         const ai = new AiRecommendClient(request);
         for (let i = 0; i < 5; i++) {

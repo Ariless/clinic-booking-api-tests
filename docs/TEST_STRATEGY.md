@@ -907,19 +907,28 @@ Each success case registers the user, then asserts that `GET /auth/me` returns t
 
 ### 15.6 Contract drift guard ✅
 
-**What:** Fetches the live OpenAPI spec from the running SUT (`/api/openapi.yaml`) and asserts that all expected paths, error codes, and schemas are documented. Fails when a route is added to the SUT but not to `openapi.yaml` — i.e. when the spec drifts from the implementation.
+**What:** Two-layer guard against interface drift. Layer 1 fetches the live OpenAPI spec (`/api/openapi.yaml`) and asserts that all expected paths, error codes, and schema names are documented. Layer 2 calls key endpoints directly and validates that actual response bodies match the defined JSON schemas — catching cases where a refactor silently changes the response shape without updating the spec.
 
-**Implemented in:** `tests/api/contract.drift.test.js` (5 tests, `@api`, no skip guard)
+**Implemented in:** `tests/api/contract.drift.test.ts` (9 tests, `@api`, no skip guard)
 
 What it catches:
 - Endpoint added to SUT, missing from spec
 - Error code renamed in one place but not the other
 - Spec file broken or unreachable
 - Swagger UI down
+- Response shape changed by AI refactoring (field renamed, type changed, required field dropped) — caught by live shape assertions before downstream tests fail with misleading symptoms
 
-What it does NOT catch: response body shape mismatches (requires dredd/spectral for that).
+**Layer 2 — live shape assertions (added 2026-06-07):**
+| Endpoint | Schema |
+|----------|--------|
+| `POST /api/v1/auth/login` | `TokenResponse` — token, refreshToken, user object |
+| `GET /api/v1/doctors` | `DoctorsList` — array of id, name, specialty |
+| `POST /api/v1/appointments` | `Appointment` — id, slotId, patientId, status, createdAt |
+| `GET /api/v1/appointments/my` | `AppointmentList` — array of appointment objects |
 
-**Interview line:** *"I have a test that fetches the live OpenAPI spec from the running server and asserts that every documented path, error code, and schema is present. It's a drift guard — if someone adds a route and forgets to update the spec, the test fails. It also double-checks that Swagger UI itself is reachable."*
+**Why:** AI-assisted refactoring can silently rename fields or change response structure. Without layer 2, the first signal is a failing downstream test with a symptom that points to the wrong place. Layer 2 fails at the source.
+
+**Interview line:** *"The drift guard has two layers. The first fetches the live OpenAPI spec and asserts every path, error code, and schema name is documented — catches spec/code divergence. The second actually calls the key endpoints and validates response shapes against defined schemas — catches AI refactoring that silently renames a field. Without the second layer, you see the symptom in a downstream test, not at the source."*
 
 ---
 
@@ -1028,7 +1037,7 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `pact/ai.recommend.pact.provider.test.ts` | Provider contract verification (SUT) — SUT satisfies all consumer interactions in `pacts/` JSON; skip guard: requires `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` |
 | `pact/ai.service.pact.consumer.test.ts` | Consumer-driven contract (SUT→ai-service) — shape of 200/422/400 from `/recommend`; consumer="clinic-booking-api", provider="ai-service"; genuine service-to-service boundary |
 | `pact/ai.service.pact.provider.test.ts` | Provider contract verification (ai-service) — ai-service satisfies SUT's expectations; requires ai-service on `AI_SERVICE_URL` with `AI_MOCK_RESPONSE=true` |
-| `contract.drift.test.js` | OpenAPI contract drift guard — spec reachable, all paths/error codes/schemas documented; Swagger UI reachable |
+| `contract.drift.test.ts` | Two-layer drift guard — (1) OpenAPI spec: paths/error codes/schemas documented, Swagger UI reachable; (2) live shape assertions: 4 key endpoints validated against JSON schemas to catch AI-refactoring-induced field drift |
 | `security.test.js` | Security boundary — IDOR on appointment access, JWT tampering rejected |
 | `infrastructure.test.js` | Infrastructure contract — health endpoint, error response format consistency |
 | `chaos.test.js` | Fault tolerance — 503 contract under chaos mode, health endpoint exempt, latency injection *(manual workflow)* |

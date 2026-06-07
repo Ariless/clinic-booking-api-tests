@@ -1,4 +1,12 @@
 import { test, expect } from '../../fixtures';
+import { AuthClient } from '../../api/AuthClient';
+import { DoctorsClient } from '../../api/DoctorsClient';
+import { AppointmentsClient } from '../../api/AppointmentsClient';
+import { seedPatient } from '../../data/seedAccounts';
+import { assertSchema } from '../../utils/schemaValidator';
+import { validateTokenResponse } from '../../data/schemas/authSchemas';
+import { validateDoctorsList } from '../../data/schemas/doctorsSchemas';
+import { validateAppointment, validateAppointmentList } from '../../data/schemas/appointmentSchemas';
 
 const EXPECTED_PATHS = [
     "/api/v1/auth/register",
@@ -97,5 +105,38 @@ test.describe("OpenAPI spec — contract drift guard @api", () => {
 
         const missing = EXPECTED_SCHEMAS.filter((schema) => !spec.includes(`    ${schema}:`));
         expect(missing, `Schemas missing from OpenAPI spec: ${missing.join(", ")}`).toHaveLength(0);
+    });
+});
+
+test.describe("Response shape — live drift guard @api", () => {
+    test("POST /api/v1/auth/login — response matches TokenResponse shape", async ({ request }) => {
+        const auth = new AuthClient(request);
+        const { status, body } = await auth.verifyLogin(seedPatient.email, seedPatient.password);
+        expect(status).toBe(200);
+        assertSchema(body, validateTokenResponse, 'TokenResponse');
+    });
+
+    test("GET /api/v1/doctors — response matches Doctor shape", async ({ request }) => {
+        const doctors = new DoctorsClient(request);
+        const { status, body } = await doctors.list();
+        expect(status).toBe(200);
+        assertSchema(body, validateDoctorsList, 'DoctorsList');
+    });
+
+    test("POST /api/v1/appointments — response matches Appointment shape", async ({ user, slot, request }) => {
+        const appts = new AppointmentsClient(request);
+        const { status, body } = await appts.createAppointment(
+            slot.slot.id,
+            { headers: { Authorization: `Bearer ${user.token}` } },
+        );
+        expect(status).toBe(201);
+        assertSchema(body, validateAppointment, 'Appointment');
+    });
+
+    test("GET /api/v1/appointments/my — response matches AppointmentList shape", async ({ user, request }) => {
+        const appts = new AppointmentsClient(request);
+        const { status, body } = await appts.listMy({ headers: { Authorization: `Bearer ${user.token}` } });
+        expect(status).toBe(200);
+        assertSchema(body, validateAppointmentList, 'AppointmentList');
     });
 });

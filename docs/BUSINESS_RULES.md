@@ -153,6 +153,7 @@ When a promoted patient already has an active booking with that doctor, the syst
 | AI-05 | If symptoms cannot be mapped to any known specialty → `422 UNKNOWN_SPECIALTY`. |
 | AI-06 | Rate limit: 5 requests per token+IP hash per 60 seconds (default). → `429 RATE_LIMITED`. |
 | AI-07 | If Claude API is unavailable → `503 CLAUDE_UNAVAILABLE`. |
+| AI-08 | `symptoms` max length is 500 characters. Exceeding → `400 VALIDATION_ERROR`. Input is rejected before reaching the retrieval or Claude layer. |
 
 ---
 

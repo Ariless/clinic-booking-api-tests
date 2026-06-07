@@ -186,6 +186,7 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | AI-06 | Retrieved specialties appear in the model's reasoning | `ai.recommend.test.js` (RAG completeness, `@rag`) | ✅ |
 | AI-07 | "chest pain" routes to Cardiologist, not Orthopedist | ❌ No test — B-05 open bug | ❌ |
 | AI-08 | Response always includes at least one available doctor | ❌ No test — B-06 open bug | ❌ |
+| AI-09 | `symptoms` max 500 characters → `400 VALIDATION_ERROR` (rejected before retrieval/Claude) | `ai.recommend.test.ts` | ✅ |
 
 ---
 
@@ -245,12 +246,12 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | Waitlist | 6 | 6 | 0 | 0 |
 | Access control | 5 | 5 | 0 | 0 |
 | Real-time notifications | 5 | 5 | 0 | 0 |
-| AI symptom checker | 8 | 6 | 0 | 2 |
+| AI symptom checker | 9 | 7 | 0 | 2 |
 | Payments | 3 | 3 | 0 | 0 |
 | Error contract | 3 | 3 | 0 | 0 |
 | Performance | 5 | 5 | 0 | 0 |
 | Accessibility | 2 | 1 | 1 | 0 |
-| **Total** | **120** | **116 (97%)** | **1 (1%)** | **3 (2%)** |
+| **Total** | **121** | **117 (97%)** | **1 (1%)** | **3 (2%)** |
 
 **Not covered — known reasons:**
 
