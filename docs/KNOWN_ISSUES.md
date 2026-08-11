@@ -100,19 +100,18 @@ Living document. Every bug found during testing — fixed or open — recorded h
 
 ---
 
-### B-06 (open) — Valid 200 response returns `doctors: []` for unseeded specialties
+### B-06 (resolved) — Valid 200 response returns `doctors: []` for unseeded specialties
 
 | Field | Value |
 |---|---|
-| **Status** | 🔴 Open |
+| **Status** | ✅ Resolved 2026-06-22 |
 | **Found by** | Pact provider verification 2026-05-08 — interaction expected `eachLike({...})` (at least one doctor); SUT returned `doctors: []` |
 | **Severity** | Medium |
 | **Business impact** | Patient receives a successful recommendation for Orthopedist or Pediatrician — but there are no doctors of that specialty in the system. No appointment can be made. Response looks successful; error is silent. |
 | **Root cause** | `ALLOWED_SPECIALTIES` and the knowledge base include 6 specialties. Seed data (`seed.js`) only seeds 3 doctors: Cardiologist (John Doe), Dermatologist (Jane Smith), Neurologist (Jim Beam). Orthopedist and Pediatrician have zero doctors in DB. |
-| **Workaround** | Avoid recommending Orthopedist/Pediatrician by ensuring retrieval returns one of the 3 seeded specialties. In practice: use unambiguous symptoms that map cleanly to Cardiologist/Dermatologist/Neurologist. |
-| **Fix plan** | Option A — seed all 6 specialties. Option B — return `404 DOCTORS_UNAVAILABLE` when `doctors: []` after a valid recommendation, instead of silent 200. Option B is the more honest API contract. |
-| **Test gap** | No test that asserts `doctors.length > 0` after any recommendation. Tracked in `../BACKLOG.md`. |
-| **Where** | `SYSTEM_WEAKNESS_REPORT.md` §5.2 · `../BACKLOG.md` (Regression: doctors.length > 0) · `PORTFOLIO_NARRATIVE.md` |
+| **Fix applied** | Option B — `aiRoutes.js` now returns `404 DOCTORS_UNAVAILABLE` when `doctors: []` after a valid recommendation. Silent 200 replaced with an honest error contract. |
+| **Regression test** | `"404 DOCTORS_UNAVAILABLE: specialty in knowledge base but no doctors in DB @api"` — uses "my baby needs vaccination" (Pediatrician score=2, others=0). Runs in mock mode without API key. |
+| **Where** | `SYSTEM_WEAKNESS_REPORT.md` §5.2 · `PORTFOLIO_NARRATIVE.md` |
 
 ---
 

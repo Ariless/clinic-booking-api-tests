@@ -1,5 +1,9 @@
 # System Weakness Report — clinic-booking-api
 
+
+<!-- private-refs-notice -->
+> **Referenced but not in this repository:** premium tests and workflows (`security.test.ts`); SUT-side files (`openapi.yaml`, `retrieval.js`, `DEFENSE_NOTES.md`). These live in the private repos — see *Premium content* in `README.md`.
+
 **Scope:** QA-perspective analysis of architectural risks, concurrency gaps, and business logic vulnerabilities in the SUT. This is an FMEA-inspired (Failure Mode and Effects Analysis) structured map of failure modes and their test coverage — not a penetration test. Each section identifies a failure mode, its severity, whether the system mitigates it, and whether a test exists.
 
 **Companion documents:** `RISK_ANALYSIS.md` (impact × likelihood → test files), `DESIGN_PRINCIPLES.md` (how tests are built around these risks), `KNOWN_ISSUES.md` (bug register — fixed + open + design debt).
@@ -19,7 +23,7 @@
 
 **Residual weakness:** The unique index constraint is the last line of defense. If it were ever dropped (accidentally, during migration), the transaction-level check alone would not catch all races under concurrent load. The buggy branch (`B6`) simulates exactly this: the index is dropped and the guard condition is flipped, allowing double-booking.
 
-**Test coverage:** `appointments.booking.conflict.test.js` — verifies `409 SLOT_TAKEN` when two clients race for the same slot.
+**Test coverage:** `appointments.booking.conflict.test.ts` — verifies `409 SLOT_TAKEN` when two clients race for the same slot.
 
 ---
 
@@ -34,7 +38,7 @@
 
 **Residual weakness:** `promoteFromWaitlist` is documented as "must be called inside an existing transaction" (code comment). If it were ever called outside a transaction (e.g., a future refactor), the read-insert-delete sequence would not be atomic and the same patient could be promoted into two appointments.
 
-**Test coverage:** `appointments.waitlist.promotion.test.js` — verifies a single promotion per freed slot. Concurrent promotion scenario is not yet explicitly tested → planned in `tests/api/concurrency/`.
+**Test coverage:** `appointments.waitlist.promotion.test.ts` — verifies a single promotion per freed slot. Concurrent promotion scenario is not yet explicitly tested → planned in `tests/api/concurrency/`.
 
 ---
 
@@ -70,7 +74,7 @@
 
 **Residual weakness:** The guard is in the query string, not enforced by a DB constraint. A future query change or a bug in the filter would silently corrupt slot state.
 
-**Test coverage:** `appointments.confirm.j3.test.js` — verifies slot is NOT freed after confirm. The expiry path for confirmed appointments is not explicitly tested.
+**Test coverage:** `appointments.confirm.j3.test.ts` — verifies slot is NOT freed after confirm. The expiry path for confirmed appointments is not explicitly tested.
 
 ---
 
@@ -158,9 +162,9 @@
 
 **How the system handles it:** The booking fails with `409 SLOT_TAKEN` and the UI shows an error message.
 
-**Impact:** Not a data corruption risk — the error contract is clean. It is a UX failure mode that the E2E conflict test (`booking-conflict.e2e.test.js`) specifically validates.
+**Impact:** Not a data corruption risk — the error contract is clean. It is a UX failure mode that the E2E conflict test (`booking-conflict.e2e.test.ts`) specifically validates.
 
-**Test coverage:** `booking-conflict.e2e.test.js` — patient B has slot selected in UI; patient A books via API; patient B submits and sees error. ✅
+**Test coverage:** `booking-conflict.e2e.test.ts` — patient B has slot selected in UI; patient A books via API; patient B submits and sees error. ✅
 
 ---
 
@@ -178,7 +182,7 @@
 
 **Severity:** Medium — real clients using correctly formatted tokens will never hit this. A security scanner or attacker probing the API will see inconsistent error responses.
 
-**Test coverage:** ❌ Existing `security.test.js` tests missing auth header or uses valid-but-unauthorized tokens — never tests malformed token. Schemathesis is the first tool to cover this path.
+**Test coverage:** ❌ Existing `security.test.ts` tests missing auth header or uses valid-but-unauthorized tokens — never tests malformed token. Schemathesis is the first tool to cover this path.
 
 **Fix direction:** Add error handler in auth middleware that catches JWT parse errors and returns `401 { errorCode: "AUTH_INVALID", message: "...", requestId: "..." }`.
 
@@ -300,7 +304,7 @@
 | No audit trail | Medium | ✅ Pino + Loki/Grafana | — not planned (mitigated by observability stack) |
 | Waitlist fairness | Low | N/A — product decision | ❌ planned |
 | Doctor self-registration | High | ❌ known gap | ❌ acknowledged |
-| IDOR on `GET /appointments/:id` | High | ✅ fixed: `requireAuth` + ownership check | ✅ `security.test.js` (found + fixed 2026-04-30) |
+| IDOR on `GET /appointments/:id` | High | ✅ fixed: `requireAuth` + ownership check | ✅ `security.test.ts` (found + fixed 2026-04-30) |
 | Rate limit per-IP only | Low | Partial | Partial — 429 contract only |
 | SQLite write bottleneck | Medium | ❌ architectural limit | ⚠️ baseline only — `k6/booking-flow.js`; expiry spike not isolated |
 | No slot soft-lock in UI | Low | ✅ clean 409 error | ✅ `booking-conflict.e2e` |

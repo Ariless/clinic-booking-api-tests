@@ -1,5 +1,9 @@
 # Release recommendation — Clinic Booking API v1
 
+
+<!-- private-refs-notice -->
+> **Referenced but not in this repository:** premium tests and workflows (`security.test.ts`). These live in the private repos — see *Premium content* in `README.md`.
+
 **Date:** 2026-05-12  
 **Prepared by:** QA  
 **Cycle covered:** 2026-04-28 → 2026-05-12  
@@ -39,10 +43,10 @@
 
 | ID | Issue | Severity | Found by |
 |---|---|---|---|
-| B-01 | IDOR — `GET /appointments/:id` accessible without authentication | **High** | `security.test.js` |
-| B-02 | Missing `<main>` landmark and `<h1>` on login, register, booking pages | Medium | `accessibility.test.js` |
-| B-03 | Doctor WebSocket never connected in browser (`window.ClinicCore` undefined) | **High** | `doctor-notifications.e2e.test.js` |
-| B-04 | Confirm success banner hidden in < 1ms (timing race) | Low | `doctor-confirm.e2e.test.js` |
+| B-01 | IDOR — `GET /appointments/:id` accessible without authentication | **High** | `security.test.ts` |
+| B-02 | Missing `<main>` landmark and `<h1>` on login, register, booking pages | Medium | `accessibility.test.ts` |
+| B-03 | Doctor WebSocket never connected in browser (`window.ClinicCore` undefined) | **High** | `doctor-notifications.e2e.test.ts` |
+| B-04 | Confirm success banner hidden in < 1ms (timing race) | Low | `doctor-confirm.e2e.test.ts` |
 
 All four were caught by automated tests and fixed during the cycle. Two were high severity — both required E2E or security tests to surface; API tests alone missed them.
 

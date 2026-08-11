@@ -1,5 +1,9 @@
 # Business Rules — clinic-booking-api
 
+
+<!-- private-refs-notice -->
+> **Referenced but not in this repository:** SUT-side files (`API_ENDPOINTS.md`, `CONTRACT_PACK.md`, `openapi/openapi.yaml`, `app-core.js`). These live in the private repos — see *Premium content* in `README.md`.
+
 Single source of truth for domain rules enforced by the system. Written for **test design and acceptance criteria** — not a user manual. Each rule is testable: a rule without a test is a gap.
 
 **Sources:** `CONTRACT_PACK.md`, `API_ENDPOINTS.md`, `openapi/openapi.yaml`, test suite behaviour, code review.  

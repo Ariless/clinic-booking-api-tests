@@ -1,5 +1,9 @@
 # Test strategy — clinic-booking-api-tests
 
+
+<!-- private-refs-notice -->
+> **Referenced but not in this repository:** premium tests and workflows (`security.test.ts`, `chaos.test.ts`, `appointments.booking.rate-limit.test.ts`, `chaos.yml`, `security-scan.yml`); SUT-side files (`API_ENDPOINTS.md`, `CONTRACT_PACK.md`, `TESTING_AGAINST_THIS_SUT.md`, `openapi.yaml`, `PROJECT_PLAN.md`, `retrieval.js`, `appointmentsRepository.js`, `docker-compose.test.yml`, `docker-compose.observability.yml`). These live in the private repos — see *Premium content* in `README.md`.
+
 This document is the **risk- and portfolio-facing** view of the full suite (API + UI + E2E). **How** we build (pyramid, flakes, clients) stays in **`../DESIGN_PRINCIPLES.md`**.
 
 **SUT contract (state machine, `errorCode`, RBAC):** use the system-under-test repo — `API_ENDPOINTS.md`, `CONTRACT_PACK.md`, `TESTING_AGAINST_THIS_SUT.md`, OpenAPI.
@@ -75,7 +79,7 @@ Prove **high-impact failures** early, not maximize endpoint coverage:
 | **`@api`** | Deeper contract and state transitions (confirm, reject, invariants) | PR or nightly |
 | **`@regression`** | Optional explicit marker for “full depth” cases when you split CI jobs | Same as `@api` until you add `@regression` to selected titles |
 | **`@negative`** | Invalid input / expected `4xx` / contract violations (use sparingly; avoid duplicating every field validator) | PR or with `@api` grep |
-| **`@rbac`** | Optional extra marker on access-boundary tests (today **`appointments.rbac.doctor`** is `@smoke` only — add `@rbac` in the title when you want `grep @rbac`) | Smoke or regression |
+| **`@rbac`** | Optional extra marker on access-boundary tests (today **`appointments.rbac.patient`** and **`appointments.rbac.cross-doctor`** are `@smoke` only — add `@rbac` in the title when you want `grep @rbac`) | Smoke or regression |
 | **`@ui`** | Pure UI state checks — no API assertion; headed Chromium | PR or nightly alongside `@api` |
 | **`@e2e`** | Cross-layer journeys — UI action + API assertion (or vice-versa); `workers: 1` | PR or nightly |
 | **`@chaos`** | Chaos mode feature verification — requires a **chaos-enabled server** (see §12); never runs in normal smoke/api jobs | Separate CI job or local manual run |
@@ -102,7 +106,7 @@ We avoid **two unrelated tests failing for one broken transition** by **splittin
 | **J1 — user intent** | `appointments.mini.j1.*` | Slot → book → **pending** visible in `GET …/appointments/my` (smoke stops here; doctor confirm is **J3**). |
 | **J3 — system transition** | `appointments.confirm.j3.*` | Doctor **confirm** → `confirmed` + **slot / public diary invariants** (e.g. slot not offered as available where contract forbids). |
 | **J2 — alternative branch** | `appointments.reject.j2.*` | Reject + slot **returns** to a bookable/public state per contract. |
-| **RBAC** | `appointments.rbac.doctor.*` | Patient JWT **cannot** read doctor’s appointments list (`403` / `FORBIDDEN`). |
+| **RBAC** | `appointments.rbac.patient.*`, `appointments.rbac.cross-doctor.*` | Patient JWT **cannot** read doctor’s appointments list (`403` / `FORBIDDEN`). |
 
 Invalid transitions (`422`), refresh, and extra RBAC rows are **second wave** — see **`RISK_ANALYSIS.md`** and learning repo **`TODO.md`**.
 
@@ -110,12 +114,12 @@ Invalid transitions (`422`), refresh, and extra RBAC rows are **second wave** �
 
 ## 5. Test data & isolation
 
-- **Unique slot windows:** `data/seedAccounts.js` → `nextSeedSlotWindow()` so parallel files against one SQLite DB do not hit `SLOT_OVERLAP` across tests.
+- **Unique slot windows:** `data/seedAccounts.ts` → `nextSeedSlotWindow()` so parallel files against one SQLite DB do not hit `SLOT_OVERLAP` across tests.
 - **No cross-file order:** each test creates what it needs (seed logins and/or register + teardown where used).
 
 ### API clients (one layer, not raw URLs in specs)
 
-HTTP paths and JSON shapes live in **`api/*Client.js`** + **`data/testData.js`** (`endpoints`). Specs call **`appointments.createAppointment`**, **`doctors.createSlot`**, etc. — so contract drift is fixed in **one place** and tests stay readable. (Full norms: **`DESIGN_PRINCIPLES.md`**.)
+HTTP paths and JSON shapes live in **`api/*Client.js`** + **`data/testData.ts`** (`endpoints`). Specs call **`appointments.createAppointment`**, **`doctors.createSlot`**, etc. — so contract drift is fixed in **one place** and tests stay readable. (Full norms: **`DESIGN_PRINCIPLES.md`**.)
 
 ---
 
@@ -125,11 +129,11 @@ Response shapes are validated with [AJV](https://ajv.js.org/) (JSON Schema, draf
 
 | File | What it validates |
 | --- | --- |
-| `utils/schemaValidator.js` | Shared AJV instance + `assertSchema(body, validate)` helper |
-| `data/schemas/errorSchema.js` | Error contract: `errorCode`, `message`, `requestId` — all required, non-empty strings |
-| `data/schemas/authSchemas.js` | Token response: `token`, `refreshToken`, `user` object with `id`, `email`, `role`, `name` |
-| `data/schemas/appointmentSchemas.js` | Appointment object: `id`, `slotId`, `patientId`, `status` (enum), `createdAt` |
-| `data/schemas/doctorsSchemas.js` | Doctor list item: `id`, `name`, `specialisation`, `doctorRecordId` |
+| `utils/schemaValidator.ts` | Shared AJV instance + `assertSchema(body, validate)` helper |
+| `data/schemas/errorSchema.ts` | Error contract: `errorCode`, `message`, `requestId` — all required, non-empty strings |
+| `data/schemas/authSchemas.ts` | Token response: `token`, `refreshToken`, `user` object with `id`, `email`, `role`, `name` |
+| `data/schemas/appointmentSchemas.ts` | Appointment object: `id`, `slotId`, `patientId`, `status` (enum), `createdAt` |
+| `data/schemas/doctorsSchemas.ts` | Doctor list item: `id`, `name`, `specialisation`, `doctorRecordId` |
 
 **Pattern in tests:**
 
@@ -146,22 +150,22 @@ All schemas use `additionalProperties: true` — non-breaking API additions do n
 
 | Case | File / status | Thesis |
 | --- | --- | --- |
-| Second patient, same `slotId` → `409` | **`appointments.booking.conflict.test.js`** (`@api`) — **shipped** | No double booking |
-| Patient `PATCH …/cancel` | **`appointments.cancel.patient.test.js`** (`@api`) — **shipped** | Lifecycle + slot availability |
-| Waitlist join → view → leave (happy path) | **`appointments.waitlist.test.js`** (`@api`) — **shipped** | Core waitlist lifecycle |
-| Waitlist duplicate join → `409`, patient deletes another's entry → `403` | **`appointments.waitlist.test.js`** (`@api`) — **shipped** | Data integrity + security boundary |
-| Cancel / reject → waitlist patient auto-promoted | **`appointments.waitlist.promotion.test.js`** (`@api`) — **shipped** | Core business value: freed slot goes to next in queue |
-| Waitlist offer: get pending offers, accept (swap booking), decline (stay on waitlist), 409 on double-accept | **`appointments.waitlist.offers.test.js`** (`@api`) — **shipped** | Manual confirmation flow when patient already has an active booking |
-| Login rate limit → `429 RATE_LIMITED` | **`auth.login.test.js`** (`@rate-limit`) — **shipped**; run with `RATE_LIMIT_LOGIN_MAX=2 RATE_LIMIT_LOGIN_WINDOW_MS=5000` | Brute-force protection on login |
-| Register rate limit → `429 RATE_LIMITED` | **`auth.register.test.js`** (`@rate-limit`) — **shipped**; run with `RATE_LIMIT_REGISTER_MAX=2 RATE_LIMIT_REGISTER_WINDOW_MS=5000` | Spam registration prevention |
-| Booking rate limit → `429 RATE_LIMITED` | **`appointments.booking.rate-limit.test.js`** (`@rate-limit`) — **shipped**; run with `RATE_LIMIT_BOOKING_MAX=2 RATE_LIMIT_BOOKING_WINDOW_MS=5000` | Slot-hoarding / abuse prevention |
-| Chaos mode: 503 contract + health exempt + probability off-switch + deterministic seed + latency | **`chaos.test.js`** (`@chaos`) — **fully implemented** (see §12) | QA engineers test their own chaos infrastructure; interview: "I verify the tool that makes tests harder" |
+| Second patient, same `slotId` → `409` | **`appointments.booking.conflict.test.ts`** (`@api`) — **shipped** | No double booking |
+| Patient `PATCH …/cancel` | **`appointments.cancel.patient.test.ts`** (`@api`) — **shipped** | Lifecycle + slot availability |
+| Waitlist join → view → leave (happy path) | **`appointments.waitlist.test.ts`** (`@api`) — **shipped** | Core waitlist lifecycle |
+| Waitlist duplicate join → `409`, patient deletes another's entry → `403` | **`appointments.waitlist.test.ts`** (`@api`) — **shipped** | Data integrity + security boundary |
+| Cancel / reject → waitlist patient auto-promoted | **`appointments.waitlist.promotion.test.ts`** (`@api`) — **shipped** | Core business value: freed slot goes to next in queue |
+| Waitlist offer: get pending offers, accept (swap booking), decline (stay on waitlist), 409 on double-accept | **`appointments.waitlist.offers.test.ts`** (`@api`) — **shipped** | Manual confirmation flow when patient already has an active booking |
+| Login rate limit → `429 RATE_LIMITED` | **`auth.login.test.ts`** (`@rate-limit`) — **shipped**; run with `RATE_LIMIT_LOGIN_MAX=2 RATE_LIMIT_LOGIN_WINDOW_MS=5000` | Brute-force protection on login |
+| Register rate limit → `429 RATE_LIMITED` | **`auth.register.test.ts`** (`@rate-limit`) — **shipped**; run with `RATE_LIMIT_REGISTER_MAX=2 RATE_LIMIT_REGISTER_WINDOW_MS=5000` | Spam registration prevention |
+| Booking rate limit → `429 RATE_LIMITED` | **`appointments.booking.rate-limit.test.ts`** (`@rate-limit`) — **shipped**; run with `RATE_LIMIT_BOOKING_MAX=2 RATE_LIMIT_BOOKING_WINDOW_MS=5000` | Slot-hoarding / abuse prevention |
+| Chaos mode: 503 contract + health exempt + probability off-switch + deterministic seed + latency | **`chaos.test.ts`** (`@chaos`) — **fully implemented** (see §12) | QA engineers test their own chaos infrastructure; interview: "I verify the tool that makes tests harder" |
 
 ---
 
 ## 8. File naming (this repo)
 
-`{domain}.{feature}[.qualifier].test.js` under `tests/api/` — e.g. `auth.login`, `appointments.reject.j2`, `appointments.rbac.doctor`.
+`{domain}.{feature}[.qualifier].test.ts` under `tests/api/` — e.g. `auth.login`, `appointments.reject.j2`, `appointments.rbac.cross-doctor`.
 
 ---
 
@@ -183,10 +187,10 @@ These are **conscious trade-offs** for a small suite — not oversights:
 | --- | --- |
 | **Folders** `tests/api/smoke/` vs `regression/` vs `negative/` | **Not required** while file count is low; we use **`tests/api/`** + **`{domain}.{feature}.test.js`** + **tags**. Revisit if the tree grows past ~15–20 API files. |
 | **TypeScript** | SUT-aligned **JavaScript (CommonJS)**; no TS migration for portfolio optics alone. |
-| **`auth.validation` as its own file** | Register validation already lives in **`auth.register.test.js`**; splitting would be cosmetic. |
+| **`auth.validation` as its own file** | Register validation already lives in **`auth.register.test.ts`**; splitting would be cosmetic. |
 | **`appointments.happy-path` rename** | **J1 / J2 / J3** names carry **state-machine** meaning; we do not rename to generic “happy-path” templates. |
-| **Extended RBAC** (patient cannot confirm/reject; doctor cannot act on other doctors’ visits) | **Shipped** — `appointments.rbac.patient.test.js`, `appointments.rbac.cross-doctor.test.js` (`@api`). |
-| **Mobile viewport testing** | **Shipped** — `mobile-chrome` project (`devices[‘Pixel 7’]`) added to `playwright.config.js`; runs all `tests/ui/**` tests automatically on Pixel 7 viewport. 12/12 pass. API tests excluded (run on `chromium` only). |
+| **Extended RBAC** (patient cannot confirm/reject; doctor cannot act on other doctors’ visits) | **Shipped** — `appointments.rbac.patient.test.ts`, `appointments.rbac.cross-doctor.test.ts` (`@api`). |
+| **Mobile viewport testing** | **Shipped** — `mobile-chrome` project (`devices[‘Pixel 7’]`) added to `playwright.config.ts`; runs all `tests/ui/**` tests automatically on Pixel 7 viewport. 12/12 pass. API tests excluded (run on `chromium` only). |
 | **Cucumber / BDD** (`playwright-bdd`) | Write `.feature` files (Gherkin) for key journeys (J1 book, U1 guest gate, E1 cross-layer); step definitions reuse existing Page Objects. `playwright-bdd` bridges Playwright runner + Cucumber syntax. Allure displays Given/When/Then steps per scenario — strong portfolio signal when combined with Allure already in place. |
 
 ---
@@ -212,7 +216,7 @@ These are **conscious trade-offs** for a small suite — not oversights:
 
 ## 12. Chaos mode tests (`@chaos`)
 
-File: **`tests/api/chaos.test.js`**  
+File: **`tests/api/chaos.test.ts`**  
 Tag: `@chaos` — excluded from normal smoke/api runs.
 
 ### Current state
@@ -310,9 +314,9 @@ Not every suite belongs in CI. The decision is explicit: signal value weighed ag
 
 | Suite | Why local only | Unblocking condition |
 |---|---|---|
-| `chaos.test.js` (`@chaos`) | Requires chaos-enabled SUT (`CHAOS_ENABLED=true`, `CHAOS_PROBABILITY`, fault injection middleware). CI SUT runs in standard mode. | Separate `chaos.yml` already exists — triggered manually via `workflow_dispatch`. |
-| `observability.loki.test.js` (`@observability`) | Requires full Loki stack (`docker-compose.observability.yml`). CI runs SUT only, no Loki sidecar. | Add observability compose to CI workflow + `LOKI_ENABLED=true`. High infrastructure cost for low CI frequency value. |
-| `appointments.booking.rate-limit.test.js` | Requires `RATE_LIMIT_WINDOW_MS` env override — CI SUT uses production defaults; parallel runs exhaust the window and produce false 429s. | Add env override to `api-tests.yml`; or isolate to a separate serial job. |
+| `chaos.test.ts` (`@chaos`) | Requires chaos-enabled SUT (`CHAOS_ENABLED=true`, `CHAOS_PROBABILITY`, fault injection middleware). CI SUT runs in standard mode. | Separate `chaos.yml` already exists — triggered manually via `workflow_dispatch`. |
+| `observability.loki.test.ts` (`@observability`) | Requires full Loki stack (`docker-compose.observability.yml`). CI runs SUT only, no Loki sidecar. | Add observability compose to CI workflow + `LOKI_ENABLED=true`. High infrastructure cost for low CI frequency value. |
+| `appointments.booking.rate-limit.test.ts` | Requires `RATE_LIMIT_WINDOW_MS` env override — CI SUT uses production defaults; parallel runs exhaust the window and produce false 429s. | Add env override to `api-tests.yml`; or isolate to a separate serial job. |
 
 **Why this matters:** running these in the default CI job would produce flaky failures caused by missing infrastructure, not product defects — exactly the failure-classification problem the framework is designed to avoid.
 
@@ -365,7 +369,7 @@ Rate limits, `AI_MOCK_RESPONSE`, `CHAOS_ENABLED`, and all SUT env vars now live 
 - `docker compose down` always removes the container, even if tests crash — no orphan processes
 - SUT config is in one file (`docker-compose.test.yml`) rather than scattered between the workflow and `.env`
 
-**Constraint:** `dbClient.js` reads SQLite directly from the filesystem (not via API). The container uses a bind mount `./data:/app/data` so the test runner can still access the DB file at `sut/data/clinic.db` from outside the container.
+**Constraint:** `dbClient.ts` reads SQLite directly from the filesystem (not via API). The container uses a bind mount `./data:/app/data` so the test runner can still access the DB file at `sut/data/clinic.db` from outside the container.
 
 **Note for local runs:** same command as CI:
 ```bash
@@ -407,7 +411,7 @@ Not penetration testing — boundary assertions that prove the API rejects unaut
 
 **Status: ✅ shipped (2026-04-30)**
 
-File: `tests/ui/accessibility.test.js` — 3 tests, tag `@a11y @ui`.
+File: `tests/ui/accessibility.test.ts` — 3 tests, tag `@a11y @ui`.
 
 Tool: **`@axe-core/playwright`** — axe-core runs against live pages in Chromium, asserts zero violations.
 
@@ -594,11 +598,11 @@ Examples in this suite:
 
 | Invariant | What always must be true | Where asserted |
 |---|---|---|
-| No double-booking | `slot.isAvailable = 0` while appointment is active; second booking → `409 SLOT_TAKEN` | `appointments.booking.conflict.test.js` + DB check |
-| Cancel frees the slot atomically | After cancel, `slot.isAvailable = 1` AND `appointment.status = 'cancelled'` in the same transaction | `appointments.cancel.patient.test.js` (DB check) |
-| Waitlist promotion is exactly-once | Under concurrent cancels, one waitlist patient promoted exactly once — never zero, never twice | `appointments.concurrency.test.js` |
-| State machine never accepts illegal transitions | No `(from, to)` combination outside the allowed set ever returns `200` | `appointments.invalid-transition.test.js` |
-| Auth guard always active | Any protected route without a valid token → `401`; with wrong role → `403` | `appointments.rbac.*.test.js`, `security.test.js` |
+| No double-booking | `slot.isAvailable = 0` while appointment is active; second booking → `409 SLOT_TAKEN` | `appointments.booking.conflict.test.ts` + DB check |
+| Cancel frees the slot atomically | After cancel, `slot.isAvailable = 1` AND `appointment.status = 'cancelled'` in the same transaction | `appointments.cancel.patient.test.ts` (DB check) |
+| Waitlist promotion is exactly-once | Under concurrent cancels, one waitlist patient promoted exactly once — never zero, never twice | `appointments.concurrency.test.ts` |
+| State machine never accepts illegal transitions | No `(from, to)` combination outside the allowed set ever returns `200` | `appointments.invalid-transition.test.ts` |
+| Auth guard always active | Any protected route without a valid token → `401`; with wrong role → `403` | `appointments.rbac.*.test.js`, `security.test.ts` |
 
 **Interview line:** *"I write tests around invariants, not just happy paths. A double-booking test isn't interesting because it returns 409 — it's interesting because it proves the system never sells one slot twice, regardless of how many concurrent requests arrive."*
 
@@ -608,11 +612,11 @@ Boundaries are tested explicitly, not assumed. Current examples:
 
 | Boundary | Test |
 |---|---|
-| Empty symptoms string → `400 VALIDATION_ERROR` | `ai.recommend.test.js` |
-| Unknown specialty (unmappable symptoms) → `422 UNKNOWN_SPECIALTY` | `ai.recommend.test.js` |
-| `doctorRecordId` that doesn't exist → `404 DOCTOR_NOT_FOUND` | `auth.register.test.js` |
-| Duplicate waitlist join → `409 WAITLIST_DUPLICATE` | `appointments.waitlist.test.js` |
-| Invalid state transition (cancelled → confirmed) → `422 INVALID_TRANSITION` | `appointments.invalid-transition.test.js` |
+| Empty symptoms string → `400 VALIDATION_ERROR` | `ai.recommend.test.ts` |
+| Unknown specialty (unmappable symptoms) → `422 UNKNOWN_SPECIALTY` | `ai.recommend.test.ts` |
+| `doctorRecordId` that doesn't exist → `404 DOCTOR_NOT_FOUND` | `auth.register.test.ts` |
+| Duplicate waitlist join → `409 WAITLIST_DUPLICATE` | `appointments.waitlist.test.ts` |
+| Invalid state transition (cancelled → confirmed) → `422 INVALID_TRANSITION` | `appointments.invalid-transition.test.ts` |
 
 
 ### 15.3 Property-based testing ✅
@@ -651,13 +655,13 @@ Key finding: Claude covered the obvious contract surface but missed the IDOR on 
 
 **Before:** test failures produced a Playwright error message. A developer reading the report had to mentally reconstruct the bug context from the assertion text and stack trace.
 
-**After:** on every test failure, `utils/aiBugReporter.js` sends the test name, file, duration, error message, and stack trace to Claude Haiku. Claude returns a structured markdown bug report: title, component, severity, steps to reproduce, actual vs expected, possible cause. The report is:
+**After:** on every test failure, `utils/aiBugReporter.ts` sends the test name, file, duration, error message, and stack trace to Claude Haiku. Claude returns a structured markdown bug report: title, component, severity, steps to reproduce, actual vs expected, possible cause. The report is:
 1. Attached to the Allure test result card via `testInfo.attach()` — visible as a "Bug Report" attachment inline with the test
 2. Saved to `bug-reports/<sanitized-test-name>_<timestamp>.md` for archiving
 
 **Skip guard:** if `ANTHROPIC_API_KEY` is not set, the function is a silent no-op. Tests run normally. No API key = no reports, no failure.
 
-**Integration point:** `afterEach` hook in `fixtures/userFixture.js`. All tests that extend the base fixture get the reporter automatically — no per-test wiring.
+**Integration point:** `afterEach` hook in `fixtures/userFixture.ts`. All tests that extend the base fixture get the reporter automatically — no per-test wiring.
 
 **Why `afterEach` in fixture, not a custom Playwright reporter:** a custom reporter class cannot inject into individual Allure test result cards. `testInfo.attach()` called inside `afterEach` is intercepted by `allure-playwright` and added to the correct test's result. This is the native integration path.
 
@@ -694,7 +698,7 @@ ANTHROPIC_API_KEY=<key> npm run ai:gap-analysis
 - Additional scenarios worth adding (validation boundaries, RBAC edge cases, state machine completeness)
 - What is already well covered (balanced — not just a list of gaps)
 
-**Why this is distinct from `contract.drift.test.js`:** the drift guard checks that documented paths exist in the spec. The gap analysis checks that test cases exist for documented paths. Different direction, different question.
+**Why this is distinct from `contract.drift.test.ts`:** the drift guard checks that documented paths exist in the spec. The gap analysis checks that test cases exist for documented paths. Different direction, different question.
 
 **Interview line:** *"I have a script that feeds the OpenAPI spec and all test names to Claude and gets back a gap analysis — endpoints with zero coverage, error codes never triggered, additional scenarios. It found 10 endpoints with no dedicated tests and ~45 undocumented error code paths on first run. It's not a replacement for a risk-based test strategy, but it's a fast way to catch blind spots before a release."*
 
@@ -851,7 +855,7 @@ The new consumer test documents exactly what the SUT sends to ai-service and wha
 
 **Tool:** Loki query API (`/loki/api/v1/query_range`) queried directly from tests. Stack: Loki + Promtail + Grafana via `docker-compose.observability.yml` in the SUT repo.
 
-**Implemented in:** `tests/api/observability.loki.test.js` (`@observability`, skip guard: `LOKI_ENABLED=true`)
+**Implemented in:** `tests/api/observability.loki.test.ts` (`@observability`, skip guard: `LOKI_ENABLED=true`)
 
 ```js
 // After booking, poll Loki until the log entry appears (up to 15s)
@@ -966,7 +970,7 @@ Full findings: `SYSTEM_WEAKNESS_REPORT.md` §5.
 
 **What:** Docker-based OWASP ZAP baseline scan runs against the SUT and checks for OWASP Top 10 vulnerabilities, missing security headers, information disclosure, and known misconfigurations.
 
-**Before:** `security.test.js` covers known scenarios (IDOR, BOLA, JWT tamper). Known attack patterns, written by a human who decides what to test.
+**Before:** `security.test.ts` covers known scenarios (IDOR, BOLA, JWT tamper). Known attack patterns, written by a human who decides what to test.
 
 **After:** ZAP searches independently — it doesn't know the business logic or what was intentionally tested. Different class of security coverage.
 
@@ -980,7 +984,7 @@ Full findings: `SYSTEM_WEAKNESS_REPORT.md` §5.
 
 **Why manual trigger:** ZAP scans the full surface (not just documented endpoints). Running on every push would produce noise from expected 401s on auth-required routes and slow the feedback loop. Deliberate execution before releases.
 
-**Interview line:** *"I have two layers of security testing. `security.test.js` tests known scenarios — IDOR, BOLA, JWT tamper. OWASP ZAP searches independently — it doesn't know what I tested, so it covers gaps I didn't think of: missing security headers, CORS issues, information disclosure. Different tools answering different questions."*
+**Interview line:** *"I have two layers of security testing. `security.test.ts` tests known scenarios — IDOR, BOLA, JWT tamper. OWASP ZAP searches independently — it doesn't know what I tested, so it covers gaps I didn't think of: missing security headers, CORS issues, information disclosure. Different tools answering different questions."*
 
 ---
 
@@ -991,7 +995,7 @@ These four items add the "system thinking" layer on top of the existing framewor
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 1 | **`docs/SYSTEM_WEAKNESS_REPORT.md`** | ✅ done | Concurrency, state gaps, security, operational risks mapped to test coverage |
-| 2 | **Concurrency test suite** | ✅ done | `tests/api/concurrency/appointments.concurrency.test.js` — double-cancel + concurrent waitlist promotion (exactly-once assert) |
+| 2 | **Concurrency test suite** | ✅ done | `tests/api/concurrency/appointments.concurrency.test.ts` — double-cancel + concurrent waitlist promotion (exactly-once assert) |
 | 3 | **Failure detection model** | ✅ done | Section in README: "How this suite knows the system broke" — signals table + invalid states |
 | 4 | **Portfolio narrative** | ✅ done | `docs/PORTFOLIO_NARRATIVE.md` — 2-min story, what to show, 7 interview Q&As |
 | 5 | **Test orthogonality map** | ✅ done | §17 — every test file mapped to its unique risk dimension |
@@ -1007,21 +1011,21 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 
 | File | Unique risk dimension |
 |---|---|
-| `auth.login.test.js` | Authentication correctness — valid credentials accepted, invalid rejected, token structure valid |
-| `auth.register.test.js` | Registration boundary — duplicate email rejected, weak password rejected, `doctorRecordId` existence enforced |
+| `auth.login.test.ts` | Authentication correctness — valid credentials accepted, invalid rejected, token structure valid |
+| `auth.register.test.ts` | Registration boundary — duplicate email rejected, weak password rejected, `doctorRecordId` existence enforced |
 | `content.stress.test.ts` | Content stress — international scripts (CJK, Arabic, Cyrillic, diacritics), special chars (apostrophe, hyphen), long inputs, boundary rejection; AI-generated additional cases via `@ai-data` tag |
-| `appointments.mini.j1.test.js` | **J1 journey** — booking happy path + slot lock invariant (slot unavailable after booking) |
-| `appointments.reject.j2.test.js` | **J2 journey** — reject flow + slot release (slot available again after rejection) |
-| `appointments.confirm.j3.test.js` | **J3 journey** — confirm flow + post-confirm slot and diary invariants |
-| `appointments.cancel.patient.test.js` | Patient cancellation + waitlist auto-promotion trigger |
-| `appointments.booking.conflict.test.js` | Double-booking prevention — same slot cannot be booked twice |
-| `appointments.invalid-transition.test.js` | State machine guard — invalid transitions (`cancelled → confirmed`, etc.) rejected with correct error |
-| `appointments.waitlist.test.js` | Waitlist boundary conditions — join, leave, duplicate join rejected |
-| `appointments.waitlist.promotion.test.js` | Auto-promotion correctness — exactly one patient promoted after cancellation |
-| `appointments.waitlist.offers.test.js` | Waitlist offer manual confirmation — accept swaps bookings, decline frees slot + patient stays on list, 409 on duplicate resolve |
-| `appointments.rbac.patient.test.js` | RBAC: patient forbidden on doctor-only actions (confirm, reject); doctor forbidden on patient-only route |
-| `appointments.rbac.cross-doctor.test.js` | RBAC: cross-doctor data isolation — doctor cannot access another doctor's appointments (IDOR) |
-| `appointments.booking.rate-limit.test.js` | Rate limiting — booking endpoint enforces per-token request window *(local only — requires env override)* |
+| `appointments.mini.j1.test.ts` | **J1 journey** — booking happy path + slot lock invariant (slot unavailable after booking) |
+| `appointments.reject.j2.test.ts` | **J2 journey** — reject flow + slot release (slot available again after rejection) |
+| `appointments.confirm.j3.test.ts` | **J3 journey** — confirm flow + post-confirm slot and diary invariants |
+| `appointments.cancel.patient.test.ts` | Patient cancellation + waitlist auto-promotion trigger |
+| `appointments.booking.conflict.test.ts` | Double-booking prevention — same slot cannot be booked twice |
+| `appointments.invalid-transition.test.ts` | State machine guard — invalid transitions (`cancelled → confirmed`, etc.) rejected with correct error |
+| `appointments.waitlist.test.ts` | Waitlist boundary conditions — join, leave, duplicate join rejected |
+| `appointments.waitlist.promotion.test.ts` | Auto-promotion correctness — exactly one patient promoted after cancellation |
+| `appointments.waitlist.offers.test.ts` | Waitlist offer manual confirmation — accept swaps bookings, decline frees slot + patient stays on list, 409 on duplicate resolve |
+| `appointments.rbac.patient.test.ts` | RBAC: patient forbidden on doctor-only actions (confirm, reject); doctor forbidden on patient-only route |
+| `appointments.rbac.cross-doctor.test.ts` | RBAC: cross-doctor data isolation — doctor cannot access another doctor's appointments (IDOR) |
+| `appointments.booking.rate-limit.test.ts` | Rate limiting — booking endpoint enforces per-token request window *(local only — requires env override)* |
 | `appointments.reschedule.test.ts` | Reschedule correctness — pending→new slot, confirmed→resets to pending, 409 SLOT_TAKEN, 422 DOCTOR_MISMATCH/SAME_SLOT, 403 FORBIDDEN, waitlist cascade on reschedule |
 | `appointments.pagination.test.ts` | Pagination contract — envelope shape `{data,total,page,limit,totalPages}`, offset correctness, invalid param rejection (page=0, limit=0, NaN) |
 | `appointments.recurring.test.ts` | Recurring series — 201 all slots booked + seriesId on each, 201 partial booking, 404 SLOT_NOT_FOUND, 400 VALIDATION_ERROR, count boundaries (1/13), 401, 200 cancel series, 404 SERIES_NOT_FOUND |
@@ -1031,21 +1035,21 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `appointments.filter.test.ts` | Appointment filtering — status/doctorId/from/to filters; exclusion boundaries for date range; combined filters; empty result set; filtered total matches data count (count query integrity); 400 validation on invalid status/doctorId/date |
 | `appointments.kafka.test.ts` | Kafka event contract — booked/cancelled/confirmed/rejected/rescheduled/completed/recurring_booked/series_cancelled topics; payload field assertions; graceful degradation when broker absent; skip guard if `KAFKA_BROKER` not set |
 | `doctors.schedule.test.ts` | Doctor schedule management — PUT/GET working hours, slot creation blocked outside schedule, boundary start/end times, timezone offset |
-| `doctors.list.test.js` | Doctor listing — availability data integrity, correct shape |
-| `ai.recommend.test.js` | AI feature contract — feature flag, error codes, response schema, rate limit; `reasoning` field present, specialty-invariant (never hallucinates outside `ALLOWED_SPECIALTIES`); bias validation: rephrasing invariance + demographic neutrality *(tests skip unless `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` set)* |
+| `doctors.list.test.ts` | Doctor listing — availability data integrity, correct shape |
+| `ai.recommend.test.ts` | AI feature contract — feature flag, error codes, response schema, rate limit; `reasoning` field present, specialty-invariant (never hallucinates outside `ALLOWED_SPECIALTIES`); bias validation: rephrasing invariance + demographic neutrality *(tests skip unless `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` set)* |
 | `pact/ai.recommend.pact.consumer.test.ts` | Consumer-driven contract (tests→SUT) — shape of 200/400/422 responses from `/api/v1/ai/recommend-doctor` formalized as a pact; runs against Pact mock server (no SUT needed) |
 | `pact/ai.recommend.pact.provider.test.ts` | Provider contract verification (SUT) — SUT satisfies all consumer interactions in `pacts/` JSON; skip guard: requires `AI_MOCK_RESPONSE=true` or `ANTHROPIC_API_KEY` |
 | `pact/ai.service.pact.consumer.test.ts` | Consumer-driven contract (SUT→ai-service) — shape of 200/422/400 from `/recommend`; consumer="clinic-booking-api", provider="ai-service"; genuine service-to-service boundary |
 | `pact/ai.service.pact.provider.test.ts` | Provider contract verification (ai-service) — ai-service satisfies SUT's expectations; requires ai-service on `AI_SERVICE_URL` with `AI_MOCK_RESPONSE=true` |
 | `contract.drift.test.ts` | Two-layer drift guard — (1) OpenAPI spec: paths/error codes/schemas documented, Swagger UI reachable; (2) live shape assertions: 4 key endpoints validated against JSON schemas to catch AI-refactoring-induced field drift |
-| `security.test.js` | Security boundary — IDOR on appointment access, JWT tampering rejected |
-| `infrastructure.test.js` | Infrastructure contract — health endpoint, error response format consistency |
-| `chaos.test.js` | Fault tolerance — 503 contract under chaos mode, health endpoint exempt, latency injection *(manual workflow)* |
-| `concurrency/appointments.concurrency.test.js` | Race conditions — double-cancel exactly once, concurrent waitlist promotion produces exactly one booking |
-| `notifications.webhook.test.js` | Webhook delivery contract — payload shape, fire-and-forget (webhook failure doesn't affect transaction) |
-| `notifications.ws.test.js` | WebSocket notification — JWT auth on connect, event delivery after booking/cancellation |
-| `consultations.payment.test.js` | Payment flow — idempotency key, 402 on failure, no consultation created on payment failure |
-| `observability.loki.test.js` | Internal observability — structured log emitted to Loki with correct `requestId`, `event`, `patientId` *(local only — requires Loki stack)* |
+| `security.test.ts` | Security boundary — IDOR on appointment access, JWT tampering rejected |
+| `infrastructure.test.ts` | Infrastructure contract — health endpoint, error response format consistency |
+| `chaos.test.ts` | Fault tolerance — 503 contract under chaos mode, health endpoint exempt, latency injection *(manual workflow)* |
+| `concurrency/appointments.concurrency.test.ts` | Race conditions — double-cancel exactly once, concurrent waitlist promotion produces exactly one booking |
+| `notifications.webhook.test.ts` | Webhook delivery contract — payload shape, fire-and-forget (webhook failure doesn't affect transaction) |
+| `notifications.ws.test.ts` | WebSocket notification — JWT auth on connect, event delivery after booking/cancellation |
+| `consultations.payment.test.ts` | Payment flow — idempotency key, 402 on failure, no consultation created on payment failure |
+| `observability.loki.test.ts` | Internal observability — structured log emitted to Loki with correct `requestId`, `event`, `patientId` *(local only — requires Loki stack)* |
 
 ### Unit layer
 
@@ -1057,15 +1061,15 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 
 | File | Unique risk dimension |
 |---|---|
-| `booking.cross-layer.test.js` | Booking flow consistency — UI action reflected in API state and DB |
-| `confirm.cross-layer.test.js` | Confirm flow cross-layer — doctor confirm visible to patient across all layers |
-| `booking-conflict.e2e.test.js` | Double-booking in real user flow — conflict error surfaced correctly in UI; DB check: exactly one active appointment for the slot |
-| `doctor-confirm.e2e.test.js` | Doctor confirmation from UI — full interaction from doctor login to confirm |
-| `waitlist.cross-layer.test.js` | Waitlist promotion visible across layers — cancellation triggers promotion visible in UI and API |
-| `offers.cross-layer.test.js` | Offer accept cross-layer — UI renders pending offer, patient accepts, booking swap reflected in API state |
-| `consultations.cross-layer.test.js` | Payment + consultation cross-layer — payment result visible in UI and consultation record created |
-| `patient-notifications.e2e.test.js` | Patient notification receipt — notification appears in UI after booking event |
-| `doctor-notifications.e2e.test.js` | Doctor real-time UI — booking/cancellation toast appears in doctor browser without page reload; also caught real SUT bug (`window.ClinicCore` undefined — WS never connected before fix) |
+| `booking.cross-layer.test.ts` | Booking flow consistency — UI action reflected in API state and DB |
+| `confirm.cross-layer.test.ts` | Confirm flow cross-layer — doctor confirm visible to patient across all layers |
+| `booking-conflict.e2e.test.ts` | Double-booking in real user flow — conflict error surfaced correctly in UI; DB check: exactly one active appointment for the slot |
+| `doctor-confirm.e2e.test.ts` | Doctor confirmation from UI — full interaction from doctor login to confirm |
+| `waitlist.cross-layer.test.ts` | Waitlist promotion visible across layers — cancellation triggers promotion visible in UI and API |
+| `offers.cross-layer.test.ts` | Offer accept cross-layer — UI renders pending offer, patient accepts, booking swap reflected in API state |
+| `consultations.cross-layer.test.ts` | Payment + consultation cross-layer — payment result visible in UI and consultation record created |
+| `patient-notifications.e2e.test.ts` | Patient notification receipt — notification appears in UI after booking event |
+| `doctor-notifications.e2e.test.ts` | Doctor real-time UI — booking/cancellation toast appears in doctor browser without page reload; also caught real SUT bug (`window.ClinicCore` undefined — WS never connected before fix) |
 | `doctor.schedule.cross-layer.test.ts` | Doctor schedule cross-layer — schedule set via UI, verified via API + DB; slot creation respects working hours |
 | `appointments.recurring.e2e.test.ts` | Recurring series cross-layer — book via API → both appointments visible in UI with series tag + DB seriesId confirmed; cancel series via UI → API status + DB status both cancelled |
 
@@ -1073,11 +1077,11 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 
 | File | Unique risk dimension |
 |---|---|
-| `login.test.js` | Login page behaviour — form validation, error states, successful redirect |
-| `register-patient.test.js` | Registration page — form validation, duplicate handling, successful flow |
-| `visual.test.js` | Visual regression — pixel-level baseline comparison for login (empty + error) and register pages across Chromium and mobile-chrome; catches CSS/layout regressions invisible to behavioural tests |
-| `guest-gates.test.js` | Auth guard — unauthenticated users cannot access protected pages (booking, consultations, notifications) |
-| `accessibility.test.js` | WCAG compliance — axe-core audit on login, register, booking pages |
+| `login.test.ts` | Login page behaviour — form validation, error states, successful redirect |
+| `register-patient.test.ts` | Registration page — form validation, duplicate handling, successful flow |
+| `visual.test.ts` | Visual regression — pixel-level baseline comparison for login (empty + error) and register pages across Chromium and mobile-chrome; catches CSS/layout regressions invisible to behavioural tests |
+| `guest-gates.test.ts` | Auth guard — unauthenticated users cannot access protected pages (booking, consultations, notifications) |
+| `accessibility.test.ts` | WCAG compliance — axe-core audit on login, register, booking pages |
 | `api-error-states.test.ts` | Error display routing — server 500 and network abort surface to correct UI zones (booking form message vs appointment banner); `page.route()` mocking without SUT changes |
 | `doctor.schedule.ui.test.ts` | Doctor schedule form — 7 day checkboxes, checkbox enables inputs, save shows toast, saved data loads on revisit, OUTSIDE_WORKING_HOURS shown when booking outside schedule |
 | `reschedule.ui.test.ts` | Reschedule button visibility — shown for pending/confirmed only; reschedule flow refreshes list to pending + shows toast |
@@ -1092,7 +1096,7 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 
 ## 18. Architecture decisions — было / стало / почему
 
-### 18.1 Page Object instantiation → fixture injection (май 2026)
+### 18.1 Page Object instantiation → fixture injection (слой — май 2026, тесты переведены — 11 августа 2026)
 
 **Before:** каждый тест вручную создавал page objects:
 ```ts
@@ -1111,7 +1115,15 @@ export const test = base.extend<Pages>({
 ```
 Тесты просто деструктурируют нужное: `{ loginPage, appointmentsPage }`. Никаких `new()` в тест-файлах.
 
-**Why:** сделано во время TypeScript-миграции (май 2026). POM отвечает за domain clarity (локаторы + методы), fixtures отвечают за DX (wiring). Используются вместе, не вместо.
+**Хронология — разошлась с документацией, исправлено 11 августа 2026.** Слой `fixtures/pages.ts` написан в мае 2026 во время TypeScript-миграции, и этот раздел был написан тогда же. Но подключён слой не был: `fixtures/index.ts` экспортировал только `slotFixture`, и 23 из 27 UI/E2E файлов продолжали инстанцировать page objects вручную — 121 вызов `new XPage(page)`. То есть три месяца документация описывала намерение как факт.
+
+Что сделано 11 августа 2026:
+- `fixtures/pages.ts` теперь расширяет конец цепочки (`userFixture → slotFixture → twoUsersFixture`), поэтому один импорт `test` даёт и данные, и страницы; фикстуры ленивые, ничего не создаётся без деструктуризации
+- `fixtures/index.ts` экспортирует `pages` + типы из `slotFixture`
+- 27 файлов переписаны: 121 `new XPage(page)` убран, неиспользуемые импорты классов удалены, импорты приведены к `../../fixtures`
+- проверка: `npx tsc --noEmit` без ошибок, UI 130/130, E2E 13 passed + 2 skipped по env-флагам
+
+**Why:** POM отвечает за domain clarity (локаторы + методы), fixtures отвечают за DX (wiring). Используются вместе, не вместо.
 
 **Interview line:** *"Moved all page object instantiation into a pages fixture using base.extend(). Specs just destructure what they need — zero new() calls in test files. POM for domain clarity, fixtures for DX."*
 
