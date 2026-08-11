@@ -10,7 +10,7 @@
 
 **Risk-based strategy + J1/J2/J3 ownership + planned high-impact cases:** **`docs/TEST_STRATEGY.md`** (includes appointment state machine diagram, CI pipeline diagram, portfolio differentiators plan). **Impact × likelihood matrix → files:** **`docs/RISK_ANALYSIS.md`** (includes risk heatmap). **Architectural vulnerabilities, race conditions, state gaps:** **`docs/SYSTEM_WEAKNESS_REPORT.md`**.
 
-> **Premium content** — AI testing patterns (metamorphic, adversarial, RAG, LLM judge), security (IDOR, BOLA), chaos, rate-limit, Pact contracts, Claude agent infrastructure (`skills/`, `CLAUDE.md`) and task solutions live in a **private repo**. Available on request during interviews or via [QA Portfolio Lab](https://gumroad.com).
+> **Premium content** — AI testing patterns (metamorphic, adversarial, RAG, LLM judge), security (IDOR, BOLA), chaos, rate-limit, Pact contracts, Claude agent infrastructure (`.claude/skills/`, `CLAUDE.md`) and task solutions live in a **private repo**. Available on request during interviews or via [QA Portfolio Lab](https://gumroad.com).
 
 ### Why this repo exists (portfolio / interview)
 

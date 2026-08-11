@@ -4,6 +4,30 @@
 
 Playwright test suite for a clinic booking API (SUT). Three layers: `tests/api` (fast contract + RBAC), `tests/e2e` (thin cross-layer journeys), `tests/ui` (browser behaviour). TypeScript migration in progress — new files go in `.ts`.
 
+## Skills index
+
+Skills live in `.claude/skills/`. Load the matching skill before writing code — load every skill that applies, not just one. Do not load all skills at once.
+
+| Skill | Load when |
+|-------|-----------|
+| `explore-before-write` | before writing any new selector, client method, or test for an unfamiliar endpoint |
+| `test-standards` | naming a test or describe block; adding tags; unsure how a test file is structured |
+| `api-client` | writing or editing methods in `api/*Client.ts`; adding an endpoint |
+| `fixtures` | test data setup — user accounts, slots, page objects |
+| `selectors` | writing locators in page objects or UI tests; fixing a broken selector |
+| `ui-test-scope` | deciding whether a test belongs in `tests/ui/`; asserting browser behaviour |
+| `e2e-cross-layer` | writing a test that spans UI + API + DB |
+| `typing` | new `.ts` files; fixing type errors; DB results and fixture types |
+| `common-tasks` | DB assertions, schema validation, error contract, auth headers |
+| `data-strategy` | choosing between seed accounts, Faker data, and fixtures |
+| `enums` | endpoints, error codes, allowed values — anything that should not be a literal |
+| `helpers` | shared utilities that are not fixtures — validators, DB helpers, assertion wrappers |
+| `config` | environment variables, baseUrl, configuration access |
+| `refactor-values` | refactoring tests without losing coverage — extract, deduplicate, rename |
+| `subagent-workflow` | large multi-file tasks; parallel work; coverage gap analysis |
+
+Skills with a `references/` folder keep long examples and troubleshooting tables there. Open a reference only when the task needs it.
+
 ## Running tests
 
 ```bash
