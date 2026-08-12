@@ -1,21 +1,16 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { BookingPage } from "../../pages/BookingPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
 
 const SERVER_ERROR = { status: 500, body: JSON.stringify({ errorCode: "INTERNAL_ERROR", message: "Server error" }) };
 
 test.describe("API error states — page.route() @ui", () => {
 
-    test("booking wizard step 4 — POST /appointments 500, error message visible, submit still present @ui", async ({ page, user, slot }) => {
+    test("booking wizard step 4 — POST /appointments 500, error message visible, submit still present @ui", async ({ page, user, slot, loginPage, bookingPage }) => {
         const { slot: slotBody, doctor } = slot;
 
-        const loginPage = new LoginPage(page);
         await loginPage.login(user.email, user.password);
 
         // Navigate directly to step 4 with all wizard params populated
-        const bookingPage = new BookingPage(page);
         await bookingPage.openAtStep(4, {
             specialty: doctor.specialty,
             doctorId: String(doctor.doctorRecordId),
@@ -38,17 +33,15 @@ test.describe("API error states — page.route() @ui", () => {
         await expect(bookingPage.submitBookingButton).toBeVisible();
     });
 
-    test("patient appointments — cancel 500, appointment stays in list, error shown @ui", async ({ request, page, user, slot }) => {
+    test("patient appointments — cancel 500, appointment stays in list, error shown @ui", async ({ request, page, user, slot, loginPage, appointmentsPage }) => {
         const { slot: slotBody } = slot;
         const appts = new AppointmentsClient(request);
         const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
 
         await appts.createAppointment(slotBody.id, patientAuth);
 
-        const loginPage = new LoginPage(page);
         await loginPage.login(user.email, user.password);
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
         await expect(appointmentsPage.appointmentByStatus("pending")).toBeVisible();
 
@@ -61,13 +54,11 @@ test.describe("API error states — page.route() @ui", () => {
         await expect(appointmentsPage.appointmentByStatus("pending")).toBeVisible();
     });
 
-    test("patient appointments — network drop on load, error banner shown @ui", async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    test("patient appointments — network drop on load, error banner shown @ui", async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         await page.route("**/api/v1/appointments/my**", (route) => route.abort());
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         await expect(appointmentsPage.errorBanner).toBeVisible();

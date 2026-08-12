@@ -1,7 +1,4 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { BookingPage } from "../../pages/BookingPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
 
 function paginatedBody(items: object[]) {
     return JSON.stringify({ data: items, page: 1, limit: 20, total: items.length, totalPages: 1 });
@@ -11,8 +8,7 @@ const FUTURE_START = "2026-08-01T09:00:00.000Z";
 const FUTURE_END = "2026-08-01T10:00:00.000Z";
 
 test("booking page — doctor select disabled until specialty chosen, enabled after @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, bookingPage }) => {
         await loginPage.login(user.email, user.password);
 
         // **/api/v1/doctors without trailing ** matches only the list endpoint, not /doctors/:id/slots
@@ -24,7 +20,6 @@ test("booking page — doctor select disabled until specialty chosen, enabled af
             }),
         );
 
-        const bookingPage = new BookingPage(page);
         await bookingPage.open();
 
         // Doctor select starts disabled — set in HTML before any specialty is chosen
@@ -37,8 +32,7 @@ test("booking page — doctor select disabled until specialty chosen, enabled af
 );
 
 test("patient appointments — offer accept button re-enabled after API error @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         await page.route("**/api/v1/appointments/my**", (route) =>
@@ -78,7 +72,6 @@ test("patient appointments — offer accept button re-enabled after API error @u
             }),
         );
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         const acceptBtn = appointmentsPage.offerAcceptButton();

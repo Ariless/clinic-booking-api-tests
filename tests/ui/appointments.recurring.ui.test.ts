@@ -1,6 +1,4 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
 
 const SERIES_ID = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -15,8 +13,7 @@ function paginatedBody(items: object[]) {
 }
 
 test("patient appointments — series tag shown when seriesId present, absent without @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         await page.route("**/api/v1/appointments/my**", (route) =>
@@ -30,7 +27,6 @@ test("patient appointments — series tag shown when seriesId present, absent wi
             }),
         );
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         // default sort is id-desc → id=2 (seriesId) renders first, id=1 (no seriesId) second
@@ -41,8 +37,7 @@ test("patient appointments — series tag shown when seriesId present, absent wi
 );
 
 test("patient appointments — cancel series button shown only for pending/confirmed with seriesId @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         await page.route("**/api/v1/appointments/my**", (route) =>
@@ -58,7 +53,6 @@ test("patient appointments — cancel series button shown only for pending/confi
             }),
         );
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         await expect(page.locator('[data-qa="patient-appt-cancel-series"]')).toHaveCount(2);
@@ -67,8 +61,7 @@ test("patient appointments — cancel series button shown only for pending/confi
 );
 
 test("patient appointments — cancel series via UI removes appointments from list and shows toast @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         let listCallCount = 0;
@@ -95,7 +88,6 @@ test("patient appointments — cancel series via UI removes appointments from li
             }),
         );
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         await expect(page.locator('[data-qa="patient-appt-cancel-series"]').first()).toBeVisible();
@@ -109,8 +101,7 @@ test("patient appointments — cancel series via UI removes appointments from li
 );
 
 test("patient appointments — cancel series API error shows inline notice @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         await page.route("**/api/v1/appointments/my**", (route) =>
@@ -131,7 +122,6 @@ test("patient appointments — cancel series API error shows inline notice @ui",
             }),
         );
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         page.once("dialog", (dialog) => dialog.accept());

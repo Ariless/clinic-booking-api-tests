@@ -1,6 +1,4 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
 
 // Visual regression — compares screenshots against committed baselines.
@@ -19,8 +17,7 @@ test.describe("Visual regression @visual @ui", () => {
         });
     });
 
-    test("login page — error state after invalid credentials @visual", async ({ page }) => {
-        const loginPage = new LoginPage(page);
+    test("login page — error state after invalid credentials @visual", async ({ page, loginPage }) => {
         await loginPage.submitForm("wrong@test.com", "wrongpassword");
         await expect(loginPage.errorMessage).toBeVisible();
         await expect(page).toHaveScreenshot("login-error.png", {
@@ -42,17 +39,15 @@ test.describe("Visual regression @visual @ui", () => {
     // Reason: badge width varies by 1px between browser states (sub-pixel rendering),
     // causing size-mismatch failures even at 5% tolerance. CSS assertions are more
     // stable and test exactly what matters — the colour coding per state.
-    test("patient appointments — pending badge colour @visual", async ({ request, page, user, slot }) => {
+    test("patient appointments — pending badge colour @visual", async ({ request, user, slot, loginPage, appointmentsPage }) => {
         const { slot: slotBody } = slot;
         const appts = new AppointmentsClient(request);
         const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
 
         await appts.createAppointment(slotBody.id, patientAuth);
 
-        const loginPage = new LoginPage(page);
         await loginPage.login(user.email, user.password);
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
         const badge = appointmentsPage.badgeByStatus("pending");
         await expect(badge).toBeVisible();
@@ -63,7 +58,7 @@ test.describe("Visual regression @visual @ui", () => {
         expect(color).toBe("rgb(146, 64, 14)");
     });
 
-    test("patient appointments — confirmed badge colour @visual", async ({ request, page, user, slot }) => {
+    test("patient appointments — confirmed badge colour @visual", async ({ request, user, slot, loginPage, appointmentsPage }) => {
         const { slot: slotBody, doctorToken } = slot;
         const appts = new AppointmentsClient(request);
         const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
@@ -72,10 +67,8 @@ test.describe("Visual regression @visual @ui", () => {
         const { body: bookBody } = await appts.createAppointment(slotBody.id, patientAuth);
         await appts.confirmAppointment(bookBody.id, doctorAuth);
 
-        const loginPage = new LoginPage(page);
         await loginPage.login(user.email, user.password);
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
         const badge = appointmentsPage.badgeByStatus("confirmed");
         await expect(badge).toBeVisible();
@@ -86,7 +79,7 @@ test.describe("Visual regression @visual @ui", () => {
         expect(color).toBe("rgb(6, 95, 70)");
     });
 
-    test("patient appointments — completed badge colour @visual", async ({ request, page, user, slot }) => {
+    test("patient appointments — completed badge colour @visual", async ({ request, user, slot, loginPage, appointmentsPage }) => {
         const { slot: slotBody, doctorToken } = slot;
         const appts = new AppointmentsClient(request);
         const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
@@ -96,10 +89,8 @@ test.describe("Visual regression @visual @ui", () => {
         await appts.confirmAppointment(bookBody.id, doctorAuth);
         await appts.completeAppointment(bookBody.id, doctorAuth);
 
-        const loginPage = new LoginPage(page);
         await loginPage.login(user.email, user.password);
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
         const badge = appointmentsPage.badgeByStatus("completed");
         await expect(badge).toBeVisible();
@@ -110,7 +101,7 @@ test.describe("Visual regression @visual @ui", () => {
         expect(color).toBe("rgb(71, 85, 105)");
     });
 
-    test("patient appointments — cancelled badge colour @visual", async ({ request, page, user, slot }) => {
+    test("patient appointments — cancelled badge colour @visual", async ({ request, user, slot, loginPage, appointmentsPage }) => {
         const { slot: slotBody } = slot;
         const appts = new AppointmentsClient(request);
         const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
@@ -118,10 +109,8 @@ test.describe("Visual regression @visual @ui", () => {
         const { body: bookBody } = await appts.createAppointment(slotBody.id, patientAuth);
         await appts.cancelAppointment(bookBody.id, patientAuth);
 
-        const loginPage = new LoginPage(page);
         await loginPage.login(user.email, user.password);
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
         const badge = appointmentsPage.badgeByStatus("cancelled");
         await expect(badge).toBeVisible();

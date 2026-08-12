@@ -1,6 +1,4 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
 
 function mockAppt(id: number) {
     return { id, slotId: id + 100, patientId: 1, status: "pending" };
@@ -17,8 +15,7 @@ function paginatedBody(items: ReturnType<typeof mockAppt>[], page: number, limit
 }
 
 test("patient appointments — pagination hidden when all visits fit on one page @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         await page.route("**/api/v1/appointments/my**", (route) =>
@@ -29,7 +26,6 @@ test("patient appointments — pagination hidden when all visits fit on one page
             }),
         );
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         await expect(appointmentsPage.pagination).not.toBeVisible();
@@ -37,8 +33,7 @@ test("patient appointments — pagination hidden when all visits fit on one page
 );
 
 test("patient appointments — pagination controls visible when multiple pages exist @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         await page.route("**/api/v1/appointments/my**", (route) =>
@@ -49,7 +44,6 @@ test("patient appointments — pagination controls visible when multiple pages e
             }),
         );
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         await expect(appointmentsPage.pagination).toBeVisible();
@@ -58,8 +52,7 @@ test("patient appointments — pagination controls visible when multiple pages e
 );
 
 test("patient appointments — previous button disabled on first page, next enabled @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         await page.route("**/api/v1/appointments/my**", (route) =>
@@ -70,7 +63,6 @@ test("patient appointments — previous button disabled on first page, next enab
             }),
         );
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         await expect(appointmentsPage.prevPageButton).toBeDisabled();
@@ -79,8 +71,7 @@ test("patient appointments — previous button disabled on first page, next enab
 );
 
 test("patient appointments — next page button requests page 2 and updates page info @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         await page.route("**/api/v1/appointments/my**", (route) => {
@@ -93,7 +84,6 @@ test("patient appointments — next page button requests page 2 and updates page
             });
         });
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         await expect(appointmentsPage.pageInfo).toHaveText("Page 1 of 2");
@@ -111,8 +101,7 @@ test("patient appointments — next page button requests page 2 and updates page
 );
 
 test("patient appointments — page size change resets to page 1 and uses new limit @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         let callCount = 0;
@@ -128,7 +117,6 @@ test("patient appointments — page size change resets to page 1 and uses new li
             });
         });
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         // navigate to page 2

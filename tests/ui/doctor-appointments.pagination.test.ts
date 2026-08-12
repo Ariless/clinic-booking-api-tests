@@ -1,6 +1,4 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { DoctorAppointmentsPage } from "../../pages/DoctorAppointmentsPage";
 
 function mockAppt(id: number) {
     return { id, slotId: id + 100, patientId: 1, status: "pending", slotStartTime: null };
@@ -17,8 +15,7 @@ function paginatedBody(items: ReturnType<typeof mockAppt>[], page: number, limit
 }
 
 test("doctor appointments — pagination hidden when all requests fit on one page @ui",
-    async ({ page, slot }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, slot, loginPage, doctorAppointmentsPage: doctorPage }) => {
         await loginPage.login(slot.doctor.email, slot.doctor.password);
 
         await page.route("**/api/v1/appointments/doctor**", (route) =>
@@ -29,7 +26,6 @@ test("doctor appointments — pagination hidden when all requests fit on one pag
             }),
         );
 
-        const doctorPage = new DoctorAppointmentsPage(page);
         await doctorPage.open();
 
         await expect(doctorPage.pagination).not.toBeVisible();
@@ -37,8 +33,7 @@ test("doctor appointments — pagination hidden when all requests fit on one pag
 );
 
 test("doctor appointments — pagination controls visible when multiple pages exist @ui",
-    async ({ page, slot }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, slot, loginPage, doctorAppointmentsPage: doctorPage }) => {
         await loginPage.login(slot.doctor.email, slot.doctor.password);
 
         await page.route("**/api/v1/appointments/doctor**", (route) =>
@@ -49,7 +44,6 @@ test("doctor appointments — pagination controls visible when multiple pages ex
             }),
         );
 
-        const doctorPage = new DoctorAppointmentsPage(page);
         await doctorPage.open();
 
         await expect(doctorPage.pagination).toBeVisible();
@@ -58,8 +52,7 @@ test("doctor appointments — pagination controls visible when multiple pages ex
 );
 
 test("doctor appointments — previous button disabled on first page, next enabled @ui",
-    async ({ page, slot }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, slot, loginPage, doctorAppointmentsPage: doctorPage }) => {
         await loginPage.login(slot.doctor.email, slot.doctor.password);
 
         await page.route("**/api/v1/appointments/doctor**", (route) =>
@@ -70,7 +63,6 @@ test("doctor appointments — previous button disabled on first page, next enabl
             }),
         );
 
-        const doctorPage = new DoctorAppointmentsPage(page);
         await doctorPage.open();
 
         await expect(doctorPage.prevPageButton).toBeDisabled();
@@ -79,8 +71,7 @@ test("doctor appointments — previous button disabled on first page, next enabl
 );
 
 test("doctor appointments — next page button requests page 2 and updates page info @ui",
-    async ({ page, slot }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, slot, loginPage, doctorAppointmentsPage: doctorPage }) => {
         await loginPage.login(slot.doctor.email, slot.doctor.password);
 
         await page.route("**/api/v1/appointments/doctor**", (route) => {
@@ -93,7 +84,6 @@ test("doctor appointments — next page button requests page 2 and updates page 
             });
         });
 
-        const doctorPage = new DoctorAppointmentsPage(page);
         await doctorPage.open();
 
         await expect(doctorPage.pageInfo).toHaveText("Page 1 of 2");
@@ -111,8 +101,7 @@ test("doctor appointments — next page button requests page 2 and updates page 
 );
 
 test("doctor appointments — page size change resets to page 1 and uses new limit @ui",
-    async ({ page, slot }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, slot, loginPage, doctorAppointmentsPage: doctorPage }) => {
         await loginPage.login(slot.doctor.email, slot.doctor.password);
 
         await page.route("**/api/v1/appointments/doctor**", (route) => {
@@ -126,7 +115,6 @@ test("doctor appointments — page size change resets to page 1 and uses new lim
             });
         });
 
-        const doctorPage = new DoctorAppointmentsPage(page);
         await doctorPage.open();
 
         await doctorPage.nextPageButton.click();

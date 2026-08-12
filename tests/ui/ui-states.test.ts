@@ -1,8 +1,4 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
-import { DoctorAppointmentsPage } from "../../pages/DoctorAppointmentsPage";
-import { BookingPage } from "../../pages/BookingPage";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
 
 function paginatedBody(items: object[]) {
@@ -23,15 +19,13 @@ const MOCK_DOCTOR = { id: 1, name: "Dr. Smith", specialty: "Cardiologist" };
 test.describe("patient appointments — empty and success states @ui", () => {
 
     test("patient appointments — 'No visits yet' shown when list is empty @ui",
-        async ({ page, user }) => {
-            const loginPage = new LoginPage(page);
+        async ({ page, user, loginPage, appointmentsPage }) => {
             await loginPage.login(user.email, user.password);
 
             await page.route("**/api/v1/appointments/my**", (route) =>
                 route.fulfill({ status: 200, contentType: "application/json", body: paginatedBody([]) }),
             );
 
-            const appointmentsPage = new AppointmentsPage(page);
             await appointmentsPage.open();
 
             await expect(page.getByTestId("patient-appt-empty")).toBeVisible();
@@ -40,8 +34,7 @@ test.describe("patient appointments — empty and success states @ui", () => {
     );
 
     test("patient appointments — 'No results' shown when filter matches no visits @ui",
-        async ({ page, user }) => {
-            const loginPage = new LoginPage(page);
+        async ({ page, user, loginPage, appointmentsPage }) => {
             await loginPage.login(user.email, user.password);
 
             await page.route("**/api/v1/appointments/my**", (route) =>
@@ -59,7 +52,6 @@ test.describe("patient appointments — empty and success states @ui", () => {
                 }),
             );
 
-            const appointmentsPage = new AppointmentsPage(page);
             await appointmentsPage.open();
 
             await page.getByTestId("patient-appt-filter-status").selectOption("completed");
@@ -70,15 +62,13 @@ test.describe("patient appointments — empty and success states @ui", () => {
     );
 
     test("patient appointments — success toast shown after cancel @ui",
-        async ({ request, page, user, slot }) => {
+        async ({ request, page, user, slot, loginPage, appointmentsPage }) => {
             const appts = new AppointmentsClient(request);
             const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
             await appts.createAppointment(slot.slot.id, patientAuth);
 
-            const loginPage = new LoginPage(page);
             await loginPage.login(user.email, user.password);
 
-            const appointmentsPage = new AppointmentsPage(page);
             await appointmentsPage.open();
             await expect(appointmentsPage.appointmentByStatus("pending")).toBeVisible();
 
@@ -96,15 +86,13 @@ test.describe("patient appointments — empty and success states @ui", () => {
 test.describe("booking page — empty, success, and disabled states @ui", () => {
 
     test("booking page — empty panel shown when no doctors available @ui",
-        async ({ page, user }) => {
-            const loginPage = new LoginPage(page);
+        async ({ page, user, loginPage, bookingPage }) => {
             await loginPage.login(user.email, user.password);
 
             await page.route("**/api/v1/doctors", (route) =>
                 route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) }),
             );
 
-            const bookingPage = new BookingPage(page);
             await bookingPage.open();
 
             await expect(page.getByTestId("booking-doctors-empty")).toBeVisible();
@@ -112,8 +100,7 @@ test.describe("booking page — empty, success, and disabled states @ui", () => 
     );
 
     test("booking wizard step 3 — empty slots panel shown when doctor has no available times @ui",
-        async ({ page, user }) => {
-            const loginPage = new LoginPage(page);
+        async ({ page, user, loginPage, bookingPage }) => {
             await loginPage.login(user.email, user.password);
 
             await page.route("**/api/v1/doctors", (route) =>
@@ -127,7 +114,6 @@ test.describe("booking page — empty, success, and disabled states @ui", () => 
                 route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) }),
             );
 
-            const bookingPage = new BookingPage(page);
             await bookingPage.openAtStep(3, { specialty: MOCK_DOCTOR.specialty, doctorId: String(MOCK_DOCTOR.id) });
             await page.waitForLoadState("networkidle");
 
@@ -136,11 +122,9 @@ test.describe("booking page — empty, success, and disabled states @ui", () => 
     );
 
     test("booking wizard — success message shown after booking @ui",
-        async ({ page, user, slot }) => {
-            const loginPage = new LoginPage(page);
+        async ({ user, slot, loginPage, bookingPage }) => {
             await loginPage.login(user.email, user.password);
 
-            const bookingPage = new BookingPage(page);
             await bookingPage.walkWizard(slot.doctor.specialty, slot.doctor.name);
 
             await bookingPage.submitBookingButton.click();
@@ -150,8 +134,7 @@ test.describe("booking page — empty, success, and disabled states @ui", () => 
     );
 
     test("booking wizard step 3 — slot pickers visible and time enabled when slots exist @ui",
-        async ({ page, user }) => {
-            const loginPage = new LoginPage(page);
+        async ({ page, user, loginPage, bookingPage }) => {
             await loginPage.login(user.email, user.password);
 
             await page.route("**/api/v1/doctors", (route) =>
@@ -169,7 +152,6 @@ test.describe("booking page — empty, success, and disabled states @ui", () => 
                 }),
             );
 
-            const bookingPage = new BookingPage(page);
             await bookingPage.openAtStep(3, { specialty: MOCK_DOCTOR.specialty, doctorId: String(MOCK_DOCTOR.id) });
             await page.waitForLoadState("networkidle");
 
@@ -185,15 +167,13 @@ test.describe("booking page — empty, success, and disabled states @ui", () => 
 test.describe("doctor appointments — empty and error states @ui", () => {
 
     test("doctor appointments — 'No incoming requests' shown when list is empty @ui",
-        async ({ page, slot }) => {
-            const loginPage = new LoginPage(page);
+        async ({ page, slot, loginPage, doctorAppointmentsPage: doctorPage }) => {
             await loginPage.login(slot.doctor.email, slot.doctor.password);
 
             await page.route("**/api/v1/appointments/doctor**", (route) =>
                 route.fulfill({ status: 200, contentType: "application/json", body: paginatedBody([]) }),
             );
 
-            const doctorPage = new DoctorAppointmentsPage(page);
             await doctorPage.open();
 
             await expect(page.getByTestId("doctor-appt-empty")).toBeVisible();
@@ -202,13 +182,11 @@ test.describe("doctor appointments — empty and error states @ui", () => {
     );
 
     test("doctor appointments — error banner shown on network failure @ui",
-        async ({ page, slot }) => {
-            const loginPage = new LoginPage(page);
+        async ({ page, slot, loginPage, doctorAppointmentsPage: doctorPage }) => {
             await loginPage.login(slot.doctor.email, slot.doctor.password);
 
             await page.route("**/api/v1/appointments/doctor**", (route) => route.abort());
 
-            const doctorPage = new DoctorAppointmentsPage(page);
             await doctorPage.open();
 
             await expect(page.getByTestId("doctor-appt-banner-error")).toBeVisible();

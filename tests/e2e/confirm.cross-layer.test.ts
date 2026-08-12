@@ -1,9 +1,7 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
 
-test("doctor confirms via API — patient UI shows confirmed status @e2e", async ({ request, page, user, slot }) => {
+test("doctor confirms via API — patient UI shows confirmed status @e2e", async ({ request, page, user, slot, loginPage, appointmentsPage }) => {
     const { slot: slotBody, doctorToken } = slot;
     const appointments = new AppointmentsClient(request);
 
@@ -20,11 +18,9 @@ test("doctor confirms via API — patient UI shows confirmed status @e2e", async
     expect(confirmStatus).toBe(200);
 
     // 3. LOGIN via UI
-    const loginPage = new LoginPage(page);
     await loginPage.login(user.email, user.password);
 
     // 4. OPEN appointments page
-    const appointmentsPage = new AppointmentsPage(page);
     await appointmentsPage.open();
 
     // 5. ASSERT confirmed status visible in UI

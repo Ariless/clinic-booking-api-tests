@@ -1,12 +1,10 @@
-import { test, expect } from "../../fixtures/twoUsersFixture";
+import { test, expect } from "../../fixtures";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
 import { DoctorsClient } from "../../api/DoctorsClient";
-import { LoginPage } from "../../pages/LoginPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
 import { dbClient } from "../../utils/dbClient";
 import { nextSeedSlotWindow } from "../../data/seedAccounts";
 
-test("offer accept — patient sees offer in UI, accepts, booking swapped @e2e", async ({ request, page, user, user2, slot }) => {
+test("offer accept — patient sees offer in UI, accepts, booking swapped @e2e", async ({ request, page, user, user2, slot, loginPage, appointmentsPage }) => {
     const { slot: slot1Body, doctorToken, doctor } = slot;
     const appointments = new AppointmentsClient(request);
     const doctors = new DoctorsClient(request);
@@ -37,10 +35,8 @@ test("offer accept — patient sees offer in UI, accepts, booking swapped @e2e",
         expect(cancelStatus).toBe(200);
 
         // UI: user1 logs in and opens appointments page
-        const loginPage = new LoginPage(page);
         await loginPage.login(user.email, user.password);
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         // Offers section must be visible with one offer item

@@ -1,5 +1,4 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
 import { DoctorsClient } from "../../api/DoctorsClient";
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -21,8 +20,7 @@ test.describe("doctor schedule — working hours @ui", () => {
         });
     });
 
-    test("doctor schedule — working hours form shows all 7 days @ui", async ({ page, slot }) => {
-        const loginPage = new LoginPage(page);
+    test("doctor schedule — working hours form shows all 7 days @ui", async ({ page, slot, loginPage }) => {
         await loginPage.login(slot.doctor.email, slot.doctor.password);
         await page.goto("/doctor/schedule");
 
@@ -33,8 +31,7 @@ test.describe("doctor schedule — working hours @ui", () => {
         }
     });
 
-    test("doctor schedule — checking day enables time inputs @ui", async ({ page, slot }) => {
-        const loginPage = new LoginPage(page);
+    test("doctor schedule — checking day enables time inputs @ui", async ({ page, slot, loginPage }) => {
         await loginPage.login(slot.doctor.email, slot.doctor.password);
         await page.goto("/doctor/schedule");
 
@@ -51,8 +48,7 @@ test.describe("doctor schedule — working hours @ui", () => {
         await expect(endInput).toBeEnabled();
     });
 
-    test("doctor schedule — save schedule shows success message @ui", async ({ page, slot }) => {
-        const loginPage = new LoginPage(page);
+    test("doctor schedule — save schedule shows success message @ui", async ({ page, slot, loginPage }) => {
         await loginPage.login(slot.doctor.email, slot.doctor.password);
         await page.goto("/doctor/schedule");
 
@@ -66,14 +62,13 @@ test.describe("doctor schedule — working hours @ui", () => {
         await expect(page.getByTestId("doctor-wh-success")).toContainText("saved");
     });
 
-    test("doctor schedule — saved schedule loads into form on page open @ui", async ({ page, request, slot }) => {
+    test("doctor schedule — saved schedule loads into form on page open @ui", async ({ page, request, slot, loginPage }) => {
         const doctors = new DoctorsClient(request);
         await doctors.setSchedule(
             [{ dayOfWeek: 3, startTime: "10:00", endTime: "15:00" }], // Thursday
             { headers: { Authorization: `Bearer ${slot.doctorToken}` } },
         );
 
-        const loginPage = new LoginPage(page);
         await loginPage.login(slot.doctor.email, slot.doctor.password);
         await page.goto("/doctor/schedule");
 
@@ -86,7 +81,7 @@ test.describe("doctor schedule — working hours @ui", () => {
         await expect(page.getByTestId("doctor-wh-day-0-enabled")).not.toBeChecked();
     });
 
-    test("doctor schedule — slot outside working hours shows error in create form @ui", async ({ page, request, slot }) => {
+    test("doctor schedule — slot outside working hours shows error in create form @ui", async ({ page, request, slot, loginPage }) => {
         const doctors = new DoctorsClient(request);
         // schedule: all days 14:00–17:00 UTC only
         await doctors.setSchedule(
@@ -94,7 +89,6 @@ test.describe("doctor schedule — working hours @ui", () => {
             { headers: { Authorization: `Bearer ${slot.doctorToken}` } },
         );
 
-        const loginPage = new LoginPage(page);
         await loginPage.login(slot.doctor.email, slot.doctor.password);
         await page.goto("/doctor/schedule");
 

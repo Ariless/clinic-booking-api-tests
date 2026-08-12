@@ -1,6 +1,4 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { BookingPage } from "../../pages/BookingPage";
 
 const MOCK_DOCTOR = { id: 1, name: "Dr. Alice Smith", specialty: "Cardiologist" };
 const MOCK_SLOT = {
@@ -14,15 +12,13 @@ const MOCK_SLOT = {
 test.describe("booking wizard — progress and navigation @ui", () => {
 
     test("booking wizard — step label shows 'Step 1 of 4' and step 1 visible on load @smoke @ui",
-        async ({ page, user }) => {
+        async ({ page, user, loginPage, bookingPage }) => {
             await page.route("**/api/v1/doctors", (route) =>
                 route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([MOCK_DOCTOR]) }),
             );
 
-            const loginPage = new LoginPage(page);
             await loginPage.login(user.email, user.password);
 
-            const bookingPage = new BookingPage(page);
             await bookingPage.open();
 
             await expect(bookingPage.wizardStepLabel).toHaveText("Step 1 of 4");
@@ -34,15 +30,13 @@ test.describe("booking wizard — progress and navigation @ui", () => {
     );
 
     test("booking wizard — Next button disabled until specialty is chosen @ui",
-        async ({ page, user }) => {
+        async ({ page, user, loginPage, bookingPage }) => {
             await page.route("**/api/v1/doctors", (route) =>
                 route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([MOCK_DOCTOR]) }),
             );
 
-            const loginPage = new LoginPage(page);
             await loginPage.login(user.email, user.password);
 
-            const bookingPage = new BookingPage(page);
             await bookingPage.open();
 
             await expect(bookingPage.step1Next).toBeDisabled();
@@ -52,15 +46,13 @@ test.describe("booking wizard — progress and navigation @ui", () => {
     );
 
     test("booking wizard — URL-skip to step 3 without doctorId redirects to step 1 @ui",
-        async ({ page, user }) => {
+        async ({ page, user, loginPage, bookingPage }) => {
             await page.route("**/api/v1/doctors", (route) =>
                 route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([MOCK_DOCTOR]) }),
             );
 
-            const loginPage = new LoginPage(page);
             await loginPage.login(user.email, user.password);
 
-            const bookingPage = new BookingPage(page);
             // Navigate to step 3 with specialty but no doctorId — resolvedStep() clamps to 1
             await bookingPage.openAtStep(3, { specialty: MOCK_DOCTOR.specialty });
             await page.waitForLoadState("networkidle");
@@ -72,15 +64,13 @@ test.describe("booking wizard — progress and navigation @ui", () => {
     );
 
     test("booking wizard — back from step 2 returns to step 1 with specialty preserved @ui",
-        async ({ page, user }) => {
+        async ({ page, user, loginPage, bookingPage }) => {
             await page.route("**/api/v1/doctors", (route) =>
                 route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([MOCK_DOCTOR]) }),
             );
 
-            const loginPage = new LoginPage(page);
             await loginPage.login(user.email, user.password);
 
-            const bookingPage = new BookingPage(page);
             await bookingPage.openAtStep(2, { specialty: MOCK_DOCTOR.specialty });
             await page.waitForLoadState("networkidle");
 
@@ -99,7 +89,7 @@ test.describe("booking wizard — progress and navigation @ui", () => {
     );
 
     test("booking wizard step 3 — Next disabled until time is selected @ui",
-        async ({ page, user }) => {
+        async ({ page, user, loginPage, bookingPage }) => {
             await page.route("**/api/v1/doctors", (route) =>
                 route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([MOCK_DOCTOR]) }),
             );
@@ -107,10 +97,8 @@ test.describe("booking wizard — progress and navigation @ui", () => {
                 route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([MOCK_SLOT]) }),
             );
 
-            const loginPage = new LoginPage(page);
             await loginPage.login(user.email, user.password);
 
-            const bookingPage = new BookingPage(page);
             await bookingPage.openAtStep(3, {
                 specialty: MOCK_DOCTOR.specialty,
                 doctorId: String(MOCK_DOCTOR.id),
@@ -128,7 +116,7 @@ test.describe("booking wizard — progress and navigation @ui", () => {
     );
 
     test("booking wizard step 4 — 409 shows slot-taken message and back button remains @ui",
-        async ({ page, user }) => {
+        async ({ page, user, loginPage, bookingPage }) => {
             await page.route("**/api/v1/doctors", (route) =>
                 route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([MOCK_DOCTOR]) }),
             );
@@ -147,10 +135,8 @@ test.describe("booking wizard — progress and navigation @ui", () => {
                 }
             });
 
-            const loginPage = new LoginPage(page);
             await loginPage.login(user.email, user.password);
 
-            const bookingPage = new BookingPage(page);
             await bookingPage.openAtStep(4, {
                 specialty: MOCK_DOCTOR.specialty,
                 doctorId: String(MOCK_DOCTOR.id),
@@ -166,7 +152,7 @@ test.describe("booking wizard — progress and navigation @ui", () => {
     );
 
     test("booking wizard — progress dots reflect current step @ui",
-        async ({ page, user }) => {
+        async ({ page, user, loginPage, bookingPage }) => {
             await page.route("**/api/v1/doctors", (route) =>
                 route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([MOCK_DOCTOR]) }),
             );
@@ -174,9 +160,7 @@ test.describe("booking wizard — progress and navigation @ui", () => {
                 route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([MOCK_SLOT]) }),
             );
 
-            const loginPage = new LoginPage(page);
             await loginPage.login(user.email, user.password);
-            const bookingPage = new BookingPage(page);
 
             // Step 1: dot-1 active, others plain
             await bookingPage.open();

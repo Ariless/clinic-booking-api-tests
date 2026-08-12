@@ -1,6 +1,4 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
 
 function paginatedBody(items: object[]) {
     return JSON.stringify({
@@ -13,8 +11,7 @@ function paginatedBody(items: object[]) {
 }
 
 test("patient appointments — reschedule button visible for pending and confirmed, absent for cancelled and completed @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         await page.route("**/api/v1/appointments/my**", (route) =>
@@ -30,7 +27,6 @@ test("patient appointments — reschedule button visible for pending and confirm
             }),
         );
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         await expect(page.locator('[data-qa="patient-appt-reschedule"][data-appt-id="1"]')).toBeVisible();
@@ -41,8 +37,7 @@ test("patient appointments — reschedule button visible for pending and confirm
 );
 
 test("patient appointments — reschedule via UI refreshes list to pending status @ui",
-    async ({ page, user }) => {
-        const loginPage = new LoginPage(page);
+    async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
         let listCallCount = 0;
@@ -65,7 +60,6 @@ test("patient appointments — reschedule via UI refreshes list to pending statu
             }),
         );
 
-        const appointmentsPage = new AppointmentsPage(page);
         await appointmentsPage.open();
 
         await expect(appointmentsPage.appointmentByStatus("confirmed")).toBeVisible();

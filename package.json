@@ -23,6 +23,8 @@
     "ai:flakiness": "node scripts/flakiness-classifier.js",
     "ai:test-gen": "node scripts/ai-test-generator.js",
     "mcp:track": "node scripts/mcp-session-tracker.js",
+    "check:conventions": "node scripts/check-conventions.js",
+    "check:conventions:fast": "node scripts/check-conventions.js --fast",
     "test:browserstack": "browserstack-node-sdk playwright test",
     "test:browserstack:ui": "browserstack-node-sdk playwright test tests/ui/"
   },

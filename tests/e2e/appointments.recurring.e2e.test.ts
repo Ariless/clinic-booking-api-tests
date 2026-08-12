@@ -1,7 +1,5 @@
 import { APIRequestContext } from "@playwright/test";
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
 import { DoctorsClient } from "../../api/DoctorsClient";
 import { dbClient } from "../../utils/dbClient";
@@ -56,7 +54,7 @@ async function createWeeklySlots(
 }
 
 test("recurring series booked via API — all appointments visible with series tag in patient UI @e2e @smoke",
-    async ({ request, page, user, slot }) => {
+    async ({ request, page, user, slot, loginPage, appointmentsPage }) => {
         const { doctor, doctorToken } = slot;
         const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
         const appointments = new AppointmentsClient(request);
@@ -72,11 +70,9 @@ test("recurring series booked via API — all appointments visible with series t
             const apptIds = (booked.booked as Array<{ id: number }>).map((a) => a.id);
 
             // 2. LOGIN via UI as patient
-            const loginPage = new LoginPage(page);
             await loginPage.login(user.email, user.password);
 
             // 3. OPEN appointments page
-            const appointmentsPage = new AppointmentsPage(page);
             await appointmentsPage.open();
 
             // 4. VERIFY both appointments show series tag in UI
@@ -98,7 +94,7 @@ test("recurring series booked via API — all appointments visible with series t
 );
 
 test("patient cancels series via UI — all appointments cancelled in API and DB @e2e @smoke",
-    async ({ request, page, user, slot }) => {
+    async ({ request, page, user, slot, loginPage, appointmentsPage }) => {
         const { doctor, doctorToken } = slot;
         const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
         const appointments = new AppointmentsClient(request);
@@ -114,11 +110,9 @@ test("patient cancels series via UI — all appointments cancelled in API and DB
             const apptIds = (booked.booked as Array<{ id: number }>).map((a) => a.id);
 
             // 2. LOGIN via UI as patient
-            const loginPage = new LoginPage(page);
             await loginPage.login(user.email, user.password);
 
             // 3. OPEN appointments page
-            const appointmentsPage = new AppointmentsPage(page);
             await appointmentsPage.open();
 
             // 4. CANCEL series via UI — accept confirm dialog and click the button

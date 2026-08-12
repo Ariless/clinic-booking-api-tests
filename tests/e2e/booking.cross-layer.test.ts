@@ -1,18 +1,14 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { BookingPage } from "../../pages/BookingPage";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
 import { createWebhookTestServer } from "../../utils/webhookTestServer";
 
-test("patient books via UI wizard — appointment appears as pending in API @e2e", async ({ request, page, user, slot }) => {
+test("patient books via UI wizard — appointment appears as pending in API @e2e", async ({ request, user, slot, loginPage, bookingPage }) => {
     const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
 
     // 1. LOGIN via UI
-    const loginPage = new LoginPage(page);
     await loginPage.login(user.email, user.password);
 
     // 2. WALK through all 4 wizard steps (specialty → doctor → slot → confirm)
-    const bookingPage = new BookingPage(page);
     await bookingPage.walkWizard(slot.doctor.specialty, slot.doctor.name);
 
     // 3. SUBMIT booking on step 4
@@ -49,11 +45,7 @@ test.describe("booking + notification — cross-layer @e2e @webhook", () => {
         await webhookServer.stop();
     });
 
-    test("patient books → doctor confirms via API — webhook fires appointment.confirmed @e2e @webhook", async ({
-        request,
-        user,
-        slot,
-    }) => {
+    test("patient books → doctor confirms via API — webhook fires appointment.confirmed @e2e @webhook", async ({ request, user, slot }) => {
         const { slot: slotBody, doctorToken } = slot;
         const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
         const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };

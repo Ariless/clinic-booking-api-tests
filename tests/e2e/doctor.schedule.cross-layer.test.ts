@@ -1,5 +1,4 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
 import { DoctorsClient } from "../../api/DoctorsClient";
 import { dbClient } from "../../utils/dbClient";
 
@@ -9,8 +8,7 @@ test.describe("doctor schedule — cross-layer @e2e", () => {
         await doctors.setSchedule([], { headers: { Authorization: `Bearer ${slot.doctorToken}` } });
     });
 
-    test("doctor schedule — set working hours via UI → schedule confirmed via API and DB @e2e", async ({ page, request, slot }) => {
-        const loginPage = new LoginPage(page);
+    test("doctor schedule — set working hours via UI → schedule confirmed via API and DB @e2e", async ({ page, request, slot, loginPage }) => {
         await loginPage.login(slot.doctor.email, slot.doctor.password);
         await page.goto("/doctor/schedule");
 

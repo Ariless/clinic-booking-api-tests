@@ -1,4 +1,4 @@
-import { test, expect } from "../../fixtures/pages";
+import { test, expect } from "../../fixtures";
 
 test("booking wizard step 4 — unauthenticated user sees sign-in gate @ui", async ({ page }) => {
     // Guest gate lives on step 4; unauthenticated users can browse steps 1–3 freely

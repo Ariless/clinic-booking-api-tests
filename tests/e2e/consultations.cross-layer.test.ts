@@ -1,6 +1,4 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { ConsultationsPage } from "../../pages/ConsultationsPage";
 import { ConsultationsClient } from "../../api/ConsultationsClient";
 import { seedDoctors } from "../../data/seedAccounts";
 import { dbClient } from "../../utils/dbClient";
@@ -9,15 +7,13 @@ const PAYMENT_ENABLED = process.env.PAYMENT_MODE === "mock_success";
 
 test.skip(!PAYMENT_ENABLED, "Restart SUT with PAYMENT_MODE=mock_success to run this test");
 
-test("patient books consultation via UI — consultation appears in API @e2e", async ({ request, page, user }) => {
+test("patient books consultation via UI — consultation appears in API @e2e", async ({ request, page, user, loginPage, consultationsPage }) => {
     const doctor = seedDoctors[0];
 
     // 1. LOGIN via UI
-    const loginPage = new LoginPage(page);
     await loginPage.login(user.email, user.password);
 
     // 2. OPEN consultations page
-    const consultationsPage = new ConsultationsPage(page);
     await consultationsPage.open();
 
     // 3. WAIT for doctor list to load, then book

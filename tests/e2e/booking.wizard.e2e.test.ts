@@ -1,18 +1,14 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { BookingPage } from "../../pages/BookingPage";
 import { dbClient } from "../../utils/dbClient";
 
 test("booking wizard — full happy path creates appointment in DB @e2e @smoke",
-    async ({ request, page, user, slot }) => {
+    async ({ request, user, slot, loginPage, bookingPage }) => {
         const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
 
         // 1. Login
-        const loginPage = new LoginPage(page);
         await loginPage.login(user.email, user.password);
 
         // 2. Walk all 4 wizard steps — returns slotId selected in step 3
-        const bookingPage = new BookingPage(page);
         const selectedSlotId = Number(await bookingPage.walkWizard(slot.doctor.specialty, slot.doctor.name));
 
         // 3. Submit booking on step 4

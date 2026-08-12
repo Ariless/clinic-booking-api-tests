@@ -1,9 +1,7 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { PatientNotificationsPage } from "../../pages/PatientNotificationsPage";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
 
-test("doctor confirms via API — patient notification page shows appointment.confirmed @e2e", async ({ request, page, user, slot }) => {
+test("doctor confirms via API — patient notification page shows appointment.confirmed @e2e", async ({ request, page, user, slot, loginPage, notificationsPage: notifPage }) => {
     const { slot: slotBody, doctorToken } = slot;
     const appointments = new AppointmentsClient(request);
     const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
@@ -14,10 +12,8 @@ test("doctor confirms via API — patient notification page shows appointment.co
     expect(bookStatus).toBe(201);
 
     // 2. LOGIN as patient via UI and open notifications page
-    const loginPage = new LoginPage(page);
     await loginPage.login(user.email, user.password);
 
-    const notifPage = new PatientNotificationsPage(page);
     await notifPage.open();
 
     // 3. WAIT for WebSocket connection to be established

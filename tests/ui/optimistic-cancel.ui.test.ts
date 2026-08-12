@@ -1,6 +1,4 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
 
 function paginatedBody(items: object[]) {
     return JSON.stringify({ data: items, page: 1, limit: 20, total: items.length, totalPages: 1 });
@@ -11,8 +9,7 @@ const PENDING_APPT = { id: 1, slotId: 101, patientId: 1, status: "pending" };
 test.describe("patient appointments — optimistic cancel @ui", () => {
 
     test("patient appointments — row fades and cancel button disabled immediately after confirm @ui",
-        async ({ page, user }) => {
-            const loginPage = new LoginPage(page);
+        async ({ page, user, loginPage, appointmentsPage }) => {
             await loginPage.login(user.email, user.password);
 
             await page.route("**/api/v1/appointments/my**", route =>
@@ -25,7 +22,6 @@ test.describe("patient appointments — optimistic cancel @ui", () => {
                 await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ id: 1, status: "cancelled" }) });
             });
 
-            const appointmentsPage = new AppointmentsPage(page);
             await appointmentsPage.open();
 
             const cancelBtn = page.locator('[data-qa="patient-appt-cancel"][data-appt-id="1"]');
@@ -44,8 +40,7 @@ test.describe("patient appointments — optimistic cancel @ui", () => {
     );
 
     test("patient appointments — row and button restored when cancel API returns 500 @ui",
-        async ({ page, user }) => {
-            const loginPage = new LoginPage(page);
+        async ({ page, user, loginPage, appointmentsPage }) => {
             await loginPage.login(user.email, user.password);
 
             await page.route("**/api/v1/appointments/my**", route =>
@@ -60,7 +55,6 @@ test.describe("patient appointments — optimistic cancel @ui", () => {
                 }),
             );
 
-            const appointmentsPage = new AppointmentsPage(page);
             await appointmentsPage.open();
 
             const cancelBtn = page.locator('[data-qa="patient-appt-cancel"][data-appt-id="1"]');
@@ -76,8 +70,7 @@ test.describe("patient appointments — optimistic cancel @ui", () => {
     );
 
     test("patient appointments — second click while cancel in flight sends no extra request @ui",
-        async ({ page, user }) => {
-            const loginPage = new LoginPage(page);
+        async ({ page, user, loginPage, appointmentsPage }) => {
             await loginPage.login(user.email, user.password);
 
             let listCallCount = 0;
@@ -99,7 +92,6 @@ test.describe("patient appointments — optimistic cancel @ui", () => {
                 await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ id: 1, status: "cancelled" }) });
             });
 
-            const appointmentsPage = new AppointmentsPage(page);
             await appointmentsPage.open();
 
             const cancelBtn = page.locator('[data-qa="patient-appt-cancel"][data-appt-id="1"]');

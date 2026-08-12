@@ -1,10 +1,8 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { AppointmentsPage } from "../../pages/AppointmentsPage";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
 import { dbClient } from "../../utils/dbClient";
 
-test("patient leaves waitlist via UI — removed from waitlist in API @e2e", async ({ request, page, user, slot }) => {
+test("patient leaves waitlist via UI — removed from waitlist in API @e2e", async ({ request, page, user, slot, loginPage, appointmentsPage }) => {
     const { doctor } = slot;
     const appointments = new AppointmentsClient(request);
     const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
@@ -14,11 +12,9 @@ test("patient leaves waitlist via UI — removed from waitlist in API @e2e", asy
     expect(joinStatus).toBe(201);
 
     // 2. LOGIN via UI
-    const loginPage = new LoginPage(page);
     await loginPage.login(user.email, user.password);
 
     // 3. OPEN appointments page
-    const appointmentsPage = new AppointmentsPage(page);
     await appointmentsPage.open();
 
     // 4. ASSERT waitlist section visible with the entry

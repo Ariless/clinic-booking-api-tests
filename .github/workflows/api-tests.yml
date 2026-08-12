@@ -107,6 +107,12 @@ jobs:
       - name: Install Playwright
         run: npm ci && npx playwright install chromium --with-deps
 
+      # Fails when a claim the docs make about the suite stops being true —
+      # page objects instantiated instead of injected, or counts in
+      # docs/FACTS.json drifting from the actual suite.
+      - name: Convention and docs drift check
+        run: npm run check:conventions
+
       - name: API tests
         run: npm run test:api
 

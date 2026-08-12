@@ -1,17 +1,13 @@
-import { test, expect } from "../../fixtures/twoUsersFixture";
-import { LoginPage } from "../../pages/LoginPage";
-import { BookingPage } from "../../pages/BookingPage";
+import { test, expect } from "../../fixtures";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
 import { dbClient } from "../../utils/dbClient";
 
-test("booking wizard — UI shows slot-taken error when slot taken by another patient @e2e", async ({ request, page, user, user2, slot }) => {
+test("booking wizard — UI shows slot-taken error when slot taken by another patient @e2e", async ({ request, user, user2, slot, loginPage, bookingPage }) => {
     const appointments = new AppointmentsClient(request);
 
     // 1. USER2 logs in via UI and walks through all 4 wizard steps
-    const loginPage = new LoginPage(page);
     await loginPage.login(user2.email, user2.password);
 
-    const bookingPage = new BookingPage(page);
     // walkWizard returns the slot ID that user2 selected in step 3
     const selectedSlotId = Number(await bookingPage.walkWizard(slot.doctor.specialty, slot.doctor.name));
 

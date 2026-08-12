@@ -1,11 +1,9 @@
 import { test, expect } from "../../fixtures";
-import { LoginPage } from "../../pages/LoginPage";
-import { DoctorAppointmentsPage } from "../../pages/DoctorAppointmentsPage";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
 import { seedDoctors } from "../../data/seedAccounts";
 import { dbClient } from "../../utils/dbClient";
 
-test("doctor confirms via UI — appointment confirmed in API @e2e", async ({ request, page, user, slot }) => {
+test("doctor confirms via UI — appointment confirmed in API @e2e", async ({ request, page, user, slot, loginPage, doctorAppointmentsPage: doctorPage }) => {
     const { slot: slotBody } = slot;
     const appointments = new AppointmentsClient(request);
     const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
@@ -16,11 +14,9 @@ test("doctor confirms via UI — appointment confirmed in API @e2e", async ({ re
 
     // 2. LOGIN via UI as doctor
     const doctor = seedDoctors[0];
-    const loginPage = new LoginPage(page);
     await loginPage.login(doctor.email, doctor.password);
 
     // 3. OPEN doctor appointments page
-    const doctorPage = new DoctorAppointmentsPage(page);
     await doctorPage.open();
 
     // 4. ACCEPT confirm dialog and click the button for this appointment

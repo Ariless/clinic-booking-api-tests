@@ -1,4 +1,8 @@
-import { test as base } from "./userFixture";
+// Extends the twoUsersFixture end of the chain (userFixture → slotFixture →
+// twoUsersFixture) so a single `test` import gives tests both data fixtures
+// (user, slot, user2) and page objects. Fixtures are lazy — nothing is created
+// unless a test destructures it.
+import { test as base } from "./twoUsersFixture";
 import { LoginPage } from "../pages/LoginPage";
 import { RegisterPage } from "../pages/RegisterPatientPage";
 import { BookingPage } from "../pages/BookingPage";
