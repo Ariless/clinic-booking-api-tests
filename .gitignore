@@ -28,3 +28,13 @@ BACKLOG.md
 tests/api/pact/
 test-results.json
 test-results.json
+
+# --- TEMP: course tools for interview demo, do NOT commit ---
+scripts/ai-gap-analysis.js
+scripts/ai-test-generator.js
+scripts/flakiness-classifier.js
+scripts/impact-analysis.js
+utils/aiBugReporter.ts
+tests/unit/bug-reporter.demo.test.ts
+.playwright-mcp/
+.playwright-mcp/

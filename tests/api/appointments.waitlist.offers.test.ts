@@ -2,8 +2,11 @@ import { APIRequestContext } from '@playwright/test';
 import { test, expect } from '../../fixtures/twoUsersFixture';
 import { AppointmentsClient } from '../../api/AppointmentsClient';
 import { DoctorsClient } from '../../api/DoctorsClient';
+import { DebugClient } from '../../api/DebugClient';
 import { dbClient } from '../../utils/dbClient';
+import { AppointmentErrors } from '../../enums/appointments';
 import { nextSeedSlotWindow, SeedDoctor } from '../../data/seedAccounts';
+import { debugRoutesEnabled, DEBUG_ROUTES_SKIP_MSG } from '../../config/sutCapabilities';
 
 interface AuthOpts {
     headers: Record<string, string>;
@@ -178,5 +181,126 @@ test("POST /waitlist-offers/:id/accept — 409 OFFER_ALREADY_RESOLVED when offer
         const { status, body } = await appointments.acceptOffer(offer.id, patientAuth);
         expect(status).toBe(409);
         expect(body.errorCode).toBe("OFFER_ALREADY_RESOLVED");
+    });
+});
+
+test("POST /waitlist-offers/:id/accept — 410 OFFER_EXPIRED is persisted, not rolled back @api", async ({ request, user, user2, slot }) => {
+    test.skip(!debugRoutesEnabled, DEBUG_ROUTES_SKIP_MSG);
+    const { slot: slot1Body, doctorToken, doctor } = slot;
+    const appointments = new AppointmentsClient(request);
+    const doctors = new DoctorsClient(request);
+    const debug = new DebugClient(request);
+    const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
+    const patient2Auth = { headers: { Authorization: `Bearer ${user2.token}` } };
+    const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
+
+    await withSecondSlot(request, doctors, doctor, doctorAuth, async (slot2) => {
+        await appointments.createAppointment(slot1Body.id, patientAuth);
+        const { body: book2Body } = await appointments.createAppointment(slot2.id, patient2Auth);
+        await appointments.joinWaitlist(doctor.doctorRecordId, patientAuth);
+        await appointments.cancelAppointment(book2Body.id, patient2Auth);
+
+        const { body: offers } = await appointments.getWaitlistOffers(patientAuth);
+        const offer = offers.find((o: { slotId: number }) => o.slotId === slot2.id);
+        expect(offer).toBeDefined();
+
+        const { status: expireStatus } = await debug.expireOffer(offer.id);
+        expect(expireStatus, "debug routes must be enabled: NODE_ENV=development ENABLE_DEBUG_ROUTES=true").toBe(200);
+
+        const { status, body } = await appointments.acceptOffer(offer.id, patientAuth);
+        expect(status).toBe(410);
+        expect(body.errorCode).toBe(AppointmentErrors.OFFER_EXPIRED);
+
+        const stored = dbClient.getOfferById(offer.id);
+        expect(stored, "offer row must exist").toBeDefined();
+        expect(stored!.status, "410 told the client it expired — the row must say so too").toBe("expired");
+    });
+});
+
+test("POST /waitlist-offers/:id/accept — 410 releases the held slot instead of freezing it @api", async ({ request, user, user2, slot }) => {
+    test.skip(!debugRoutesEnabled, DEBUG_ROUTES_SKIP_MSG);
+    const { slot: slot1Body, doctorToken, doctor } = slot;
+    const appointments = new AppointmentsClient(request);
+    const doctors = new DoctorsClient(request);
+    const debug = new DebugClient(request);
+    const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
+    const patient2Auth = { headers: { Authorization: `Bearer ${user2.token}` } };
+    const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
+
+    await withSecondSlot(request, doctors, doctor, doctorAuth, async (slot2) => {
+        await appointments.createAppointment(slot1Body.id, patientAuth);
+        const { body: book2Body } = await appointments.createAppointment(slot2.id, patient2Auth);
+        await appointments.joinWaitlist(doctor.doctorRecordId, patientAuth);
+        await appointments.cancelAppointment(book2Body.id, patient2Auth);
+
+        const { body: offers } = await appointments.getWaitlistOffers(patientAuth);
+        const offer = offers.find((o: { slotId: number }) => o.slotId === slot2.id);
+
+        await debug.expireOffer(offer.id);
+        await appointments.acceptOffer(offer.id, patientAuth);
+
+        const dbSlot = dbClient.getSlotById(slot2.id);
+        expect(dbSlot!.isAvailable, "a slot held by an expired offer must go back on sale").toBe(1);
+    });
+});
+
+test("POST /debug/run-offer-expiry — sweep releases a slot nobody ever answered for @api", async ({ request, user, user2, slot }) => {
+    test.skip(!debugRoutesEnabled, DEBUG_ROUTES_SKIP_MSG);
+    const { slot: slot1Body, doctorToken, doctor } = slot;
+    const appointments = new AppointmentsClient(request);
+    const doctors = new DoctorsClient(request);
+    const debug = new DebugClient(request);
+    const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
+    const patient2Auth = { headers: { Authorization: `Bearer ${user2.token}` } };
+    const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
+
+    await withSecondSlot(request, doctors, doctor, doctorAuth, async (slot2) => {
+        await appointments.createAppointment(slot1Body.id, patientAuth);
+        const { body: book2Body } = await appointments.createAppointment(slot2.id, patient2Auth);
+        await appointments.joinWaitlist(doctor.doctorRecordId, patientAuth);
+        await appointments.cancelAppointment(book2Body.id, patient2Auth);
+
+        const { body: offers } = await appointments.getWaitlistOffers(patientAuth);
+        const offer = offers.find((o: { slotId: number }) => o.slotId === slot2.id);
+
+        await debug.expireOffer(offer.id);
+
+        // The patient never accepts and never declines — only the timer can resolve this.
+        const { status: sweepStatus, body: sweepBody } = await debug.runOfferExpiry();
+        expect(sweepStatus).toBe(200);
+        expect(sweepBody.expired).toBeGreaterThanOrEqual(1);
+
+        const dbSlot = dbClient.getSlotById(slot2.id);
+        expect(dbSlot!.isAvailable, "silent patient must not hold the slot forever").toBe(1);
+        expect(dbClient.getOfferById(offer.id)!.status).toBe("expired");
+    });
+});
+
+test("POST /debug/run-offer-expiry — expired offer is not handed back to the same patient @api", async ({ request, user, user2, slot }) => {
+    test.skip(!debugRoutesEnabled, DEBUG_ROUTES_SKIP_MSG);
+    const { slot: slot1Body, doctorToken, doctor } = slot;
+    const appointments = new AppointmentsClient(request);
+    const doctors = new DoctorsClient(request);
+    const debug = new DebugClient(request);
+    const patientAuth = { headers: { Authorization: `Bearer ${user.token}` } };
+    const patient2Auth = { headers: { Authorization: `Bearer ${user2.token}` } };
+    const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
+
+    await withSecondSlot(request, doctors, doctor, doctorAuth, async (slot2) => {
+        await appointments.createAppointment(slot1Body.id, patientAuth);
+        const { body: book2Body } = await appointments.createAppointment(slot2.id, patient2Auth);
+        await appointments.joinWaitlist(doctor.doctorRecordId, patientAuth);
+        await appointments.cancelAppointment(book2Body.id, patient2Auth);
+
+        const { body: offers } = await appointments.getWaitlistOffers(patientAuth);
+        const offer = offers.find((o: { slotId: number }) => o.slotId === slot2.id);
+
+        await debug.expireOffer(offer.id);
+        await debug.runOfferExpiry();
+
+        // The patient is still on the waitlist, so a naive re-offer would loop on them forever.
+        const { body: afterOffers } = await appointments.getWaitlistOffers(patientAuth);
+        const reoffered = afterOffers.filter((o: { slotId: number }) => o.slotId === slot2.id);
+        expect(reoffered, "a patient who let the offer lapse must not be re-offered the same slot").toHaveLength(0);
     });
 });

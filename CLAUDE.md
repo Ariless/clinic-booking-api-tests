@@ -32,6 +32,9 @@ Skills with a `references/` folder keep long examples and troubleshooting tables
 
 ```bash
 npm test                          # all tests
+npm run test:invariants           # runtime invariant contract — needs a SUT started with
+                                  # NODE_ENV=development ENABLE_DEBUG_ROUTES=true ASSERT_INVARIANTS=true
+                                  # (without it these tests skip, they never fail on config)
 npm run test:smoke                # @smoke only
 npm run test:api                  # API layer
 npm run test:e2e                  # E2E layer

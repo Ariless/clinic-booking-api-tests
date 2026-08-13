@@ -58,12 +58,62 @@ How this suite knows the system broke — and what each failure means:
 | k6 `p(95) > 200ms` or `error_rate > 1%` threshold breached | Performance regression — latency spike or increased error rate under load | `k6/booking-flow.js` |
 | Doctor UI confirm button does nothing or returns error | JavaScript event handler broken or endpoint wired incorrectly — doctors can't confirm from the browser | `doctor-confirm.e2e.test.ts` |
 
-**Invalid states** — if any of these exist in the DB, something is broken:
-- `slot.isAvailable = 0` with no active appointment referencing it
-- Two appointments with `status IN ('pending','confirmed')` for the same `slotId`
-- Appointment `status = 'cancelled'` but `slot.isAvailable = 0`
-
 **Interview line:** *"I don't wait for a bug report — the suite maps each assertion to a business harm. If the double-booking test fails, I know we just sold one slot twice."*
+
+---
+
+### Invariants as executable checks
+
+A stated invariant and an executed one are different artifacts. This suite carries both: the states
+below are written as rules, and each rule is backed either by the schema or by a runtime check that
+answers on every mutating request.
+
+**Invalid states** — if any of these exist in the DB, something is broken:
+
+| State | Enforced by |
+| --- | --- |
+| Two appointments with `status IN ('pending','confirmed')` for the same `slotId` | `idx_appointments_one_active_per_slot` (partial unique index) + `INV-3` |
+| Two pending offers holding the same `slotId` | `idx_offers_one_pending_per_slot` (partial unique index) + `INV-4` |
+| Active appointment on a slot that is still on sale | `INV-1` |
+| Live offer holding a slot that is still on sale | `INV-2` |
+| A slot that is both booked and held by a live offer | `INV-5` |
+
+**How the runtime contract works.** `src/invariants.js` in the SUT runs the five checks after every
+mutating request under `ASSERT_INVARIANTS`, and answers `500 INVARIANT_VIOLATED` naming the rule that
+broke. It queries the database directly and knows nothing about what the handler intended, so it
+covers endpoints written after it — including paths no test targets. The two checks that duplicate an
+index are kept on purpose: a dropped index stays visible instead of going quiet.
+
+**The oracle is proven to fail.** `POST /debug/break-invariant` desyncs state on purpose and
+`tests/api/invariants.test.ts` asserts the 500 — an oracle nobody has watched fail is
+indistinguishable from one that never fires. Measured on the day it shipped: 159 API tests with the
+contract on, **zero** false positives, and the only firings came from the deliberate break.
+
+**Invariants are verified against the code before they ship.** Two further candidates were dropped at
+that step: "a waitlisted patient has no active booking with that doctor" is false by design, because
+declining an offer keeps the patient in the queue while their booking stays live. A check that fires
+on correct behaviour is worse than no check.
+
+**What this method found.** Tracing every write to `slots.isAvailable` against `INV-1`/`INV-2`
+surfaced three defects in a feature with six passing scenario tests — the difference is what each
+kind of test asks. A scenario test asks "did this action return the right answer"; an invariant asks
+"what state did it leave behind":
+
+| ID | Defect | Fix |
+| --- | --- | --- |
+| B-10 | A waitlist offer held a slot until accepted or declined; an offer left unanswered kept the slot off sale after its TTL passed. | `expireStaleOffers()` sweep + `AUTO_EXPIRE_OFFERS_INTERVAL_MS` timer; expiry releases the slot and advances the queue. |
+| B-11 | The expiry write in `acceptOffer` ran inside `db.transaction()` and the 410 was thrown from the same block; better-sqlite3 rolls back on throw, so the row kept its previous status. | Expiry returns a marker, the throw moved outside the transaction, so the state change commits. |
+| B-12 | The eligibility rule covered `declined`; an offer that lapsed left the patient first in line for the same slot. | `expired` added alongside `declined` in `getNextWaitlistEntry`, shipped together with the sweep. |
+
+**Where the schema stops.** `isAvailable = 0` with no booking and no live offer is not flagged: the
+column carries both "the doctor closed this slot" and "something holds this slot", and the two are
+indistinguishable after the fact. Splitting it into stored intent and derived occupancy is costed and
+argued in `sut/DESIGN_PROPOSALS.md` §1, and deliberately deferred — this SUT exists to be a test
+target, and a hand-maintained denormalised flag is one of its more productive bug generators.
+
+**Interview line:** *"A written invariant and an executed one are different artifacts. I turned ours
+into queries the system runs on every write — and the first one found three defects in a feature that
+had six green tests."*
 
 ---
 
@@ -279,6 +329,7 @@ npm test                              # all tests under tests/
 npm run test:api                      # tests/api only
 npm run test:ui                       # tests/ui only
 npm run test:e2e                      # tests/e2e only
+npm run test:invariants               # runtime invariant contract (see below)
 
 npx playwright test --grep @smoke
 npx playwright test --grep @api
@@ -287,6 +338,19 @@ npx playwright test --grep @e2e
 
 npx playwright test --ui              # Playwright UI mode
 ```
+
+**Runtime invariant contract** — needs a SUT started with the oracle on:
+
+```bash
+cd ../sut
+NODE_ENV=development ENABLE_DEBUG_ROUTES=true ASSERT_INVARIANTS=true npm run dev
+
+cd ../clinic-booking-api-tests
+npm run test:invariants
+```
+
+Without those flags the invariant tests **skip** rather than fail: a suite that goes red because of
+how the SUT was launched trains people to ignore red. Same rule as the Kafka and rate-limit tests.
 
 **Performance (k6):**
 ```bash

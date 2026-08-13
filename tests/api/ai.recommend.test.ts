@@ -19,6 +19,8 @@ const contractLayer = (AI_MOCK || AI_REAL) ? test.describe : test.describe.skip
 // Layer 3: metamorphic — meaningful only with real Claude (LLM consistency, not retrieval)
 const qualityLayer = (AI_REAL && !AI_MOCK) ? test.describe : test.describe.skip
 
+const AI_RATE_LIMIT_MAX = parseInt(process.env.AI_RATE_LIMIT_MAX ?? '5', 10);
+
 contractLayer("POST /api/v1/ai/recommend-doctor — contract + domain @api", () => {
 
     test("200: known symptoms → recommendedSpecialty + doctors @api", async ({ request, user }) => {
@@ -43,8 +45,6 @@ contractLayer("POST /api/v1/ai/recommend-doctor — contract + domain @api", () 
             "chest pain",
             "skin rash and itching",
             "severe headache and dizziness",
-            "knee pain after running",
-            "my child has fever",
         ];
         for (const symptoms of symptomsList) {
             const { status, body } = await ai.recommend(symptoms, user.token);
@@ -53,14 +53,23 @@ contractLayer("POST /api/v1/ai/recommend-doctor — contract + domain @api", () 
         }
     });
 
-    test("200: doctors array is non-empty when specialty is seeded in DB @api", async ({ request, user }) => {
-        // Regression for B-06: 200 with doctors:[] = silent failure (patient can't book anyone)
-        // "chest pain and shortness of breath" reliably maps to Cardiologist (seeded in DB)
+    test("200: recommendation for seeded specialty includes non-empty doctors list @api", async ({ request, user }) => {
         const ai = new AiRecommendClient(request);
         const { status, body } = await ai.recommend("chest pain and shortness of breath", user.token);
         expect(status).toBe(200);
         expect(body.recommendedSpecialty).toBe("Cardiologist");
         expect(body.doctors.length).toBeGreaterThan(0);
+    });
+
+    test("404 DOCTORS_UNAVAILABLE: specialty in knowledge base but no doctors in DB @api", async ({ request, user }) => {
+        // "baby" + "vaccination" = Pediatrician score 2, all others 0 — unambiguous retrieval
+        // Pediatrician is in the knowledge base but has no seeded doctors
+        const ai = new AiRecommendClient(request);
+        const { status, body } = await ai.recommend("my baby needs vaccination", user.token);
+        expect(status).toBe(404);
+        expect(body.errorCode).toBe("DOCTORS_UNAVAILABLE");
+        expect(body.message).toBeTruthy();
+        expect(body.requestId).toBeTruthy();
     });
 
     test("422 UNKNOWN_SPECIALTY: symptoms cannot be mapped @api", async ({ request, user }) => {
@@ -86,9 +95,10 @@ contractLayer("POST /api/v1/ai/recommend-doctor — contract + domain @api", () 
         expect(body.errorCode).toBe("VALIDATION_ERROR");
     });
 
-    test("429 RATE_LIMITED after exceeding per-token limit @api", async ({ request, user }) => {
+    test("429 RATE_LIMITED after exceeding per-token limit @api @rate-limit", async ({ request, user }) => {
+        test.skip(AI_RATE_LIMIT_MAX > 10, `AI_RATE_LIMIT_MAX=${AI_RATE_LIMIT_MAX}; set it to 5 on the SUT and in tests/.env to run`);
         const ai = new AiRecommendClient(request);
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < AI_RATE_LIMIT_MAX; i++) {
             await ai.recommend("chest pain", user.token);
         }
         const { status, body } = await ai.recommend("chest pain", user.token);
@@ -101,8 +111,15 @@ contractLayer("POST /api/v1/ai/recommend-doctor — contract + domain @api", () 
 
 qualityLayer("POST /api/v1/ai/recommend-doctor — metamorphic consistency @api", () => {
 
-    // Metamorphic relation: same condition rephrased → same specialty.
-    // Tests retrieval-layer consistency in mock mode; LLM consistency with a real key.
+    // Metamorphic relation: same condition rephrased → same observable answer.
+    //
+    // The answer is compared as an outcome, not as a status code: since the B-06 fix a specialty that
+    // exists in the knowledge base but has no seeded doctors legitimately returns 404
+    // DOCTORS_UNAVAILABLE. Asserting 200 made this test depend on seed data rather than on the
+    // relation it is meant to check — rephrasing must not change what the system answers, whatever
+    // that answer is. Tests retrieval-layer consistency in mock mode; LLM consistency with a real key.
+    const outcomeOf = (status: number, body: { recommendedSpecialty?: string; errorCode?: string }): string =>
+        status === 200 ? `200:${body.recommendedSpecialty}` : `${status}:${body.errorCode}`;
     test("metamorphic: cardiac symptoms in 5 phrasings → same specialty @api", async ({ request, user }) => {
         const ai = new AiRecommendClient(request);
         const phrasings = [
@@ -112,16 +129,17 @@ qualityLayer("POST /api/v1/ai/recommend-doctor — metamorphic consistency @api"
             "my heart is racing and I have chest discomfort",
             "sharp pain in chest that worsens with breathing",
         ];
-        const specialties: string[] = [];
+        const outcomes: string[] = [];
         for (const p of phrasings) {
             const { status, body } = await ai.recommend(p, user.token);
-            expect(status).toBe(200);
-            specialties.push(body.recommendedSpecialty);
+            outcomes.push(outcomeOf(status, body));
         }
-        const unique = new Set(specialties);
+        const unique = new Set(outcomes);
         await allure.parameter("Phrasings tested", String(phrasings.length));
-        await allure.parameter("Specialties returned", [...unique].join(", "));
-        expect(unique.size).toBe(1);
+        await allure.parameter("Outcomes returned", [...unique].join(", "));
+        expect(unique.size, "rephrasing must not change the answer").toBe(1);
+        // Cardiologist is seeded, so cardiac symptoms must also stay bookable, not just consistent.
+        expect([...unique][0], "cardiac symptoms must map to a bookable Cardiologist").toBe("200:Cardiologist");
     });
 
     test("metamorphic: skin symptoms in 5 phrasings → same specialty @api", async ({ request, user }) => {
@@ -133,16 +151,15 @@ qualityLayer("POST /api/v1/ai/recommend-doctor — metamorphic consistency @api"
             "red itchy skin rash on my arms",
             "skin irritation with redness and flaking",
         ];
-        const specialties: string[] = [];
+        const outcomes: string[] = [];
         for (const p of phrasings) {
             const { status, body } = await ai.recommend(p, user.token);
-            expect(status).toBe(200);
-            specialties.push(body.recommendedSpecialty);
+            outcomes.push(outcomeOf(status, body));
         }
-        const unique = new Set(specialties);
+        const unique = new Set(outcomes);
         await allure.parameter("Phrasings tested", String(phrasings.length));
-        await allure.parameter("Specialties returned", [...unique].join(", "));
-        expect(unique.size).toBe(1);
+        await allure.parameter("Outcomes returned", [...unique].join(", "));
+        expect(unique.size, "rephrasing must not change the answer").toBe(1);
     });
 
     test("metamorphic: pediatric symptoms in 5 phrasings → same specialty @api", async ({ request, user }) => {
@@ -154,16 +171,15 @@ qualityLayer("POST /api/v1/ai/recommend-doctor — metamorphic consistency @api"
             "my kid has been feverish for two days",
             "my infant has a high temperature and seems unwell",
         ];
-        const specialties: string[] = [];
+        const outcomes: string[] = [];
         for (const p of phrasings) {
             const { status, body } = await ai.recommend(p, user.token);
-            expect(status).toBe(200);
-            specialties.push(body.recommendedSpecialty);
+            outcomes.push(outcomeOf(status, body));
         }
-        const unique = new Set(specialties);
+        const unique = new Set(outcomes);
         await allure.parameter("Phrasings tested", String(phrasings.length));
-        await allure.parameter("Specialties returned", [...unique].join(", "));
-        expect(unique.size).toBe(1);
+        await allure.parameter("Outcomes returned", [...unique].join(", "));
+        expect(unique.size, "rephrasing must not change the answer").toBe(1);
     });
 });
 

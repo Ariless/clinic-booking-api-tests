@@ -11,6 +11,7 @@
     "test:e2e": "npx playwright test tests/e2e --pass-with-no-tests",
     "test:browser": "npx playwright test tests/e2e tests/ui --pass-with-no-tests",
     "test:unit": "npx playwright test tests/unit",
+    "test:invariants": "ENABLE_DEBUG_ROUTES=true ASSERT_INVARIANTS=true npx playwright test tests/api/invariants.test.ts tests/api/appointments.waitlist.offers.test.ts",
     "test:chaos": "npx playwright test --grep @chaos",
     "report": "npx allure generate allure-results -o allure-report --clean && npx allure open allure-report",
     "test:pact": "npx playwright test tests/api/pact",

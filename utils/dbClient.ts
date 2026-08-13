@@ -30,6 +30,16 @@ interface WaitlistRow {
   [key: string]: unknown;
 }
 
+interface OfferRow {
+  id: number;
+  slotId: number;
+  patientId: number;
+  existingAppointmentId: number | null;
+  status: string;
+  expiresAt: string;
+  [key: string]: unknown;
+}
+
 interface ConsultationRow {
   id: number;
   patientId: number;
@@ -92,6 +102,14 @@ const dbClient = {
     return db().prepare('SELECT * FROM slot_waitlist WHERE patientId = ?').all(patientId) as WaitlistRow[];
   },
 
+  getOfferById(id: number): OfferRow | undefined {
+    return db().prepare('SELECT * FROM waitlist_offers WHERE id = ?').get(id) as OfferRow | undefined;
+  },
+
+  getOffersBySlot(slotId: number): OfferRow[] {
+    return db().prepare('SELECT * FROM waitlist_offers WHERE slotId = ?').all(slotId) as OfferRow[];
+  },
+
   getWaitlistByDoctor(doctorId: number): WaitlistRow[] {
     return db().prepare('SELECT * FROM slot_waitlist WHERE doctorId = ?').all(doctorId) as WaitlistRow[];
   },
@@ -132,4 +150,4 @@ const dbClient = {
 };
 
 export { dbClient };
-export type { SlotRow, AppointmentRow, WaitlistRow, ConsultationRow, PaymentRow, ScheduleRow, UserRow };
+export type { SlotRow, AppointmentRow, WaitlistRow, OfferRow, ConsultationRow, PaymentRow, ScheduleRow, UserRow };

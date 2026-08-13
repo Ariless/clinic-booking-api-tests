@@ -22,6 +22,9 @@ export const AppointmentEndpoints = {
     waitlistOfferAccept:  (id: number | string) => `${API_V1}/appointments/waitlist-offers/${id}/accept`,
     waitlistOfferDecline: (id: number | string) => `${API_V1}/appointments/waitlist-offers/${id}/decline`,
     debugConcurrent:      `${API_V1}/debug/simulate-concurrent-booking`,
+    debugExpireOffer:     `${API_V1}/debug/expire-offer`,
+    debugRunOfferExpiry:  `${API_V1}/debug/run-offer-expiry`,
+    debugBreakInvariant:  `${API_V1}/debug/break-invariant`,
 } as const;
 
 export const AppointmentErrors = {
@@ -35,6 +38,7 @@ export const AppointmentErrors = {
     SERIES_NOT_FOUND:       "SERIES_NOT_FOUND",
     WAITLIST_DUPLICATE:     "WAITLIST_DUPLICATE",
     OFFER_ALREADY_RESOLVED: "OFFER_ALREADY_RESOLVED",
+    OFFER_EXPIRED:          "OFFER_EXPIRED",
     PAYMENT_REQUIRED:       "PAYMENT_REQUIRED",
     CHAOS_ERROR:            "CHAOS_ERROR",
     INTERNAL_ERROR:         "INTERNAL_ERROR",
