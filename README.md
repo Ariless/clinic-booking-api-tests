@@ -368,18 +368,20 @@ Two workflow files under `.github/workflows/`:
 
 ### `api-tests.yml` — Playwright tests (push / PR to `main`)
 
-Four jobs — smoke gates the rest, API and E2E run in parallel:
+Smoke gates the rest; API, E2E and the invariant contract run in parallel:
 
 ```
-smoke  →  api   (tests/api)
-       →  e2e   (tests/e2e + tests/ui)
+smoke  →  api         (tests/api)
+       →  e2e         (tests/e2e + tests/ui)
+       →  invariants  (tests/api against a SUT with ASSERT_INVARIANTS on)
               ↓
-       allure-report  (merges all results → GitHub Pages)
+       allure-report  (merges api + e2e + smoke results → GitHub Pages)
 ```
 
 - **SUT:** checked out from **`Ariless/clinic-booking-api`** (override: repo variable **`SUT_GITHUB_REPOSITORY`** under Settings → Actions → Variables), then started via `docker compose -f sut/docker-compose.test.yml up -d --wait` — same image as local, healthcheck-gated startup, `docker compose down` on cleanup.
 - **E2E job** uses `--pass-with-no-tests` — stays green until `tests/e2e` / `tests/ui` are committed; picks them up automatically once pushed.
-- **Allure** merges results from all three jobs and deploys even if a job fails (`if: always()`).
+- **Invariants job** starts the SUT with an overlay (`docker-compose.test.yml` + `docker-compose.invariants.yml`) that sets `ASSERT_INVARIANTS=true` and `NODE_ENV=development`, then runs the API layer against it. Two things have to hold: the oracle answers `500 INVARIANT_VIOLATED` on a deliberate breach, and the SUT logs no violation on any other path. It is `continue-on-error` until a week of runs is clean — gating merges on two days of local evidence would be premature, and leaving the flag in forever would make the job decorative.
+- **Allure** merges results from smoke, api and e2e and deploys even if a job fails (`if: always()`). The invariants job re-runs the same API suite under a different SUT configuration, so its results stay a separate artifact (`allure-results-invariants`) instead of doubling every test in the report.
 
 ---
 

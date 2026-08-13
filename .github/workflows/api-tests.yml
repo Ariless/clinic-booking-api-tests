@@ -151,6 +151,95 @@ jobs:
         if: always()
         run: docker compose -f sut/docker-compose.test.yml down
 
+# ── Invariant contract ───────────────────────────────────────────────────────
+# Runs the API layer against a SUT with ASSERT_INVARIANTS on: after every mutating request the
+# SUT verifies five cross-table rules and answers 500 INVARIANT_VIOLATED on a breach. The oracle
+# reads the database directly, so it covers paths no test targets.
+#
+# continue-on-error until 2026-08-20: the "zero false positives" figure comes from two local runs
+# on one day, which is not enough to gate merges on. Remove the flag once a week of runs is clean —
+# leaving it in permanently would make this job decorative.
+  invariants:
+    name: Invariant contract
+    needs: [smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    permissions:
+      contents: read
+
+    env:
+      # Mirrors what the SUT was started with — the suite skips these tests when the SUT cannot
+      # serve them, rather than failing on configuration.
+      ENABLE_DEBUG_ROUTES: "true"
+      ASSERT_INVARIANTS: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
+          path: sut
+          token: ${{ secrets.SUT_GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Start SUT with the invariant contract on
+        run: |
+          mkdir -p sut/data
+          docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.invariants.yml up -d --wait
+
+      - name: SUT logs on failure
+        if: failure()
+        run: docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.invariants.yml logs
+
+      - name: Install Playwright
+        run: npm ci && npx playwright install chromium --with-deps
+
+      # The oracle must be seen failing before its silence means anything: these tests desync state
+      # on purpose via /debug/break-invariant and require the 500.
+      - name: Oracle bites on a deliberate breach
+        run: npx playwright test tests/api/invariants.test.ts
+
+      - name: API tests under the contract
+        run: npm run test:api
+
+      # Green tests only prove no assertion caught a breach. This reads what the SUT itself logged,
+      # excluding the two firings the break-invariant tests cause on purpose. Anything left is a
+      # real breach on a path no assertion covers — exactly what the oracle exists to surface.
+      - name: Report unexpected invariant violations
+        if: always()
+        run: |
+          docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.invariants.yml logs \
+            | grep "invariant.violated" \
+            | grep -v "break-invariant" > unexpected.log || true
+          if [ -s unexpected.log ]; then
+            echo "::error::the invariant contract fired outside the deliberate test breach"
+            cat unexpected.log
+            exit 1
+          fi
+          echo "No unexpected invariant violations."
+
+      # Deliberately not merged into the published Allure report: this job re-runs the same API
+      # suite under a different SUT configuration, and merging would double every test in it.
+      # Download the artifact directly when a run needs investigating.
+      - name: Upload allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-invariants
+          path: allure-results/
+          if-no-files-found: ignore
+
+      - name: Stop SUT
+        if: always()
+        run: docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.invariants.yml down
+
 # ── E2E & UI ─────────────────────────────────────────────────────────────────
 # Browser tests (tests/e2e + tests/ui). --pass-with-no-tests keeps the job green
 # until those directories are committed. workers:1 for SQLite safety.
