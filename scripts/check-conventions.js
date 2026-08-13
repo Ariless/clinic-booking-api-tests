@@ -74,13 +74,20 @@ function walk(dir, out = []) {
     const factsPath = path.join(ROOT, "docs/FACTS.json");
     const facts = JSON.parse(fs.readFileSync(factsPath, "utf8"));
 
-    const testFiles = walk(path.join(ROOT, "tests")).filter((f) =>
-        /\.test\.(ts|js)$/.test(f),
-    ).length;
-    if (testFiles !== facts.testFiles) {
+    // Counted from git, not from the disk: gitignored suites (pact, course demos) exist on some
+    // machines and not in CI, so a disk walk gives a different answer depending on where it runs —
+    // and a claim that only holds in one environment is not a claim.
+    const trackedTests = execSync("git ls-files tests", {
+        cwd: ROOT,
+        encoding: "utf8",
+    })
+        .split("\n")
+        .filter((f) => /\.test\.(ts|js)$/.test(f));
+
+    if (trackedTests.length !== facts.testFiles) {
         fail(
             "facts-test-files",
-            `docs/FACTS.json says ${facts.testFiles} test files, found ${testFiles}`,
+            `docs/FACTS.json says ${facts.testFiles} test files, found ${trackedTests.length}`,
         );
     }
 
@@ -95,11 +102,15 @@ function walk(dir, out = []) {
     }
 
     if (!FAST) {
-        const listed = execSync("npx playwright test --list", {
-            cwd: ROOT,
-            encoding: "utf8",
-            stdio: ["ignore", "pipe", "ignore"],
-        });
+        // Same reason as above: list only the tracked suites, so the counts match everywhere.
+        const listed = execSync(
+            `npx playwright test --list ${trackedTests.map((f) => JSON.stringify(f)).join(" ")}`,
+            {
+                cwd: ROOT,
+                encoding: "utf8",
+                stdio: ["ignore", "pipe", "ignore"],
+            },
+        );
         const unique = (listed.match(/^\s+\[chromium\]/gm) || []).length;
         const total = Number((listed.match(/Total:\s+(\d+)\s+tests/) || [])[1] || 0);
 
