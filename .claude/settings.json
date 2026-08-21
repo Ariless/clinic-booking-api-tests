@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "names=$(ls /Users/darya/Documents/workspace/qa-portfolio-lab-course1/.claude/skills | tr '\\n' ' '); /opt/homebrew/bin/jq -Rns --arg names \"$names\" '{hookSpecificOutput:{hookEventName:\"UserPromptSubmit\",additionalContext:(\"PROJECT SKILLS — before writing or editing any test, client, fixture, page object or selector, load the matching skill from .claude/skills/ via the Skill tool. Load every skill that applies, not just one. Available: \"+$names)}}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

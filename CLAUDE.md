@@ -4,37 +4,10 @@
 
 Playwright test suite for a clinic booking API (SUT). Three layers: `tests/api` (fast contract + RBAC), `tests/e2e` (thin cross-layer journeys), `tests/ui` (browser behaviour). TypeScript migration in progress — new files go in `.ts`.
 
-## Skills index
-
-Skills live in `.claude/skills/`. Load the matching skill before writing code — load every skill that applies, not just one. Do not load all skills at once.
-
-| Skill | Load when |
-|-------|-----------|
-| `explore-before-write` | before writing any new selector, client method, or test for an unfamiliar endpoint |
-| `test-standards` | naming a test or describe block; adding tags; unsure how a test file is structured |
-| `api-client` | writing or editing methods in `api/*Client.ts`; adding an endpoint |
-| `fixtures` | test data setup — user accounts, slots, page objects |
-| `selectors` | writing locators in page objects or UI tests; fixing a broken selector |
-| `ui-test-scope` | deciding whether a test belongs in `tests/ui/`; asserting browser behaviour |
-| `e2e-cross-layer` | writing a test that spans UI + API + DB |
-| `typing` | new `.ts` files; fixing type errors; DB results and fixture types |
-| `common-tasks` | DB assertions, schema validation, error contract, auth headers |
-| `data-strategy` | choosing between seed accounts, Faker data, and fixtures |
-| `enums` | endpoints, error codes, allowed values — anything that should not be a literal |
-| `helpers` | shared utilities that are not fixtures — validators, DB helpers, assertion wrappers |
-| `config` | environment variables, baseUrl, configuration access |
-| `refactor-values` | refactoring tests without losing coverage — extract, deduplicate, rename |
-| `subagent-workflow` | large multi-file tasks; parallel work; coverage gap analysis |
-
-Skills with a `references/` folder keep long examples and troubleshooting tables there. Open a reference only when the task needs it.
-
 ## Running tests
 
 ```bash
 npm test                          # all tests
-npm run test:invariants           # runtime invariant contract — needs a SUT started with
-                                  # NODE_ENV=development ENABLE_DEBUG_ROUTES=true ASSERT_INVARIANTS=true
-                                  # (without it these tests skip, they never fail on config)
 npm run test:smoke                # @smoke only
 npm run test:api                  # API layer
 npm run test:e2e                  # E2E layer
@@ -54,11 +27,68 @@ data/         testData.ts (endpoints), seedAccounts.ts, schemas/
 fixtures/     Playwright fixtures — userFixture, slotFixture, twoUsersFixture, index
 flows/        multi-step API sequences reused across tests
 pages/        Page Objects — one class per screen, extends BasePage
-utils/        dbClient, schemaValidator, slotAssertion, webhookTestServer, userUtils
+utils/        dbClient, schemaValidator, slotAssertion, webhookTestServer, aiBugReporter, userUtils
 tests/api/    API tests
 tests/e2e/    E2E cross-layer tests
 tests/ui/     UI browser tests
+tests/unit/   Unit tests (ai.retrieval, bug-reporter.demo)
 ```
+
+## SUT surface map
+
+`docs/SURFACEMAP.md` — compact index of all API endpoints, UI pages, data-qa attributes, error codes, and seed accounts. Read it before exploring the DOM or SUT source code.
+
+---
+
+## Agent rules — MUST / SHOULD / WON'T
+
+### MUST
+- Load the matching skill from `.claude/skills/` before starting any task — see Skills index below; load every skill that applies, not just one
+- TypeScript for all new files — never create `.js`
+- All HTTP through `api/*Client.ts` — never `request.post()` with raw URLs in test files
+- Error responses: `assertSchema(body, validateError)` + `expect(body.errorCode).toBe(...)` — never status code alone
+- Auth from fixture: `{ headers: user.auth }` — never hardcoded Bearer token
+- After any TS change: `npx tsc --noEmit` — zero errors before reporting done
+
+### SHOULD
+- DB assertions for create/update/delete: `dbClient.getX(id)` + field checks — don't trust API response alone
+- `assertSchema` before field-level assertions — shape first, then specifics
+- `import type` when importing only for type annotations
+
+### WON'T
+- `new PageClass(page)` in test files — only destructure from fixture
+- `any` type — use `unknown` + type guard or explicit type
+- Hardcoded credentials or Bearer tokens
+- CSS class selectors, XPath, or positional selectors
+- `waitForTimeout` — use Playwright auto-waiting or `waitForResponse`
+- New `.js` files — only `.ts`
+- Commit — show commands, user runs them
+
+---
+
+## Task rhythm
+
+For every non-trivial task, follow these phases in order:
+
+1. **Read** — read all relevant files before writing anything
+2. **Scope** — list exactly which files will change and why; wait for confirmation if scope is unclear
+3. **Skills** — load the matching skill from `.claude/skills/`
+4. **Write** — implement the change
+5. **Verify** — `npx tsc --noEmit`; zero errors
+6. **Report** — show git commands; state what changed and what's next
+
+---
+
+## Audit-then-edit
+
+When a task touches multiple files or has unclear scope:
+1. Read all affected files first
+2. Propose the full list of changes (file → what changes, why)
+3. Wait for confirmation before editing
+4. Apply all changes
+5. Report: what changed, what was skipped, what's next
+
+---
 
 ## Test naming
 
@@ -133,3 +163,24 @@ Before writing any test ask: "what does the user or business lose if this fails 
 - Don't create new JS files — new code goes in TS
 - Don't commit — show the commands, user runs them
 
+## Skills index
+
+Load the relevant skill file before starting a task. Do not load all skills at once.
+
+| Skill | Load when |
+|-------|-----------|
+| `.claude/skills/api-client/SKILL.md` | writing or editing tests that call the API; adding client methods; any task touching `api/*Client.ts` |
+| `.claude/skills/ui-test-scope/SKILL.md` | writing any UI test; adding assertions to `tests/ui/` |
+| `.claude/skills/e2e-cross-layer/SKILL.md` | writing any E2E test; any test that crosses UI + API or UI + DB |
+| `.claude/skills/selectors/SKILL.md` | choosing or fixing a locator in any page object or UI test; any task touching `pages/*.ts` |
+| `.claude/skills/fixtures/SKILL.md` | adding test data setup; creating a new fixture; debugging dirty-state failures |
+| `.claude/skills/common-tasks/SKILL.md` | adding DB assertions, schema checks, error contract assertions, or auth headers |
+| `.claude/skills/typing/SKILL.md` | writing new TS files; fixing type errors; migrating JS → TS; working with DB results or fixture types |
+| `.claude/skills/explore-before-write/SKILL.md` | before writing any new locator, client method, or step — verify real DOM/API/existing code first |
+| `.claude/skills/subagent-workflow/SKILL.md` | task requires reading many files before writing; parallel independent audits; research-then-write pattern |
+| `.claude/skills/test-standards/SKILL.md` | naming a test; choosing tags; structuring a new describe block; reviewing test naming |
+| `.claude/skills/data-strategy/SKILL.md` | deciding what test data to use; choosing between seed accounts, Faker, and fixtures |
+| `.claude/skills/enums/SKILL.md` | using an endpoint path or error code; adding a new endpoint or error code to enums/ |
+| `.claude/skills/config/SKILL.md` | changing base URL; adding env vars; running against non-default environment |
+| `.claude/skills/helpers/SKILL.md` | adding shared stateless logic; deciding where utility code belongs |
+| `.claude/skills/refactor-values/SKILL.md` | extracting repeated logic; renaming fixtures or helpers; deduplicating test setup |
