@@ -1,14 +1,15 @@
 # Release recommendation — Clinic Booking API v1
 
-
-<!-- private-refs-notice -->
-> **Referenced but not in this repository:** premium tests and workflows (`security.test.ts`). These live in the private repos — see *Premium content* in `README.md`.
-
 **Date:** 2026-05-12  
 **Prepared by:** QA  
 **Cycle covered:** 2026-04-28 → 2026-05-12  
 **Test suite:** 7 layers — smoke, API, E2E, UI, unit, security, performance  
 **Total test cases:** 111 automated + 408 Schemathesis-generated scenarios
+
+> **This is a dated snapshot, deliberately not rewritten** (noted 2026-08-21). A go/no-go call is
+> evidence about the state of a system on the day it was made; updating its counts to today's would
+> destroy exactly what makes it useful. For current numbers see `README.md` and `docs/RTM.md`; for
+> the current bug register see `docs/KNOWN_ISSUES.md`.
 
 ---
 

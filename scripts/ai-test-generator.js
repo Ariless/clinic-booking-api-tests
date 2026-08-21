@@ -8,6 +8,12 @@
 //   ANTHROPIC_API_KEY=<key> node scripts/ai-test-generator.js --tag Doctors
 //   OPENAPI_PATH=../sut/openapi/openapi.yaml node scripts/ai-test-generator.js --tag AI
 
+// The key lives in .env like every other secret in this repo; without this the documented
+// `npm run ai:*` commands died with "ANTHROPIC_API_KEY is not set" unless you pasted the key
+// onto the command line by hand. Added 2026-08-21. { quiet: true } keeps the banner out of
+// generated report output.
+require("dotenv").config({ quiet: true });
+
 const https = require("https");
 const fs = require("fs");
 const path = require("path");

@@ -52,13 +52,13 @@ Claude's suggestions closely matched the contract checklist. All were accepted.
 
 | Contract item | Suggested by Claude | Test file |
 |---|---|---|
-| Book available slot → 201 pending | Yes | `appointments.mini.j1.test.js` |
-| Doctor confirms pending → 200 | Yes | `appointments.confirm.j3.test.js` |
-| Doctor rejects pending → 200 | Yes | `appointments.reject.j2.test.js` |
-| Patient cancels pending → 200 | Yes | `appointments.cancel.patient.test.js` |
-| Patient cancels confirmed → 200 | Yes | `appointments.cancel.patient.test.js` |
-| Double booking → 409 SLOT_TAKEN | Yes | `appointments.booking.conflict.test.js` |
-| `/my` returns only caller's rows | Yes | `appointments.mini.j1.test.js` |
+| Book available slot → 201 pending | Yes | `appointments.mini.j1.test.ts` |
+| Doctor confirms pending → 200 | Yes | `appointments.confirm.j3.test.ts` |
+| Doctor rejects pending → 200 | Yes | `appointments.reject.j2.test.ts` |
+| Patient cancels pending → 200 | Yes | `appointments.cancel.patient.test.ts` |
+| Patient cancels confirmed → 200 | Yes | `appointments.cancel.patient.test.ts` |
+| Double booking → 409 SLOT_TAKEN | Yes | `appointments.booking.conflict.test.ts` |
+| `/my` returns only caller's rows | Yes | `appointments.mini.j1.test.ts` |
 
 **Why accepted:** direct mapping to contract. No interpretation needed — if these fail, the contract is broken.
 
@@ -68,7 +68,7 @@ Claude's suggestions closely matched the contract checklist. All were accepted.
 
 Claude suggested testing `rejected → confirmed` and `cancelled → cancelled`. Both accepted.
 
-Claude also suggested: `cancelled → confirmed`, `cancelled → rejected`, `pending → pending`. These were accepted in principle but collapsed into a single file (`appointments.invalid-transition.test.js`) rather than separate files per transition.
+Claude also suggested: `cancelled → confirmed`, `cancelled → rejected`, `pending → pending`. These were accepted in principle but collapsed into a single file (`appointments.invalid-transition.test.ts`) rather than separate files per transition.
 
 **What was restructured:** Claude proposed one test per source/target pair. We kept only the highest-signal transitions:
 
@@ -86,21 +86,21 @@ Claude's suggestions were mostly correct but contained one systematic error.
 
 **Accepted:**
 
-- Patient cannot call `/confirm` → 403 (`appointments.rbac.patient.test.js`)
-- Patient cannot call `/reject` → 403 (`appointments.rbac.patient.test.js`)
-- Doctor cannot access `/my` → 403 (`appointments.rbac.patient.test.js`)
-- Patient cannot access `/doctor` → 403 (`appointments.rbac.patient.test.js`)
-- Doctor cannot act on another doctor's appointment → 403 (`appointments.rbac.cross-doctor.test.js`)
+- Patient cannot call `/confirm` → 403 (`appointments.rbac.patient.test.ts`)
+- Patient cannot call `/reject` → 403 (`appointments.rbac.patient.test.ts`)
+- Doctor cannot access `/my` → 403 (`appointments.rbac.patient.test.ts`)
+- Patient cannot access `/doctor` → 403 (`appointments.rbac.patient.test.ts`)
+- Doctor cannot act on another doctor's appointment → 403 (`appointments.rbac.cross-doctor.test.ts`)
 
 **Discarded — wrong assumption:**
 
 Claude proposed: *"Unauthenticated user books appointment → 401"*. This looks correct from the contract (`AUTH_REQUIRED → 401`), but the contract also specifies that `FORBIDDEN → 403` is returned when the role is wrong — not when the token is absent. Claude conflated two different authorization failure modes.
 
-The suite already had infrastructure tests covering 401 responses at the auth layer (`infrastructure.test.js`). Adding a duplicate 401 test inside booking flows would not have caught a distinct failure — the middleware is shared. Discarded as redundant.
+The suite already had infrastructure tests covering 401 responses at the auth layer (`infrastructure.test.ts`). Adding a duplicate 401 test inside booking flows would not have caught a distinct failure — the middleware is shared. Discarded as redundant.
 
 **Discarded — duplicate coverage:**
 
-Claude suggested testing that a patient cannot create an appointment on behalf of another patient (using a different `patientId` in the body). The contract specifies: *"patient id is always `req.user.id`; request body is ignored."* This is tested implicitly in `appointments.mini.j1.test.js` — the fixture uses the authenticated user's token and the returned appointment always belongs to that user. A separate test for body injection would have tested the same assertion.
+Claude suggested testing that a patient cannot create an appointment on behalf of another patient (using a different `patientId` in the body). The contract specifies: *"patient id is always `req.user.id`; request body is ignored."* This is tested implicitly in `appointments.mini.j1.test.ts` — the fixture uses the authenticated user's token and the returned appointment always belongs to that user. A separate test for body injection would have tested the same assertion.
 
 ---
 
@@ -127,7 +127,7 @@ These were not in Claude's output. They were identified through manual contract 
 | `/appointments/doctor` isolation: doctor sees only own appointments | Claude suggested patient isolation but not the symmetric doctor-side test |
 | `EMAIL_RETIRED` on re-register with soft-deleted email | Claude found `EMAIL_TAKEN` but missed the second `409` code for the deleted-account case — it's a non-obvious DB constraint |
 | Waitlist auto-promotion after cancellation | Outside the original contract; discovered as a system behaviour gap during implementation review |
-| IDOR on `GET /appointments/:id` | Claude found role-based access gaps but did not propose ownership verification — caught separately in `security.test.js` |
+| IDOR on `GET /appointments/:id` | Claude found role-based access gaps but did not propose ownership verification — caught separately in `security.test.ts` |
 
 ---
 

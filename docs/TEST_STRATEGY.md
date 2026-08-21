@@ -1,8 +1,12 @@
 # Test strategy — clinic-booking-api-tests
 
 
-<!-- private-refs-notice -->
-> **Referenced but not in this repository:** premium tests and workflows (`security.test.ts`, `chaos.test.ts`, `appointments.booking.rate-limit.test.ts`, `chaos.yml`, `security-scan.yml`); SUT-side files (`API_ENDPOINTS.md`, `CONTRACT_PACK.md`, `TESTING_AGAINST_THIS_SUT.md`, `openapi.yaml`, `PROJECT_PLAN.md`, `retrieval.js`, `appointmentsRepository.js`, `docker-compose.test.yml`, `docker-compose.observability.yml`). These live in the private repos — see *Premium content* in `README.md`.
+<!-- sut-refs-notice -->
+<!-- 2026-08-21: this used to be a "premium content" notice listing security.test.ts,
+     chaos.test.ts, appointments.booking.rate-limit.test.ts, chaos.yml and security-scan.yml
+     as living elsewhere, and pointed at a *Premium content* section README has never had.
+     All of those are in this repository. What genuinely lives elsewhere is the SUT. -->
+> **Referenced but living in the SUT repository:** `API_ENDPOINTS.md`, `CONTRACT_PACK.md`, `TESTING_AGAINST_THIS_SUT.md`, `openapi.yaml`, `PROJECT_PLAN.md`, `retrieval.js`, `appointmentsRepository.js`, `docker-compose.test.yml`, `docker-compose.observability.yml` — see *System under test* in `README.md`.
 
 This document is the **risk- and portfolio-facing** view of the full suite (API + UI + E2E). **How** we build (pyramid, flakes, clients) stays in **`../DESIGN_PRINCIPLES.md`**.
 
@@ -235,7 +239,7 @@ Tag: `@chaos` — excluded from normal smoke/api runs.
 
 These tests require the SUT started with chaos env vars, **not** the default server. Two approaches:
 
-- **Local:** restart server with `CHAOS_ENABLED=true CHAOS_FAIL_PROBABILITY=1`, then run `CHAOS_ENABLED=true npx playwright test chaos.test.js`
+- **Local:** restart server with `CHAOS_ENABLED=true CHAOS_FAIL_PROBABILITY=1`, then run `CHAOS_ENABLED=true npx playwright test chaos.test.ts`
 - **CI:** separate `chaos.yml` workflow (`workflow_dispatch`) starts the SUT with chaos env before running `@chaos` grep
 
 ### Test cases (full target set)
@@ -391,7 +395,7 @@ Five patterns that distinguish this suite from typical QA portfolios. Each ships
 
 ### 14.1 Security testing (`@security`)
 
-File: **`tests/api/security.test.js`**
+File: **`tests/api/security.test.ts`**
 
 Not penetration testing — boundary assertions that prove the API rejects unauthorized or malformed access at the contract level.
 
@@ -538,7 +542,7 @@ Example: `"chest pain and palpitations"` → Cardiologist scores 3 (matches `che
 | `429` rate limit | `@ai` — already works |
 | Full route with mock response (`AI_MOCK_RESPONSE=true`) | `@ai` — SUT returns deterministic JSON, no API call |
 
-**Unit tests — no SUT, no API key (`@unit`, `tests/unit/ai.retrieval.test.js`):**
+**Unit tests — no SUT, no API key (`@unit`, `tests/unit/ai.retrieval.test.ts`):**
 
 | Case | What it verifies |
 |---|---|
@@ -575,11 +579,11 @@ AI_MOCK_RESPONSE=true   # skip real API call, return deterministic mock (for CI)
 ```bash
 # Mock mode (no API cost)
 AI_MOCK_RESPONSE=true node src/server.js
-AI_MOCK_RESPONSE=true npx playwright test tests/api/ai.recommend.test.js
+AI_MOCK_RESPONSE=true npx playwright test tests/api/ai.recommend.test.ts
 
 # Real Claude
 ANTHROPIC_API_KEY=<key> node src/server.js
-ANTHROPIC_API_KEY=<key> npx playwright test tests/api/ai.recommend.test.js
+ANTHROPIC_API_KEY=<key> npx playwright test tests/api/ai.recommend.test.ts
 ```
 
 All AI tests skip automatically if neither `AI_MOCK_RESPONSE=true` nor `ANTHROPIC_API_KEY` is set.
@@ -1055,7 +1059,7 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 
 | File | Unique risk dimension |
 |---|---|
-| `unit/ai.retrieval.test.js` | RAG retrieval correctness — scoring returns right specialty for known symptoms, unknown symptoms produce empty result; prompt builder includes retrieved specialty + description (context injection verified without a live SUT) |
+| `unit/ai.retrieval.test.ts` | RAG retrieval correctness — scoring returns right specialty for known symptoms, unknown symptoms produce empty result; prompt builder includes retrieved specialty + description (context injection verified without a live SUT) |
 
 ### E2E layer
 

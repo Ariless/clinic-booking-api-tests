@@ -4,6 +4,11 @@ Living document. Every bug found during testing — fixed or open — recorded h
 
 **Statuses:** `Fixed` · `Open` · `Design debt` (acknowledged, not planned)
 
+> File names in older entries were rewritten from `.test.js` to `.test.ts` on 2026-08-21, after the
+> TypeScript migration left every reference here pointing at a path that no longer exists. The one
+> exception is `appointmentStateMachine.test.js`, which is a Jest unit test in the SUT repository and
+> genuinely still `.js`.
+
 ---
 
 ## Fixed bugs
@@ -13,12 +18,12 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | Field | Value |
 |---|---|
 | **Status** | ✅ Fixed 2026-04-30 |
-| **Found by** | `security.test.js` — expected `401` on unauthenticated request, got `200` |
+| **Found by** | `security.test.ts` — expected `401` on unauthenticated request, got `200` |
 | **Severity** | High |
 | **Business impact** | Any unauthenticated user could read any appointment by ID. Any authenticated patient could read another patient's appointment — privacy breach, GDPR-level exposure. |
 | **Root cause** | `GET /:id` route in `appointmentsRoutes.js` was missing `requireAuth` middleware. No ownership check existed. |
 | **Fix** | Added `requireAuth` to `GET /:id`. Added ownership check: `appointment.patientId !== userId` → `403 FORBIDDEN`. |
-| **Where** | `SYSTEM_WEAKNESS_REPORT.md` §3.2 · `security.test.js` · `PORTFOLIO_NARRATIVE.md` |
+| **Where** | `SYSTEM_WEAKNESS_REPORT.md` §3.2 · `security.test.ts` · `PORTFOLIO_NARRATIVE.md` |
 
 ---
 
@@ -27,13 +32,13 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | Field | Value |
 |---|---|
 | **Status** | ✅ Fixed 2026-04-30 |
-| **Found by** | `accessibility.test.js` (`@a11y`) — axe-core reported `landmark-one-main`, `page-has-heading-one`, `region` violations |
+| **Found by** | `accessibility.test.ts` (`@a11y`) — axe-core reported `landmark-one-main`, `page-has-heading-one`, `region` violations |
 | **Severity** | Medium |
 | **Business impact** | Screen reader users could not navigate login, register, or booking pages efficiently. EU Accessibility Act (2025) — legal compliance risk. |
 | **Root cause** | `login.html`, `register-patient.html`, `patient-booking.html` had no `<main>` landmark. Booking page had `<h2>` sections but no page-level `<h1>`. |
 | **Fix** | Added `<main>` landmark to all three pages. Added visually-hidden `<h1>Book an appointment</h1>` to booking page. Added `.visually-hidden` utility class to `app.css`. |
 | **Residual** | `color-contrast` excluded — `.muted` is `#64748b` (3.9:1, below WCAG AA 4.5:1). Documented design debt — see B-06. |
-| **Where** | `SYSTEM_WEAKNESS_REPORT.md` §3.4 · `accessibility.test.js` · `PORTFOLIO_NARRATIVE.md` |
+| **Where** | `SYSTEM_WEAKNESS_REPORT.md` §3.4 · `accessibility.test.ts` · `PORTFOLIO_NARRATIVE.md` |
 
 **Recurrence — 2026-05-22:** Five pages added since the original fix (`patient-appointments.html`, `patient-consultations.html`, `patient-notifications.html`, `doctor-appointments.html`, `doctor-schedule.html`) were shipped without `<main>` landmarks. Additionally, `doctor-schedule.html` had 14 unlabelled `<input type="time">` elements (working hours table rows generated dynamically via JS template literal — `aria-label` never added). Found by extended `accessibility.test.ts` run. Fixed: `<main>` + visually-hidden `<h1>` added to all five pages; `aria-label="${name} start/end"` added to the time inputs in the JS template.
 
@@ -44,13 +49,13 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | Field | Value |
 |---|---|
 | **Status** | ✅ Fixed 2026-05-03 |
-| **Found by** | `doctor-notifications.e2e.test.js` — `waitForConnection()` timed out; WS status never showed `connected` |
+| **Found by** | `doctor-notifications.e2e.test.ts` — `waitForConnection()` timed out; WS status never showed `connected` |
 | **Severity** | High |
 | **Business impact** | Doctors received no real-time notifications in the browser. Booking and cancellation events were silently dropped on the client side. API tests passed — the bug was invisible to any non-browser test. |
 | **Root cause** | `doctor-appointments.html` called `window.ClinicCore.getToken()`. `ClinicCore` was never defined — `ClinicApp` was the correct global. Silent `TypeError` on page load; WebSocket initialisation never ran. |
 | **Fix** | Changed `window.ClinicCore.getToken()` → `window.ClinicApp.getToken()` in `doctor-appointments.html`. |
-| **Why API tests missed it** | The `notifications.ws.test.js` API test uses a Node.js `ws` client with the token passed directly — it bypasses the browser JavaScript entirely. Only the E2E test opened a real browser and exercised the client-side initialisation code. |
-| **Where** | `project_ui_e2e_tests.md` (memory) · `doctor-notifications.e2e.test.js` · `PORTFOLIO_NARRATIVE.md` |
+| **Why API tests missed it** | The `notifications.ws.test.ts` API test uses a Node.js `ws` client with the token passed directly — it bypasses the browser JavaScript entirely. Only the E2E test opened a real browser and exercised the client-side initialisation code. |
+| **Where** | `doctor-notifications.e2e.test.ts` · `PORTFOLIO_NARRATIVE.md` |
 
 ---
 
@@ -59,12 +64,12 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | Field | Value |
 |---|---|
 | **Status** | ✅ Fixed 2026-05-03 |
-| **Found by** | `doctor-confirm.e2e.test.js` — intermittent failure; `bannerSuccess` not visible |
+| **Found by** | `doctor-confirm.e2e.test.ts` — intermittent failure; `bannerSuccess` not visible |
 | **Severity** | Low |
 | **Business impact** | Doctor clicks Confirm — no visual feedback. From the doctor's perspective the action may appear to have had no effect. |
 | **Root cause** | `showBanner()` was called before `await loadAppointments()`. `loadAppointments()` called `hideBanners()` immediately on start, hiding the success banner before Playwright could observe it. |
 | **Fix** | Moved `showBanner()` call to after `await loadAppointments()` in `doctor-appointments.html`. |
-| **Where** | `project_ui_e2e_tests.md` (memory) · `doctor-confirm.e2e.test.js` |
+| **Where** | `doctor-confirm.e2e.test.ts` |
 
 ---
 
@@ -80,7 +85,7 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | **Business impact** | Patient with classic cardiac symptoms is directed to the wrong specialist. Silent misrouting — the API returns `200` with a valid-looking specialty. No error signal. |
 | **Root cause** | Keyword-overlap scoring in `retrieval.js`: "pain" matches Orthopedist keyword list; "chest" also triggers a match. Orthopedist total score > Cardiologist score for the input "chest pain". The LLM corrects this in real Claude mode (model has broader context), but in mock mode the raw retrieval result is returned directly — wrong specialty. |
 | **Workaround** | Use `AI_MOCK_RESPONSE=false` with a real API key for the recommendation endpoint. In mock mode, the retrieval ranking is the final answer. |
-| **Fix plan** | Improve retrieval scoring: add term specificity weighting (rare terms score higher than generic ones like "pain"); or add a symptom-to-specialty override table for high-confidence mappings. Regression test: `retrieve("chest pain")` → Cardiologist as top-1 in `unit/ai.retrieval.test.js`. |
+| **Fix plan** | Improve retrieval scoring: add term specificity weighting (rare terms score higher than generic ones like "pain"); or add a symptom-to-specialty override table for high-confidence mappings. Regression test: `retrieve("chest pain")` → Cardiologist as top-1 in `unit/ai.retrieval.test.ts`. |
 | **Test gap** | No regression test for ambiguous symptoms. Tracked in `../BACKLOG.md`. |
 | **Where** | `SYSTEM_WEAKNESS_REPORT.md` §5.1 · `../BACKLOG.md` (Regression: "chest pain" → Cardiologist) · `PORTFOLIO_NARRATIVE.md` |
 
@@ -170,14 +175,14 @@ Living document. Every bug found during testing — fixed or open — recorded h
 
 ## CI / environment issues
 
-### CI-01 — Rate limit test gets 400 instead of 429 in CI (2026-05-11)
+### CI-01 — Rate limit test gets 400 instead of 429 in CI (2026-05-11, ✅ Fixed 2026-05-11)
 
 | Field | Value |
 |---|---|
-| **Status** | 🔴 Open — test skipped in CI pending fix |
+| **Status** | ✅ Fixed 2026-05-11 |
 | **Symptom** | `POST /auth/register @rate-limit` expects 429, receives 400 in CI |
 | **Root cause** | `docker-compose.test.yml` sets `RATE_LIMIT_REGISTER_MAX=1000`. Test exhausts fewer requests than the limit, then sends invalid data expecting rate limit to fire — but SUT validates the request body first (400 VALIDATION_ERROR) before reaching the rate limiter. Locally the env var is set to 10000 so the test skips via its skip guard. |
-| **Fix** | Add skip guard: if `RATE_LIMIT_REGISTER_MAX > 5` → skip test. Or set `RATE_LIMIT_REGISTER_MAX=3` in `docker-compose.test.yml` but only for this test step. |
+| **Fix** | Both halves shipped the same day and the entry was never updated (corrected 2026-08-21). `auth.register.test.ts:96` carries the skip guard — `test.skip(REGISTER_MAX > 5, …)` — and `api-tests.yml` sets `RATE_LIMIT_REGISTER_MAX: "1000"` at workflow level (588d7a0), so the test process sees the same value as the SUT and skips with an explanation instead of asserting against a validation error. |
 | **Category** | CI environment configuration — not a product bug |
 | **Portfolio note** | Classic "passes locally, fails in CI" — environment variable difference causes middleware ordering to change observable behaviour |
 
@@ -194,7 +199,7 @@ Living document. Every bug found during testing — fixed or open — recorded h
 
 ---
 
-### CI-02 — Flaky SLOT_OVERLAP in `appointments.waitlist.offers.test.js` (2026-05-11, ✅ Fixed 2026-05-20)
+### CI-02 — Flaky SLOT_OVERLAP in `appointments.waitlist.offers.test.ts` (2026-05-11, ✅ Fixed 2026-05-20)
 
 | Field | Value |
 |---|---|
@@ -327,6 +332,41 @@ Living document. Every bug found during testing — fixed or open — recorded h
 Bugs in this repository, not in the SUT. They belong in the same register: a test that cannot fail,
 or fails for the wrong reason, misreports the system exactly as a broken endpoint does.
 
+### DOC-02 — The gap-analysis generator stopped seeing tests after the TS migration (✅ Fixed 2026-08-21)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-08-21 |
+| **Symptom** | Regenerating `docs/AI_GAP_ANALYSIS.md` produced a report opening with *"**No test inventory was provided.** The analysis below assumes a baseline of zero test coverage"* — 43 endpoints, 0% coverage, against a suite of 299 tests. |
+| **Root cause** | `collectTestInventory()` filtered on `entry.name.endsWith(".test.js")`. After the TypeScript migration no file matched, so the script sent Claude an empty inventory. It did not error — it produced a confident, entirely wrong report, and the previous version on disk (generated 2026-05-09, when the filter still matched) hid the breakage. |
+| **Fix** | Filter accepts `.test.ts` and `.test.js`. Regenerated: 33 paths, 28 with coverage, 5 without, which matches the suite. Same pass added `dotenv` to all five `ai:*` scripts — they required the key pasted on the command line, while README documented them as plain `npm run` commands. |
+| **Category** | Tooling drift after a migration — a generator that degrades into a wrong answer rather than an error |
+| **Portfolio note** | Same family as TST-03, one step worse. A dead npm script announces itself the moment you run it; a generator that quietly loses its input keeps producing output, and the output is a document someone may act on. Anything that reads the suite by file extension is a migration hazard worth grepping for. |
+
+### DOC-03 — The extracted AI service was documented as wired in; it never was (🔴 Open — decision needed)
+
+| Field | Value |
+|---|---|
+| **Status** | 🔴 Open — needs a product decision, not a fix |
+| **Symptom** | `BACKLOG.md` records *"AI service extraction + Pact redesign"* as `[x] done 2026-05-18`, stating the SUT proxies through `callAiService()`, that both compose files were updated, and that a 503 `AI_SERVICE_DEGRADE` test was added. |
+| **What is actually true** | `ai-service/` exists and works standalone. The SUT does not call it: no client, no URL config, no compose entry, and `git log -S "callAiService"` across all branches returns nothing — the function has never existed in the repository. `AI_SERVICE_UNAVAILABLE` appears in no SUT source file. The test `503 AI_SERVICE_UNAVAILABLE: ai-service unreachable @api` guards on `AI_SERVICE_DEGRADE`, which nothing sets, so it has always skipped — which is why the gap stayed invisible. |
+| **Options** | (1) Wire it: add the client, the URL config and the compose entry, implement `AI_SERVICE_UNAVAILABLE`, and the skipped test starts earning its place. (2) Keep the service standalone as the provider side of the Pact contract, correct the backlog entry, and delete the test that asserts an integration nobody intends to build. |
+| **Category** | Documentation drift — work recorded as delivered that was never wired |
+| **Portfolio note** | The skipped test is the interesting part. A test that has never run is not coverage; it is a claim in the shape of coverage, and it kept a documented-but-absent integration looking accounted for. Worth pairing with TST-04 — both are about skips that hide rather than inform. |
+
+### DOC-01 — Six documents kept describing a split that no longer existed (✅ Fixed 2026-08-21)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-08-21 |
+| **Symptom** | `TEST_STRATEGY.md`, `RISK_ANALYSIS.md`, `RTM.md`, `GO_NO_GO.md`, `BUSINESS_RULES.md` and `SYSTEM_WEAKNESS_REPORT.md` each opened with *"Referenced but not in this repository: premium tests and workflows (`security.test.ts`, `chaos.test.ts`, `appointments.booking.rate-limit.test.ts`, `chaos.yml`, `security-scan.yml`) … see Premium content in README.md"*. All five files are in the repository, and README has never had a *Premium content* section — so the first thing a reader met was a claim they could disprove in one click, pointing at a section that does not exist. |
+| **Root cause** | The notices were written when part of the suite was held back, and survived the content coming back. Nothing regenerates them, so no process could notice; they are prose, and prose does not fail a build. |
+| **Fix** | Where SUT-side files were genuinely meant (`API_ENDPOINTS.md`, `CONTRACT_PACK.md`, `openapi.yaml`, `retrieval.js`, `app-core.js`, `DEFENSE_NOTES.md`), the notice now says so and points at *System under test* in README. Where only in-repo tests were listed, the notice is gone. The original wording is preserved in an HTML comment above each, so the history stays readable without being rendered. |
+| **Also corrected in the same pass** | README claimed 5 fixed bugs against a register holding 23 closed entries, 120 requirements against a matrix totalling 121, and 10 visual tests against a file holding 7; `CI-01` sat open although its fix shipped 2026-05-11 in the very commit that created this register (588d7a0), and `CI-02` was marked open in the summary table while its own entry said fixed. |
+| **Prevention** | `check-conventions.js` now guards register counts, the RTM total row and the visual test count from `docs/FACTS.json` — verified by breaking each on purpose and watching the check go red. |
+| **Category** | Documentation drift — a claim that ages instead of breaking |
+| **Portfolio note** | Test counts drift quietly; access claims drift loudly. This one told every reader that the interesting parts were held back, in a repository that had just published them. The fix worth keeping is not the edit — it is that three of the four numbers behind it now fail a check instead of ageing. |
+
 ### TST-01 — LLM judge decided by a single call and flipped between runs (✅ Fixed 2026-08-21)
 
 | Field | Value |
@@ -369,7 +409,7 @@ or fails for the wrong reason, misreports the system exactly as a broken endpoin
 |---|---|
 | **Status** | ✅ Fixed 2026-08-21 |
 | **Symptom** | `npm run test:visual` and `test:visual:update` answered "No tests found" — so visual regressions went unchecked and baselines could not be refreshed through the documented command. |
-| **Root cause** | Both scripts still named `tests/ui/visual.test.js`; the migration renamed it to `.ts`. Playwright treats an unmatched path as "no tests", not as an error, so nothing announced the breakage. |
+| **Root cause** | Both scripts still named `tests/ui/visual.test.ts`; the migration renamed it to `.ts`. Playwright treats an unmatched path as "no tests", not as an error, so nothing announced the breakage. |
 | **Fix** | Point both scripts at `visual.test.ts`. The suite runs 14 checks (7 tests × chromium + mobile-chrome) and passes. |
 | **Category** | Tooling drift after a migration |
 | **Portfolio note** | The whole visual layer was unreachable through its own npm script and nothing went red. Worth a convention check: every path named in `package.json` should exist. |
@@ -380,19 +420,19 @@ or fails for the wrong reason, misreports the system exactly as a broken endpoin
 
 | ID | Title | Status | Severity | Found by |
 |---|---|---|---|---|
-| B-01 | IDOR on `GET /appointments/:id` | ✅ Fixed 2026-04-30 | High | `security.test.js` |
-| B-02 | Missing landmarks + heading (a11y) | ✅ Fixed 2026-04-30 | Medium | `accessibility.test.js` (axe-core) |
-| B-03 | WS never connected (`ClinicCore` undefined) | ✅ Fixed 2026-05-03 | High | `doctor-notifications.e2e.test.js` |
-| B-04 | Confirm banner hidden in <1ms | ✅ Fixed 2026-05-03 | Low | `doctor-confirm.e2e.test.js` |
+| B-01 | IDOR on `GET /appointments/:id` | ✅ Fixed 2026-04-30 | High | `security.test.ts` |
+| B-02 | Missing landmarks + heading (a11y) | ✅ Fixed 2026-04-30 | Medium | `accessibility.test.ts` (axe-core) |
+| B-03 | WS never connected (`ClinicCore` undefined) | ✅ Fixed 2026-05-03 | High | `doctor-notifications.e2e.test.ts` |
+| B-04 | Confirm banner hidden in <1ms | ✅ Fixed 2026-05-03 | Low | `doctor-confirm.e2e.test.ts` |
 | B-05 | "chest pain" → Orthopedist (wrong retrieval ranking) | 🔴 Open | Medium | Pact provider verification |
 | B-06 | `doctors: []` on valid 200 (unseeded specialties) | 🔴 Open | Medium | Pact provider verification |
 | B-07 | Wrong operation order in reschedule → 409 with active waitlist | ✅ Fixed 2026-05-16 | High | `appointments.reschedule.test.ts` |
-| CI-01 | Rate limit test: 400 instead of 429 in CI | 🔴 Open | Low | CI run 2026-05-11 |
-| CI-02 | Flaky SLOT_OVERLAP in waitlist offers test | 🔴 Open | Low | CI run 2026-05-11 |
+| CI-01 | Rate limit test: 400 instead of 429 in CI | ✅ Fixed 2026-05-11: skip guard + `RATE_LIMIT_REGISTER_MAX` in CI env | Low | CI run 2026-05-11 |
+| CI-02 | Flaky SLOT_OVERLAP in waitlist offers test | ✅ Fixed 2026-05-20 | Low | CI run 2026-05-11 |
 | CI-03 | Route pattern broke on paginated URL (missing `**`) | ✅ Fixed 2026-05-16 | Low | `api-error-states.test.ts` |
 | CI-04 | Private SUT repo → misleading "file not found" in CI | ✅ Fixed 2026-05-18 | Medium | CI run 2026-05-18 |
 | CI-05 | `SQLITE_READONLY` in teardown — Docker owns the DB file | ✅ Fixed 2026-05-18 | Low | CI run 2026-05-18 |
-| D-01 | Color contrast below WCAG AA | ⚠️ Design debt | Low | `accessibility.test.js` |
+| D-01 | Color contrast below WCAG AA | ⚠️ Design debt | Low | `accessibility.test.ts` |
 | D-02 | Doctor self-registration — no `doctorRecordId` validation | ⚠️ Design debt | High (prod) | Manual review |
 | D-03 | Rate limiting per-IP only | ⚠️ Design debt | Low | Manual review |
 | CI-06 | Doctor schedule pollution → ordering-dependent fixture failures | ✅ Fixed 2026-05-20 | Low | Full `@api` run 2026-05-18 |
@@ -408,5 +448,8 @@ or fails for the wrong reason, misreports the system exactly as a broken endpoin
 | INV-01 | `isAvailable` consistency was covered by scenario tests only, so detection depended on a test targeting the path | ✅ Addressed 2026-08-13: `ASSERT_INVARIANTS` runtime contract (5 checks) + `idx_offers_one_pending_per_slot` | Medium | Invariant review 2026-08-13 |
 | TST-01 | LLM judge decided on one call; ~40% failure rate on a correct answer | ✅ Fixed 2026-08-21: majority of 3 + sharpened question + verdicts in Allure | Medium | Full `@api` run 2026-08-21 |
 | TST-02 | 429 test hard-coded the default rate limit, so it asserted the launch configuration | ✅ Fixed 2026-08-21: ceiling discovered by request, loud skip otherwise | Low | Full `@api` run 2026-08-21 |
-| TST-03 | `test:visual` pointed at `visual.test.js` after the TS migration — "No tests found", never red | ✅ Fixed 2026-08-21: path corrected, 14 checks pass | Low | Repository audit 2026-08-21 |
+| TST-03 | `test:visual` pointed at `visual.test.ts` after the TS migration — "No tests found", never red | ✅ Fixed 2026-08-21: path corrected, 14 checks pass | Low | Repository audit 2026-08-21 |
 | TST-04 | AI suite needs two mutually exclusive `AI_RATE_LIMIT_MAX` settings; a correct 429 was reported as a broken endpoint | ✅ Fixed 2026-08-21: `skipIfThrottled()` in all 9 multi-call loops | Medium | Verifying the TST-02 fix 2026-08-21 |
+| DOC-01 | Six docs advertised a premium/public split that no longer existed, pointing at a README section that never existed | ✅ Fixed 2026-08-21: notices rewritten or removed; counts corrected and put under the convention check | Medium | Repository audit 2026-08-21 |
+| DOC-02 | `ai-gap-analysis.js` filtered on `.test.js`; after the TS migration it reported 0% coverage over an empty inventory | ✅ Fixed 2026-08-21: filter accepts `.ts`, report regenerated, `dotenv` added to all `ai:*` scripts | Medium | Regenerating the report 2026-08-21 |
+| DOC-03 | `ai-service` recorded as wired into the SUT since 2026-05-18; `callAiService()` has never existed | 🔴 Open — wire it or correct the record and drop the always-skipped test | Medium | Repository audit 2026-08-21 |

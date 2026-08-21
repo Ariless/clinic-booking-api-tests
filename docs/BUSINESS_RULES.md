@@ -1,8 +1,12 @@
 # Business Rules — clinic-booking-api
 
 
-<!-- private-refs-notice -->
-> **Referenced but not in this repository:** SUT-side files (`API_ENDPOINTS.md`, `CONTRACT_PACK.md`, `openapi/openapi.yaml`, `app-core.js`). These live in the private repos — see *Premium content* in `README.md`.
+<!-- sut-refs-notice -->
+<!-- 2026-08-21: this used to be a "premium content" notice listing security.test.ts,
+     chaos.test.ts, appointments.booking.rate-limit.test.ts, chaos.yml and security-scan.yml
+     as living elsewhere, and pointed at a *Premium content* section README has never had.
+     All of those are in this repository. What genuinely lives elsewhere is the SUT. -->
+> **Referenced but living in the SUT repository:** `API_ENDPOINTS.md`, `CONTRACT_PACK.md`, `openapi/openapi.yaml`, `app-core.js` — see *System under test* in `README.md`.
 
 Single source of truth for domain rules enforced by the system. Written for **test design and acceptance criteria** — not a user manual. Each rule is testable: a rule without a test is a gap.
 

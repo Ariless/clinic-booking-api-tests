@@ -1,12 +1,8 @@
 # Requirements Traceability Matrix — Clinic Booking API
 
-
-<!-- private-refs-notice -->
-> **Referenced but not in this repository:** premium tests and workflows (`security.test.ts`, `chaos.test.ts`). These live in the private repos — see *Premium content* in `README.md`.
-
 **Purpose:** trace every business requirement to the test file(s) that verify it, and confirm coverage status.  
-**Last updated:** 2026-05-18  
-**Suite:** 148 automated tests across 7 layers
+**Requirements last reviewed:** 2026-05-18 — the mapping below has not been re-walked since, while the suite has roughly doubled. Treat unmapped recent tests as a known gap in this document, not as missing coverage.  
+**Suite at the time of that review:** 148 automated tests. **Today:** 299 unique tests / 364 runs across 72 files (`npm run test:count`, verified 2026-08-21).
 
 Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 

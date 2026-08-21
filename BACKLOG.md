@@ -229,7 +229,7 @@ SUT done 2026-05-15. `?page=&limit=` (page ≥ 1, limit 1–100); response `{ da
 | Accessibility tests (axe-core) | [x] done 2026-04-30 | 3 real a11y issues fixed |
 | BrowserStack integration | [x] done 2026-05-12 | 22/22 on OSX Sequoia + Windows 11; **не включать в курс** — tool configuration, не technique; safari finding → content material |
 | Schemathesis API fuzzing | [x] done 2026-05-12 | 408+ scenarios; 3 real gaps found |
-| OWASP ZAP in CI | [~] | запускали вручную локально; `security-scan.yml` в CI не существует; документация в TEST_STRATEGY.md §15.9 |
+| OWASP ZAP in CI | [x] done | `.github/workflows/security-scan.yml` — ZAP baseline против поднятого SUT, отчёт в артефактах; документация в TEST_STRATEGY.md §15.9. (Строка до 2026-08-21 утверждала, что workflow не существует — он к тому моменту уже был.) |
 | API error states (page.route()) | [x] done 2026-05-15 | `api-error-states.test.ts`; 3 scenarios |
 | AI test generation artifact | [x] done 2026-05-04 | `docs/AI_TEST_GENERATION.md` |
 | Test orthogonality map | [x] done 2026-05-02 | §17 in TEST_STRATEGY.md; 36 files mapped |
@@ -326,7 +326,7 @@ SUT done 2026-05-15. `?page=&limit=` (page ≥ 1, limit 1–100); response `{ da
 
 Phase 1 (Playwright mobile viewport) — done 2026-05-01. `mobile-chrome` project in this repo runs all `tests/ui/**` on Pixel 7 viewport.
 
-Phase 2 (native app + Appium suite) — full backlog in [`../clinic-mobile/BACKLOG.md`](../clinic-mobile/BACKLOG.md).
+Phase 2 (native app + Appium suite) — full backlog in [`../clinic-mobile/BACKLOG.md`](https://github.com/Ariless/clinic-mobile/blob/main/BACKLOG.md).
 Two repos: `clinic-mobile` (React Native SUT) + `clinic-mobile-tests` (Appium + WebdriverIO + Cucumber).
 
 ---

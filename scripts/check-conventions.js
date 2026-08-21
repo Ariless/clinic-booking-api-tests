@@ -69,10 +69,12 @@ function walk(dir, out = []) {
     }
 }
 
+let facts;
+
 // ── 3. Countable claims in docs/FACTS.json still match reality ──────────────
 {
     const factsPath = path.join(ROOT, "docs/FACTS.json");
-    const facts = JSON.parse(fs.readFileSync(factsPath, "utf8"));
+    facts = JSON.parse(fs.readFileSync(factsPath, "utf8"));
 
     // Counted from git, not from the disk: gitignored suites (pact, course demos) exist on some
     // machines and not in CI, so a disk walk gives a different answer depending on where it runs —
@@ -126,6 +128,60 @@ function walk(dir, out = []) {
                 `docs/FACTS.json says ${facts.testRunsAllProjects} runs across projects, found ${total}`,
             );
         }
+    }
+}
+
+// ── 4. Doc-level counts: the register, the matrix, the visual suite ─────────
+// Added 2026-08-21. The three numbers below had all drifted in prose: README said 5 fixed bugs
+// against a register holding 23 closed entries, 120 requirements against a matrix totalling 121,
+// and 10 visual tests against a file holding 7. Nothing was wrong with the docs' structure — the
+// counts simply aged, exactly the failure mode this script exists to catch.
+{
+    const knownIssues = fs.readFileSync(path.join(ROOT, "docs/KNOWN_ISSUES.md"), "utf8");
+    const summary = knownIssues.slice(knownIssues.indexOf("## Summary table"));
+    const count = (re) => (summary.match(re) || []).length;
+
+    const closed = count(/✅ (Fixed|Addressed)/g);
+    const open = count(/🔴 Open/g);
+    const debt = count(/⚠️ Design debt/g);
+
+    if (closed !== facts.knownIssuesClosed) {
+        fail("facts-issues-closed", `docs/FACTS.json says ${facts.knownIssuesClosed} closed register entries, summary table has ${closed}`);
+    }
+    if (open !== facts.knownIssuesOpen) {
+        fail("facts-issues-open", `docs/FACTS.json says ${facts.knownIssuesOpen} open register entries, summary table has ${open}`);
+    }
+    if (debt !== facts.knownIssuesDesignDebt) {
+        fail("facts-issues-debt", `docs/FACTS.json says ${facts.knownIssuesDesignDebt} design debt entries, summary table has ${debt}`);
+    }
+
+    const rtm = fs.readFileSync(path.join(ROOT, "docs/RTM.md"), "utf8");
+    const totalRow = rtm.match(/\|\s*\*\*Total\*\*\s*\|\s*\*\*(\d+)\*\*\s*\|\s*\*\*(\d+)/);
+    if (!totalRow) {
+        fail("facts-rtm-row", "docs/RTM.md has no **Total** row to read requirement counts from");
+    } else {
+        if (Number(totalRow[1]) !== facts.rtmRequirements) {
+            fail("facts-rtm-requirements", `docs/FACTS.json says ${facts.rtmRequirements} requirements, RTM total row says ${totalRow[1]}`);
+        }
+        if (Number(totalRow[2]) !== facts.rtmCovered) {
+            fail("facts-rtm-covered", `docs/FACTS.json says ${facts.rtmCovered} covered, RTM total row says ${totalRow[2]}`);
+        }
+    }
+
+    // README quotes the closed-entry count in prose; tie it to the same number so the two cannot
+    // drift apart again — the exact failure this whole section exists to prevent.
+    const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+    const quoted = readme.match(/\*\*(\d+) closed entries\*\*/);
+    if (!quoted) {
+        fail("facts-readme-register", "README.md no longer quotes the register size as '**N closed entries**' — update the check or restore the phrasing");
+    } else if (Number(quoted[1]) !== facts.knownIssuesClosed) {
+        fail("facts-readme-register", `README.md says ${quoted[1]} closed entries, docs/FACTS.json says ${facts.knownIssuesClosed}`);
+    }
+
+    const visual = fs.readFileSync(path.join(ROOT, "tests/ui/visual.test.ts"), "utf8");
+    const visualTests = (visual.match(/^\s+test\(/gm) || []).length;
+    if (visualTests !== facts.visualTests) {
+        fail("facts-visual-tests", `docs/FACTS.json says ${facts.visualTests} visual tests, tests/ui/visual.test.ts has ${visualTests}`);
     }
 }
 

@@ -3,8 +3,14 @@
 // → saves docs/AI_GAP_ANALYSIS.md
 //
 // Usage:
-//   ANTHROPIC_API_KEY=<key> node scripts/ai-gap-analysis.js
-//   ANTHROPIC_API_KEY=<key> OPENAPI_PATH=/custom/path/openapi.yaml node scripts/ai-gap-analysis.js
+//   npm run ai:gap-analysis                       (key comes from .env)
+//   OPENAPI_PATH=/custom/path/openapi.yaml npm run ai:gap-analysis
+
+// The key lives in .env like every other secret in this repo; without this the documented
+// `npm run ai:*` commands died with "ANTHROPIC_API_KEY is not set" unless you pasted the key
+// onto the command line by hand. Added 2026-08-21. { quiet: true } keeps the banner out of
+// generated report output.
+require("dotenv").config({ quiet: true });
 
 const https = require("https");
 const fs = require("fs");
@@ -44,7 +50,11 @@ function collectTestInventory(dir, base = dir) {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) {
             lines.push(...collectTestInventory(full, base));
-        } else if (entry.name.endsWith(".test.js")) {
+        // .ts first, .js still accepted: this filter said ".test.js" only, and after the TypeScript
+        // migration it matched nothing. The script kept working — it sent Claude an empty inventory,
+        // and the generated report duly announced 0% coverage across 43 endpoints. A generator that
+        // fails loudly is fine; one that produces a confident wrong answer is not. Fixed 2026-08-21.
+        } else if (/\.test\.(ts|js)$/.test(entry.name)) {
             const rel = path.relative(base, full);
             const names = extractTestNames(fs.readFileSync(full, "utf8"));
             lines.push(`### ${rel}`);
@@ -156,8 +166,8 @@ Be specific — always name the exact endpoint and status code. Do not pad or re
 
 > **Generated:** ${now}
 > **Model:** claude-haiku-4-5-20251001
-> **Source:** openapi.yaml (${Object.keys(yaml.match(/operationId:/g) ?? {}).length ?? "~30"} operations) + ${TESTS_DIR.split("/").slice(-2).join("/")} test suite
-> **How to regenerate:** \`ANTHROPIC_API_KEY=<key> node scripts/ai-gap-analysis.js\`
+> **Source:** openapi.yaml (${Object.keys(yaml.match(/operationId:/g) ?? {}).length ?? "~30"} operations) + the ${path.basename(TESTS_DIR)}/ suite
+> **How to regenerate:** \`npm run ai:gap-analysis\` (key comes from \`.env\`)
 
 ---
 

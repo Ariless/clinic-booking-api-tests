@@ -1,8 +1,14 @@
 {
-  "_comment": "Single source of truth for countable claims made in README.md, docs/*.md and CLAUDE.md. Verified by scripts/check-conventions.js \u2014 update here first, then in prose. Counts cover git-tracked suites only, so they match in CI and on any machine.",
+  "_comment": "Single source of truth for countable claims made in README.md, docs/*.md and CLAUDE.md. Verified by scripts/check-conventions.js — update here first, then in prose. Counts cover git-tracked suites only, so they match in CI and on any machine.",
   "_verifiedAt": "2026-08-21",
   "uniqueTests": 299,
   "testRunsAllProjects": 364,
   "testFiles": 72,
-  "pageObjects": 7
+  "pageObjects": 7,
+  "knownIssuesClosed": 25,
+  "knownIssuesOpen": 4,
+  "knownIssuesDesignDebt": 4,
+  "rtmRequirements": 121,
+  "rtmCovered": 117,
+  "visualTests": 7
 }

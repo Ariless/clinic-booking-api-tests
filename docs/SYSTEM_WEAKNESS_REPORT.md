@@ -1,8 +1,12 @@
 # System Weakness Report — clinic-booking-api
 
 
-<!-- private-refs-notice -->
-> **Referenced but not in this repository:** premium tests and workflows (`security.test.ts`); SUT-side files (`openapi.yaml`, `retrieval.js`, `DEFENSE_NOTES.md`). These live in the private repos — see *Premium content* in `README.md`.
+<!-- sut-refs-notice -->
+<!-- 2026-08-21: this used to be a "premium content" notice listing security.test.ts,
+     chaos.test.ts, appointments.booking.rate-limit.test.ts, chaos.yml and security-scan.yml
+     as living elsewhere, and pointed at a *Premium content* section README has never had.
+     All of those are in this repository. What genuinely lives elsewhere is the SUT. -->
+> **Referenced but living in the SUT repository:** `openapi.yaml`, `retrieval.js`, `DEFENSE_NOTES.md` — see *System under test* in `README.md`.
 
 **Scope:** QA-perspective analysis of architectural risks, concurrency gaps, and business logic vulnerabilities in the SUT. This is an FMEA-inspired (Failure Mode and Effects Analysis) structured map of failure modes and their test coverage — not a penetration test. Each section identifies a failure mode, its severity, whether the system mitigates it, and whether a test exists.
 

@@ -1,12 +1,19 @@
 {
+  // Image tag tracks @playwright/test in package.json — 1.59.1 as of 2026-08-21. It used to sit at
+  // v1.49.1 while the package moved on: `npm install` then pulled 1.59.1 into a container whose
+  // browsers were built for 1.49.1, and Playwright refuses to run against a browser build it does
+  // not know. Bump both together, or not at all.
   "name": "clinic-booking-api-tests",
-  "image": "mcr.microsoft.com/playwright:v1.49.1-noble",
+  "image": "mcr.microsoft.com/playwright:v1.59.1-noble",
   "features": {
+    // Node 20 to match the CI runners in .github/workflows/api-tests.yml.
     "ghcr.io/devcontainers/features/node:1": {
-      "version": "22"
+      "version": "20"
     }
   },
-  "postCreateCommand": "npm install",
+  // `playwright install chromium` is not redundant with the image: it reconciles the browser build
+  // with whatever version npm just resolved, which is the failure the old pin produced silently.
+  "postCreateCommand": "npm install && npx playwright install chromium",
   "customizations": {
     "vscode": {
       "extensions": [

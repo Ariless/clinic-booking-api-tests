@@ -6,6 +6,10 @@
 
 ---
 
+> **Dated snapshot, deliberately not rewritten** (noted 2026-08-21). This is what was reported to
+> stakeholders on 2026-05-09; rewriting its counts would turn a record of a conversation into a
+> claim about today. Current state: `README.md`, `docs/KNOWN_ISSUES.md` (3 open bugs).
+
 ## Overall status: ⚠️ Mostly ready — 2 open issues require a decision before release
 
 The core booking experience works correctly and is covered by automated checks. Two issues related to the AI symptom checker remain open — they affect the accuracy of specialist recommendations and require a product decision on how to handle them.
