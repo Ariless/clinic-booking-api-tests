@@ -322,6 +322,60 @@ Living document. Every bug found during testing — fixed or open — recorded h
 
 ---
 
+## Suite defects — the tests themselves
+
+Bugs in this repository, not in the SUT. They belong in the same register: a test that cannot fail,
+or fails for the wrong reason, misreports the system exactly as a broken endpoint does.
+
+### TST-01 — LLM judge decided by a single call and flipped between runs (✅ Fixed 2026-08-21)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-08-21 |
+| **Symptom** | `LLM judge: reasoning semantically justifies recommended specialty @rag` failed in a full `@api` run against a healthy SUT. The reasoning it rejected was correct: *"Cardiologist specializes in heart and blood vessel disorders, which are the primary concerns for chest pain and shortness of breath symptoms that suggest potential cardiac conditions."* |
+| **Root cause** | Two faults compounding. The verdict came from **one** judge call with a hard `expect(valid).toBe(true)`, and the question — *"does this reasoning logically justify the recommendation?"* — invited the judge to withhold approval for incompleteness. Measured on that one fixed input, five runs answered **false, false, true, true, true**: a ~40% failure rate on a passing system. The judge was not malfunctioning; it objected that no pulmonary or GI alternative was named — something the endpoint never claims to do. |
+| **Fix** | Majority of three runs (`JUDGE_RUNS = 3`, threshold `ceil(n/2)`) — the same non-determinism guard the mobile a11y audit already used. The prompt now asks whether the reasoning supports routing to that specialist and says explicitly not to answer false merely because alternatives go unmentioned. All verdicts are attached to Allure on every run, pass or fail. |
+| **Verified** | 5 consecutive runs green; a deliberately wrong reasoning (a dermatology sentence under cardiac symptoms) is still rejected 3/3, so the oracle can still say no. |
+| **Category** | AI test design — non-deterministic oracle treated as a deterministic assertion |
+| **Portfolio note** | The failure looked like an AI-quality problem and was a test-design problem. An LLM judge is a sampling process: one call is a sample size of one, and a threshold assertion over it encodes the noise as a verdict. Worth pairing with the negative check — an oracle nobody has watched refuse is indistinguishable from one that approves everything. |
+
+### TST-02 — The 429 test asserted a launch configuration, not a behaviour (✅ Fixed 2026-08-21)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-08-21 |
+| **Symptom** | `429 RATE_LIMITED after exceeding per-token limit @api` returned 200 where it expected 429 on a working local environment. |
+| **Root cause** | The test sent a hard-coded 5 requests — the default of `AI_RATE_LIMIT_MAX`. A working `.env` raises that limit so the rest of the suite does not trip over the throttle, and the test then reported the launch configuration as a SUT defect. It stayed green in CI only because `docker-compose.test.yml` overrides the login, register and booking limits and happens to leave the AI one at its default. Reading `process.env.AI_RATE_LIMIT_MAX` inside the test would not have helped — the limit is enforced in the SUT process, not in this one. |
+| **Fix** | Discover the ceiling by request: send up to 20 calls, stop at the first 429. If none arrives, `test.skip` with a message naming the cause and the way to run it (`restart the SUT at the default of 5`). Same rule as the Kafka and invariant suites — a suite that goes red because of how the SUT was launched trains people to ignore red. |
+| **Verified** | Passes against a SUT started with `AI_RATE_LIMIT_MAX=5` (429 arrives on the 6th call); skips with the explanation against the raised limit in `.env`. |
+| **Category** | Test design — environment coupling disguised as an assertion |
+| **Portfolio note** | The distinction that matters: skipping *loudly* is a report, failing is a claim. This test had been making a claim about the SUT while describing the developer's `.env`. |
+
+### TST-04 — Two SUT configurations the suite needs at once, and neither was declared (✅ Fixed 2026-08-21)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-08-21 |
+| **Symptom** | Found while verifying the TST-02 fix. Against a SUT started at the default `AI_RATE_LIMIT_MAX=5`, `distribution drift: specialty frequencies stay within tolerance of baseline @rag` failed with *Expected: 200, Received: 429* — a throttle answering exactly as designed, reported as a broken endpoint. |
+| **Root cause** | The AI suite needs mutually exclusive configurations. The throttle test wants the default of 5; every multi-call test wants it raised past the number of symptoms it sends — 12 for the drift corpus, 5 per metamorphic set, 5 for the golden dataset. Nothing stated the requirement, so which tests were red depended on how the SUT happened to be launched, and the failure message pointed at the endpoint instead of the environment. |
+| **Fix** | `skipIfThrottled(status)` next to the status assertion in all 9 multi-call loops: a 429 mid-test skips with a message naming the cause and the fix, instead of asserting against it. |
+| **Verified** | Both configurations, zero failures in each: at `AI_RATE_LIMIT_MAX=5` — 17 passed, 3 skipped (drift skips); at the raised limit from `.env` — 17 passed, 3 skipped (the throttle test skips). |
+| **Category** | Test design — environment requirement encoded nowhere, surfaced as a false SUT defect |
+| **Portfolio note** | Sibling of TST-02 and the more interesting half: there the test asserted a configuration, here two tests demanded opposite configurations and neither said so. A suite carrying incompatible environment requirements has to state them, or every run is red about the wrong thing. |
+
+### TST-03 — `npm run test:visual` pointed at a file the TypeScript migration renamed (✅ Fixed 2026-08-21)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-08-21 |
+| **Symptom** | `npm run test:visual` and `test:visual:update` answered "No tests found" — so visual regressions went unchecked and baselines could not be refreshed through the documented command. |
+| **Root cause** | Both scripts still named `tests/ui/visual.test.js`; the migration renamed it to `.ts`. Playwright treats an unmatched path as "no tests", not as an error, so nothing announced the breakage. |
+| **Fix** | Point both scripts at `visual.test.ts`. The suite runs 14 checks (7 tests × chromium + mobile-chrome) and passes. |
+| **Category** | Tooling drift after a migration |
+| **Portfolio note** | The whole visual layer was unreachable through its own npm script and nothing went red. Worth a convention check: every path named in `package.json` should exist. |
+
+---
+
 ## Summary table
 
 | ID | Title | Status | Severity | Found by |
@@ -352,3 +406,7 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | B-11 | Expiry write in `acceptOffer` ran inside `db.transaction()` with the 410 thrown from the same block; better-sqlite3 rolls back on throw, so the row kept its previous status | ✅ Fixed 2026-08-13: expiry returns a marker, throw moved outside the transaction | Medium | Same review; confirmed with a `better-sqlite3` rollback probe |
 | B-12 | Eligibility rule covered `declined`; an offer that lapsed left the same patient first in line for that slot | ✅ Fixed 2026-08-13: `expired` added alongside `declined`, shipped with the sweep | Medium | Surfaced while implementing B-10 |
 | INV-01 | `isAvailable` consistency was covered by scenario tests only, so detection depended on a test targeting the path | ✅ Addressed 2026-08-13: `ASSERT_INVARIANTS` runtime contract (5 checks) + `idx_offers_one_pending_per_slot` | Medium | Invariant review 2026-08-13 |
+| TST-01 | LLM judge decided on one call; ~40% failure rate on a correct answer | ✅ Fixed 2026-08-21: majority of 3 + sharpened question + verdicts in Allure | Medium | Full `@api` run 2026-08-21 |
+| TST-02 | 429 test hard-coded the default rate limit, so it asserted the launch configuration | ✅ Fixed 2026-08-21: ceiling discovered by request, loud skip otherwise | Low | Full `@api` run 2026-08-21 |
+| TST-03 | `test:visual` pointed at `visual.test.js` after the TS migration — "No tests found", never red | ✅ Fixed 2026-08-21: path corrected, 14 checks pass | Low | Repository audit 2026-08-21 |
+| TST-04 | AI suite needs two mutually exclusive `AI_RATE_LIMIT_MAX` settings; a correct 429 was reported as a broken endpoint | ✅ Fixed 2026-08-21: `skipIfThrottled()` in all 9 multi-call loops | Medium | Verifying the TST-02 fix 2026-08-21 |
