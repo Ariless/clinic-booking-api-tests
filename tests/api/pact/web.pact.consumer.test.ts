@@ -1,6 +1,7 @@
 import path from 'path'
 import { test, expect } from '@playwright/test'
 import { PactV3, MatchersV3 } from '@pact-foundation/pact'
+import { seedPatient } from '../../../data/seedAccounts'
 
 const { like, integer, eachLike } = MatchersV3
 
@@ -29,13 +30,19 @@ test.describe('clinic-booking-api-tests → clinic-booking-api Pact consumer', (
     // If the provider renames token → accessToken, both pact files fail: two signals, one root cause.
     await provider
       .uponReceiving('a login request from the web test suite')
+      // Credentials come from data/seedAccounts.ts rather than a literal. The
+      // contract used to hardcode 'password123', which no seed account has: the
+      // consumer test still passed, because it verifies itself against its own
+      // mock, and the provider verification failed with 401 on the real SUT.
+      // A contract written from an invented value proves only that the mock
+      // agrees with the mock.
       .withRequest({
         method: 'POST',
         path: '/api/v1/auth/login',
         headers: { 'Content-Type': 'application/json' },
         body: {
-          email: like('patient@example.com'),
-          password: like('password123'),
+          email: like(seedPatient.email),
+          password: like(seedPatient.password),
         },
       })
       .willRespondWith({
@@ -44,7 +51,7 @@ test.describe('clinic-booking-api-tests → clinic-booking-api Pact consumer', (
           token: like('eyJhbGciOiJIUzI1NiJ9.test.signature'),
           user: {
             id: integer(1),
-            email: like('patient@example.com'),
+            email: like(seedPatient.email),
             role: like('patient'),
           },
         },
@@ -53,7 +60,7 @@ test.describe('clinic-booking-api-tests → clinic-booking-api Pact consumer', (
         const res = await fetch(`${mockServer.url}/api/v1/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'patient@example.com', password: 'password123' }),
+          body: JSON.stringify({ email: seedPatient.email, password: seedPatient.password }),
         })
         expect(res.status).toBe(200)
         const body = await res.json() as Record<string, unknown>

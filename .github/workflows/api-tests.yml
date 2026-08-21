@@ -6,6 +6,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Manual runs. Needed whenever the code has not changed but the environment
+  # has: a rotated SUT_GITHUB_TOKEN, an updated secret, a change on the SUT
+  # side. Without this the only way to re-run was an empty commit — which is
+  # how an expired token stayed invisible until someone happened to push.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

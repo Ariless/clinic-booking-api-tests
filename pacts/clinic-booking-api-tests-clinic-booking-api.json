@@ -254,7 +254,7 @@
       "request": {
         "body": {
           "email": "patient@example.com",
-          "password": "password123"
+          "password": "password"
         },
         "headers": {
           "Content-Type": "application/json"
