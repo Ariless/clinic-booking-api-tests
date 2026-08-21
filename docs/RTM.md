@@ -188,7 +188,7 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | AI-04 | Unavailable Claude API returns 503 gracefully | `ai.recommend.test.ts` | ✅ |
 | AI-05 | Reasoning logically justifies the recommended specialty | `ai.recommend.test.ts` (LLM judge, `@rag`) | ✅ |
 | AI-06 | Retrieved specialties appear in the model's reasoning | `ai.recommend.test.ts` (RAG completeness, `@rag`) | ✅ |
-| AI-07 | "chest pain" routes to Cardiologist, not Orthopedist | ❌ No test — B-05 open bug | ❌ |
+| AI-07 | "chest pain" routes to Cardiologist, not Orthopedist | ✅ `unit/ai.retrieval.test.ts` — B-05 fixed in SUT `fcccd6d` | ✅ |
 | AI-08 | Response always includes at least one available doctor | ❌ No test — B-06 open bug | ❌ |
 | AI-09 | `symptoms` max 500 characters → `400 VALIDATION_ERROR` (rejected before retrieval/Claude) | `ai.recommend.test.ts` | ✅ |
 
@@ -262,5 +262,5 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | ID | Gap | Reason |
 |----|-----|--------|
 | A-07 | Malformed JWT error contract | Found by Schemathesis 2026-05-12 — fix in next cycle |
-| AI-07 | "chest pain" → Cardiologist | B-05 open bug — retrieval scoring fix needed first |
+| AI-07 | "chest pain" → Cardiologist | covered — B-05 closed 2026-08-21 |
 | AI-08 | `doctors.length > 0` assertion | B-06 open bug — product decision on seeding or error code |

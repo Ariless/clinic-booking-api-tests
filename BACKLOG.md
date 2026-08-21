@@ -196,7 +196,7 @@ SUT done 2026-05-15. `?page=&limit=` (page ≥ 1, limit 1–100); response `{ da
 | [x] done 2026-05-18 | `appointments.kafka.test.ts` | 9 тестов @kafka: booked/cancelled/confirmed/rejected/rescheduled/completed/recurring_booked/series_cancelled + graceful degradation; `utils/kafkaTestConsumer.ts`; skip guard если `KAFKA_BROKER` не задан |
 | [x] done 2026-05-16 | `appointments.pagination.test.ts` | 7 тестов: default shape @smoke, limit=5, page=2&limit=1 off-by-one, limit=0/page=0/page=NaN → 400, doctor endpoint @smoke |
 | [x] done 2026-05-16 | **List-level AJV schemas** | `validateAppointmentList` + `validatePaginatedAppointments` добавлены в `data/schemas/appointmentSchemas.ts` |
-| [x] done 2026-05-16 | Regression: "chest pain" → Cardiologist | `test.fail()` в `unit/ai.retrieval.test.ts`; документирует B-05 (scoring flaw); suite проходит, алертит при исправлении |
+| [x] closed 2026-08-21 | Regression: "chest pain" → Cardiologist | B-05 fixed in SUT (`fcccd6d`, multi-word keyword matching). The `test.fail()` marker alerted on the fix and was removed; `unit/ai.retrieval.test.ts` now guards the corrected behaviour as an ordinary regression test |
 | [x] done 2026-05-16 | Regression: `doctors.length > 0` | добавлен assert в `api/ai.recommend.test.ts`; регрессия B-06; использует "chest pain and shortness of breath" → Cardiologist (seeded) |
 | [x] done 2026-05-18 | AI model drift (scheduled) | `model-drift.yml`; cron Monday 09:00 UTC + manual; запускает `@rag` с реальным ключом; артефакты 90 дней |
 | [x] done 2026-05-18 | AI-генерация тестовых данных | `utils/aiTestDataGenerator.ts` + `tests/api/content.stress.test.ts`; 10 статических + 1 `@ai-data`; graceful degradation без ключа |

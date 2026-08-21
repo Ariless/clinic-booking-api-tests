@@ -29,10 +29,17 @@ test.describe("RAG pipeline — retrieval → prompt unit tests", () => {
         expect(results[0].specialty).toBe("Dermatologist");
     });
 
-    test("retrieve: bare 'chest pain' — Orthopedist mismatch, expected Cardiologist — bug B-05 @unit", () => {
-        // Generic "pain" keyword scores Orthopedist above Cardiologist for minimal 2-word input.
-        // "chest pain shortness of breath" works (more terms tip the score). Bare "chest pain" does not.
-        test.fail();
+    test("retrieve: bare 'chest pain' ranks Cardiologist first — B-05 regression @unit", () => {
+        // Was a documented defect (B-05): the generic "pain" keyword scored
+        // Orthopedist above Cardiologist on a bare two-word query, while
+        // "chest pain shortness of breath" worked because extra terms tipped the
+        // score. The test carried test.fail() so the suite stayed green while
+        // recording the flaw, and would alert the moment it was fixed.
+        //
+        // It alerted. SUT commit fcccd6d ("fix multi-word keyword matching in
+        // retrieval") closed it, and Playwright reported "Expected to fail, but
+        // passed". The marker is gone and this is now an ordinary regression
+        // test guarding the fix.
         const results = retrieve("chest pain", specialtyKnowledge, 3);
         expect(results.length).toBeGreaterThan(0);
         expect(results[0].specialty).toBe("Cardiologist");
