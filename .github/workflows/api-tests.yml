@@ -150,6 +150,19 @@ jobs:
       - name: API tests
         run: npm run test:api
 
+      # One deliberate misconfiguration, on the layer the ai-service job does not cover: the model
+      # call itself is aimed at a dead port, and the endpoint has to answer 503 CLAUDE_UNAVAILABLE
+      # rather than hang or blame the service in front of it. Runs last in the job because it
+      # restarts the SUT into a degraded topology. No API key involved — the request never leaves
+      # the runner. Before 2026-08-22 this path had a test and no way to run it (TST-06).
+      - name: Degradation — the model is unreachable
+        env:
+          CLAUDE_DEGRADE: "true"
+        run: |
+          docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.claude-degrade.yml \
+            up -d --wait
+          npx playwright test tests/api/ai.recommend.test.ts --grep "Claude unreachable"
+
       - name: Generate AI CI summary
         if: always()
         env:

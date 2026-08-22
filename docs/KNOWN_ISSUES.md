@@ -392,6 +392,20 @@ or fails for the wrong reason, misreports the system exactly as a broken endpoin
 | **Category** | Documentation drift — a claim that ages instead of breaking |
 | **Portfolio note** | Test counts drift quietly; access claims drift loudly. This one told every reader that the interesting parts were held back, in a repository that had just published them. The fix worth keeping is not the edit — it is that three of the four numbers behind it now fail a check instead of ageing. |
 
+### TST-06 — The Claude degradation test was gated on a variable nothing set (✅ Fixed 2026-08-22)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-08-22 |
+| **Symptom** | `Graceful degradation: wrong API key → 503 CLAUDE_UNAVAILABLE @rag` skipped on `!process.env.AI_DEGRADE_TEST`. That variable appeared nowhere else: not in `sut/.env.example`, not in any workflow, not in either README. The test had never executed once since it was written, while the register and the suite listing counted it as coverage of the 503 path. |
+| **Root cause** | The guard named a configuration that did not exist. Degrading the model call needs the SUT to be *started* differently, and the SUT had no switch for it — unlike `AI_SERVICE_DEGRADE`, which points the service client at a dead port. Worse, mock mode (`AI_MOCK_RESPONSE=true`, what CI runs) answers from retrieval without calling Claude at all, so even a correct key-based misconfiguration would have returned a cheerful 200. |
+| **Fix** | `CLAUDE_DEGRADE` in the SUT: the Anthropic client is constructed against `CLAUDE_DEGRADE_BASE_URL` (a dead port by default) with SDK retries off and a 2 s timeout, and the mock branch is bypassed so the call actually happens. The failure then travels the ordinary path — same catch, same `CLAUDE_UNAVAILABLE`, same breaker. Overlay `docker-compose.claude-degrade.yml` starts that topology and raises the breaker threshold, since a breaker tripping into `CIRCUIT_OPEN` is a different test. A step in the `api` job runs it on every push; the test guards on `CLAUDE_DEGRADE`, mirroring how the ai-service block guards on `AI_SERVICE_DEGRADE`. |
+| **Verified** | Degraded SUT: both tests pass and the endpoint answers 503 in ~30 ms. Healthy SUT with the flag set: both fail on `Expected 503, Received 200`, so the assertion is doing work. No flag: both skip. Second test added — the failure must be attributed to `CLAUDE_UNAVAILABLE` and not `AI_SERVICE_UNAVAILABLE`, which is the whole reason there are two codes. |
+| **Category** | Test infrastructure — a guard naming a configuration that was never built |
+| **Portfolio note** | Third of a family found in two days: `AI_SERVICE_DEGRADE` (a backlog entry recorded as shipped, never wired), the clinic-mobile pact (a contract checked in "for provider verification" nobody verified), and this one. All three read as coverage from the outside, and all three were invisible for the same reason — a test that never runs reports nothing, and nothing looks exactly like success. Worth a grep across any suite: every environment variable a test skips on should be set somewhere. |
+
+---
+
 ### TST-05 — Convention check read the fixture barrel by its wording, not its behaviour (✅ Fixed 2026-08-22)
 
 | Field | Value |
@@ -490,6 +504,7 @@ or fails for the wrong reason, misreports the system exactly as a broken endpoin
 | TST-02 | 429 test hard-coded the default rate limit, so it asserted the launch configuration | ✅ Fixed 2026-08-21: ceiling discovered by request, loud skip otherwise | Low | Full `@api` run 2026-08-21 |
 | TST-03 | `test:visual` pointed at `visual.test.ts` after the TS migration — "No tests found", never red | ✅ Fixed 2026-08-21: path corrected, 14 checks pass | Low | Repository audit 2026-08-21 |
 | TST-05 | Convention check looked for a literal `from "./pages"`; a longer fixture chain moved it and the check went red on a healthy barrel | ✅ Fixed 2026-08-22: the check walks the export chain and asks whether `fixtures/pages.ts` is reachable | Low | Full run after the B-15 fix 2026-08-22 |
+| TST-06 | Claude degradation test gated on `AI_DEGRADE_TEST`, a variable nothing in either repository ever set — it had never run | ✅ Fixed 2026-08-22: `CLAUDE_DEGRADE` switch in the SUT + compose overlay + CI step; test rewired and a second assertion added | Medium | Repository audit 2026-08-21, fixed 2026-08-22 |
 | TST-04 | AI suite needs two mutually exclusive `AI_RATE_LIMIT_MAX` settings; a correct 429 was reported as a broken endpoint | ✅ Fixed 2026-08-21: `skipIfThrottled()` in all 9 multi-call loops | Medium | Verifying the TST-02 fix 2026-08-21 |
 | DOC-01 | Six docs advertised a premium/public split that no longer existed, pointing at a README section that never existed | ✅ Fixed 2026-08-21: notices rewritten or removed; counts corrected and put under the convention check | Medium | Repository audit 2026-08-21 |
 | DOC-02 | `ai-gap-analysis.js` filtered on `.test.js`; after the TS migration it reported 0% coverage over an empty inventory | ✅ Fixed 2026-08-21: filter accepts `.ts`, report regenerated, `dotenv` added to all `ai:*` scripts | Medium | Regenerating the report 2026-08-21 |

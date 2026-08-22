@@ -376,17 +376,36 @@ test.describe("POST /api/v1/ai/recommend-doctor — bias validation @rag", () =>
     });
 });
 
-test.describe("POST /api/v1/ai/recommend-doctor — degradation @rag", () => {
+// Sibling of the ai-service degradation block further down, one layer lower: there the service in
+// front of the model is unreachable, here the model call itself is. Until 2026-08-22 this block
+// guarded on AI_DEGRADE_TEST, a variable nothing in either repository ever set — no `.env.example`
+// entry, no CI job, no README line — so it had never run. The SUT now carries a real switch:
+// CLAUDE_DEGRADE points the Anthropic client at a dead port and bypasses mock mode.
+//
+//   cd sut && CLAUDE_DEGRADE=true CIRCUIT_BREAKER_THRESHOLD=100 node src/server.js
+//   cd tests && CLAUDE_DEGRADE=true npx playwright test tests/api/ai.recommend.test.ts --grep "Claude unreachable"
+test.describe("POST /api/v1/ai/recommend-doctor — Claude unreachable @rag", () => {
     test.beforeEach(() => {
-        if (!process.env.AI_DEGRADE_TEST) test.skip();
+        // Mirrors the SUT's launch configuration: the variable says the server was started degraded,
+        // it does not degrade anything by itself.
+        if (!process.env.CLAUDE_DEGRADE) test.skip();
     });
 
-    test("Graceful degradation: wrong API key → 503 CLAUDE_UNAVAILABLE @rag", async ({ request, user }) => {
+    test("503 CLAUDE_UNAVAILABLE: the model call never lands @rag", async ({ request, user }) => {
         const ai = new AiRecommendClient(request);
         const { status, body } = await ai.recommend("chest pain", user.token);
         expect(status).toBe(503);
         expect(body.errorCode).toBe("CLAUDE_UNAVAILABLE");
         expect(body.requestId).toBeTruthy();
+    });
+
+    // The distinction is the point of having two codes: an unreachable model is not an unreachable
+    // service, and whoever reads the log should not be sent to the wrong system.
+    test("the failure is attributed to the model, not to the service in front of it @rag", async ({ request, user }) => {
+        const ai = new AiRecommendClient(request);
+        const { body } = await ai.recommend("skin rash", user.token);
+        expect(body.errorCode).not.toBe("AI_SERVICE_UNAVAILABLE");
+        expect(body.errorCode).toBe("CLAUDE_UNAVAILABLE");
     });
 });
 
