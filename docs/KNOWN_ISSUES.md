@@ -392,6 +392,20 @@ or fails for the wrong reason, misreports the system exactly as a broken endpoin
 | **Category** | Documentation drift — a claim that ages instead of breaking |
 | **Portfolio note** | Test counts drift quietly; access claims drift loudly. This one told every reader that the interesting parts were held back, in a repository that had just published them. The fix worth keeping is not the edit — it is that three of the four numbers behind it now fail a check instead of ageing. |
 
+### TST-05 — Convention check read the fixture barrel by its wording, not its behaviour (✅ Fixed 2026-08-22)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-08-22 |
+| **Symptom** | `npm run check:conventions` failed with *"fixtures/index.ts does not re-export ./pages — tests importing from '../../fixtures' would not get page objects"* on a repository where every test importing from `../../fixtures` did get its page objects, and 143 UI and E2E tests proved it by passing. |
+| **Root cause** | The check tested for the string `from "./pages"` in `fixtures/index.ts`. The barrel is a chain — `userFixture → slotFixture → twoUsersFixture → pages → unstaffedSpecialty` — and index.ts re-exports only its last link. When `unstaffedSpecialtyFixture` was added to the end of the chain, the literal moved one file away and the check started reporting a healthy barrel as broken. Nothing about the guarantee had changed. |
+| **Fix** | The check now walks the chain from `fixtures/index.ts` and asks whether `fixtures/pages.ts` is reachable, following re-exports and the `test as base` imports that link one fixture to the next. Plain imports are deliberately not followed: a fixture may import a page object as a type without putting it on the barrel. |
+| **Verified** | Barrel truncated to `export * from "./twoUsersFixture"` — check fails with the new message. Barrel given a plain `import { LoginPage } from "./pages"` and no re-export — check still fails, so the walk cannot be satisfied by an import that carries nothing. Restored barrel — check passes. |
+| **Category** | Test infrastructure — guard asserting a proxy for the property instead of the property |
+| **Portfolio note** | The same shape as B-15 one level up: a check that watches the wording of an implementation goes red on healthy code as soon as the wording moves, and a red check that everyone knows to ignore is worse than no check. Guards should ask the question they mean — here "can the barrel still reach the page fixtures", not "does this one file mention them". |
+
+---
+
 ### TST-01 — LLM judge decided by a single call and flipped between runs (✅ Fixed 2026-08-21)
 
 | Field | Value |
@@ -475,6 +489,7 @@ or fails for the wrong reason, misreports the system exactly as a broken endpoin
 | TST-01 | LLM judge decided on one call; ~40% failure rate on a correct answer | ✅ Fixed 2026-08-21: majority of 3 + sharpened question + verdicts in Allure | Medium | Full `@api` run 2026-08-21 |
 | TST-02 | 429 test hard-coded the default rate limit, so it asserted the launch configuration | ✅ Fixed 2026-08-21: ceiling discovered by request, loud skip otherwise | Low | Full `@api` run 2026-08-21 |
 | TST-03 | `test:visual` pointed at `visual.test.ts` after the TS migration — "No tests found", never red | ✅ Fixed 2026-08-21: path corrected, 14 checks pass | Low | Repository audit 2026-08-21 |
+| TST-05 | Convention check looked for a literal `from "./pages"`; a longer fixture chain moved it and the check went red on a healthy barrel | ✅ Fixed 2026-08-22: the check walks the export chain and asks whether `fixtures/pages.ts` is reachable | Low | Full run after the B-15 fix 2026-08-22 |
 | TST-04 | AI suite needs two mutually exclusive `AI_RATE_LIMIT_MAX` settings; a correct 429 was reported as a broken endpoint | ✅ Fixed 2026-08-21: `skipIfThrottled()` in all 9 multi-call loops | Medium | Verifying the TST-02 fix 2026-08-21 |
 | DOC-01 | Six docs advertised a premium/public split that no longer existed, pointing at a README section that never existed | ✅ Fixed 2026-08-21: notices rewritten or removed; counts corrected and put under the convention check | Medium | Repository audit 2026-08-21 |
 | DOC-02 | `ai-gap-analysis.js` filtered on `.test.js`; after the TS migration it reported 0% coverage over an empty inventory | ✅ Fixed 2026-08-21: filter accepts `.ts`, report regenerated, `dotenv` added to all `ai:*` scripts | Medium | Regenerating the report 2026-08-21 |

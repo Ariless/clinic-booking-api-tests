@@ -57,14 +57,55 @@ function walk(dir, out = []) {
     }
 }
 
-// ── 2. The fixture barrel actually re-exports the page fixtures ──────────────
+// ── 2. The fixture barrel actually reaches the page fixtures ────────────────
+// Until 2026-08-22 this looked for a literal `from "./pages"` in fixtures/index.ts. But the barrel
+// is a chain — userFixture → slotFixture → twoUsersFixture → pages → unstaffedSpecialty — and
+// index.ts re-exports only its last link. Adding a link at the end (unstaffedSpecialtyFixture)
+// made the literal disappear while the barrel kept working exactly as documented, so the check
+// failed on a healthy repository. It now walks the chain: what matters is that fixtures/pages.ts
+// is reachable from the barrel, not which file happens to name it.
 {
-    const indexPath = path.join(ROOT, "fixtures/index.ts");
-    const index = fs.readFileSync(indexPath, "utf8");
-    if (!/from\s+"\.\/pages"/.test(index)) {
+    const fixturesDir = path.join(ROOT, "fixtures");
+    const pagesModule = path.join(fixturesDir, "pages.ts");
+
+    const resolveLink = (fromFile, spec) => {
+        const base = path.resolve(path.dirname(fromFile), spec);
+        for (const candidate of [`${base}.ts`, path.join(base, "index.ts")]) {
+            if (fs.existsSync(candidate)) return candidate;
+        }
+        return null;
+    };
+
+    // Two ways a link carries the fixture forward: a re-export, or the `test as base` import that
+    // every fixture in the chain uses to extend the one before it. Plain imports are ignored — a
+    // fixture may import a page object as a type without putting it on the barrel.
+    const linksOf = (file) => {
+        const src = fs.readFileSync(file, "utf8");
+        const specs = [
+            ...[...src.matchAll(/export\s+(?:\*|type\s*\{[^}]*\}|\{[^}]*\})\s+from\s+["'](\.[^"']+)["']/g)],
+            ...[...src.matchAll(/import\s*\{[^}]*\btest\s+as\s+base\b[^}]*\}\s*from\s+["'](\.[^"']+)["']/g)],
+        ].map((m) => m[1]);
+        return specs.map((spec) => resolveLink(file, spec)).filter(Boolean);
+    };
+
+    const seen = new Set();
+    const queue = [path.join(fixturesDir, "index.ts")];
+    let reachesPages = false;
+    while (queue.length) {
+        const file = queue.pop();
+        if (seen.has(file)) continue;
+        seen.add(file);
+        if (file === pagesModule) {
+            reachesPages = true;
+            break;
+        }
+        queue.push(...linksOf(file));
+    }
+
+    if (!reachesPages) {
         fail(
             "fixture-barrel-exports-pages",
-            "fixtures/index.ts does not re-export ./pages — tests importing from '../../fixtures' would not get page objects",
+            "fixtures/index.ts does not reach fixtures/pages.ts through its export chain — tests importing from '../../fixtures' would not get page objects",
         );
     }
 }
