@@ -117,7 +117,7 @@ let facts;
     const factsPath = path.join(ROOT, "docs/FACTS.json");
     facts = JSON.parse(fs.readFileSync(factsPath, "utf8"));
 
-    // Counted from git, not from the disk: gitignored suites (pact, course demos) exist on some
+    // Counted from git, not from the disk: gitignored suites (pact, AI demos) exist on some
     // machines and not in CI, so a disk walk gives a different answer depending on where it runs —
     // and a claim that only holds in one environment is not a claim.
     const trackedTests = execSync("git ls-files tests", {

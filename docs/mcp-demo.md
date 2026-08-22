@@ -1,6 +1,6 @@
 # Playwright MCP — Demo Scenario
 
-Воспроизводимый сценарий для урока курса: "Когда AI exploration работает, а когда нет."
+Воспроизводимый сценарий: когда AI exploration работает, а когда нет.
 
 **Пред-реквизит:** SUT запущен на `http://localhost:3000`  
 **Инструмент:** Playwright MCP подключён к Claude Desktop (см. [mcp-config](#setup))  
@@ -54,7 +54,7 @@ expect(body).not.toHaveProperty('accessToken')
 Pact не только проверяет наличие `token`, но и **явно запрещает `accessToken`**.  
 Если API переименует поле — CI упадёт в тот же день. MCP об этом не узнает.
 
-**Вывод для студента:**  
+**Вывод:**  
 MCP обнаруживает текущее состояние. Pact фиксирует намерение и ловит дрейф.
 
 ---
@@ -120,4 +120,3 @@ Pact и spec-тесты — граница, которая держится в C
 - `pacts/clinic-booking-api-tests-clinic-booking-api.json` — Pact-контракт: 6 interactions, имена полей, статусы
 - `../clinic-mobile-tests/features/idempotency.feature` — идемпотентность: ADB network drop + retry
 - `tests/e2e/booking-conflict.e2e.test.ts` — конфликт бронирований, DB cross-check
-- `course/mcp-lesson.md` — план урока и скрипт

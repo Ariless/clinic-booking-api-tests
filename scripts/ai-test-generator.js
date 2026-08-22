@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Reads openapi.yaml → asks Claude Haiku to generate a Playwright test file draft
-// for a specific API tag. Student reviews and edits the output.
+// for a specific API tag. The output is a draft: review and edit before committing it.
 //
 // Usage:
 //   node scripts/ai-test-generator.js --tag Auth

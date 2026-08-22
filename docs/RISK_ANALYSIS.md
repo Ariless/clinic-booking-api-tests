@@ -2,10 +2,6 @@
 
 
 <!-- sut-refs-notice -->
-<!-- 2026-08-21: this used to be a "premium content" notice listing security.test.ts,
-     chaos.test.ts, appointments.booking.rate-limit.test.ts, chaos.yml and security-scan.yml
-     as living elsewhere, and pointed at a *Premium content* section README has never had.
-     All of those are in this repository. What genuinely lives elsewhere is the SUT. -->
 > **Referenced but living in the SUT repository:** `CONTRACT_PACK.md` — see *System under test* in `README.md`.
 
 **Method:** informal **Impact × Likelihood** (1–5 each) to prioritize tests, not to compute formal RPN. **Source of truth for transitions:** SUT **`CONTRACT_PACK.md`** / OpenAPI.
