@@ -333,7 +333,7 @@ SUT done 2026-05-15. `?page=&limit=` (page ≥ 1, limit 1–100); response `{ da
 
 Phase 1 (Playwright mobile viewport) — done 2026-05-01. `mobile-chrome` project in this repo runs all `tests/ui/**` on Pixel 7 viewport.
 
-Phase 2 (native app + Appium suite) — full backlog in [`../clinic-mobile/BACKLOG.md`](https://github.com/Ariless/clinic-mobile/blob/main/BACKLOG.md).
+Phase 2 (native app + Appium suite) — full backlog in `BACKLOG.md` of the private `clinic-mobile` repository.
 Two repos: `clinic-mobile` (React Native SUT) + `clinic-mobile-tests` (Appium + WebdriverIO + Cucumber).
 
 ---
