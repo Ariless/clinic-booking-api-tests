@@ -1,9 +1,8 @@
 import { test, expect } from '../../fixtures';
 import { AppointmentsClient } from '../../api/AppointmentsClient';
 import { DoctorsClient } from '../../api/DoctorsClient';
-import { AuthClient } from '../../api/AuthClient';
 import { createKafkaTestConsumer } from '../../utils/kafkaTestConsumer';
-import { seedDoctors, nextSeedSlotWindow } from '../../data/seedAccounts';
+import { nextSeedSlotWindow } from '../../data/seedAccounts';
 
 // To run these tests:
 //   docker compose -f sut/docker-compose.kafka.yml up -d

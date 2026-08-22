@@ -22,7 +22,6 @@ const { execSync } = require("child_process");
 const ROOT = path.join(__dirname, "..");
 const CHANGED_FILES_PATH = path.join(ROOT, "changed-files.txt");
 const OUTPUT_PATH = path.join(ROOT, "impact-tests.txt");
-const TESTS_DIR = path.join(ROOT, "tests");
 
 // ── discover test files ───────────────────────────────────────────────────────
 

@@ -42,35 +42,14 @@ function extractTags(specText) {
 // ── extract endpoint blocks for a specific tag ────────────────────────────────
 
 function extractTagSection(specText, tag) {
-    // collect all lines for paths that have `tags: [<tag>]` or `- <tag>`
-    const lines = specText.split("\n");
-    const result = [];
-    let inPath = false;
-    let pathIndent = 0;
-    let capture = false;
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        // detect a new top-level path (2-space indent, starts with /)
-        if (/^  \//.test(line)) {
-            inPath = true;
-            pathIndent = 2;
-            capture = false;
-            result.push("\n" + line);
-            continue;
-        }
-        if (inPath) {
-            result.push(line);
-            // check if this path section mentions our tag
-            if (line.includes(`[${tag}]`) || line.match(new RegExp(`-\\s+${tag}\\b`))) {
-                capture = true;
-            }
-        }
-    }
-
-    // second pass: only keep blocks that had capture=true
-    // simpler: just search for the relevant paths block by block
-    const blocks = specText.split(/\n(?=  \/)/);
+    // Keeps the path blocks whose operations carry the requested tag, in either OpenAPI form:
+    // `tags: [Auth]` on one line, or `tags:` followed by `- Auth`.
+    //
+    // A line-by-line first pass used to sit here, building a `result` array and tracking `inPath`,
+    // `pathIndent` and `capture`. Nothing read any of it — the function has always returned the
+    // block filter below, so the loop was dead weight that looked like the real logic. Removed
+    // 2026-08-22; behaviour is unchanged.
+    const blocks = specText.split(/\n(?= {2}\/)/);
     return blocks
         .filter((block) => {
             const tagPattern = new RegExp(`tags:\\s*\\[${tag}\\]|tags:[^\\n]*\\n[^\\n]*-\\s*${tag}\\b`);

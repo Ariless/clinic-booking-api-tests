@@ -17,7 +17,10 @@ function createWebhookTestServer() {
             pendingResolve(payload);
             pendingResolve = null;
           }
-        } catch (_) {}
+        } catch {
+          // Malformed webhook payload: ignore it and answer 200 anyway, the way the
+          // real receiver does — the test asserts on what arrived, not on this branch.
+        }
         res.writeHead(200);
         res.end();
       });

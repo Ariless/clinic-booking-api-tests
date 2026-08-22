@@ -1,8 +1,6 @@
 import { test, expect } from "../../fixtures";
 import { DoctorsClient } from "../../api/DoctorsClient";
 
-const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-
 test.describe("doctor schedule — working hours @ui", () => {
     test.beforeEach(async ({ request, slot }) => {
         // clear schedule before each test so state is predictable

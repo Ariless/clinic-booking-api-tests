@@ -77,10 +77,11 @@ async function globalTeardown() {
     db.prepare("DELETE FROM slots WHERE startTime > ?").run(seedCutoff);
 
     console.log(`[global-teardown] removed ${testUsers.length} orphaned test user(s)`);
-  } catch (err: any) {
+  } catch (err: unknown) {
     // In CI the DB is owned by the Docker container (root) — host runner has no write access.
     // The DB is ephemeral there anyway, so skipping cleanup is safe.
-    if (err?.code === 'SQLITE_READONLY') {
+    const code = (err as { code?: string } | null)?.code;
+    if (code === 'SQLITE_READONLY') {
       console.log('[global-teardown] DB is readonly — skipping cleanup (CI ephemeral DB)');
       return;
     }

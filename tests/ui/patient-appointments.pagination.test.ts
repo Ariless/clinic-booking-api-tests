@@ -104,9 +104,7 @@ test("patient appointments — page size change resets to page 1 and uses new li
     async ({ page, user, loginPage, appointmentsPage }) => {
         await loginPage.login(user.email, user.password);
 
-        let callCount = 0;
         await page.route("**/api/v1/appointments/my**", (route) => {
-            callCount++;
             const url = new URL(route.request().url());
             const pg = parseInt(url.searchParams.get("page") ?? "1", 10);
             const lim = parseInt(url.searchParams.get("limit") ?? "20", 10);

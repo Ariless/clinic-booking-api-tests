@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "npx playwright test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test:smoke": "npx playwright test --grep @smoke",
     "test:api": "npx playwright test tests/api",
     "test:ui": "npx playwright test tests/ui --pass-with-no-tests",
@@ -32,6 +34,7 @@
   "private": true,
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
+    "@eslint/js": "^10.0.1",
     "@pact-foundation/pact": "^16.4.0",
     "@playwright/test": "^1.59.1",
     "@types/better-sqlite3": "^7.6.13",
@@ -40,7 +43,10 @@
     "allure-commandline": "^2.38.1",
     "allure-playwright": "^3.7.1",
     "better-sqlite3": "^12.9.0",
-    "browserstack-node-sdk": "^1.53.4"
+    "browserstack-node-sdk": "^1.53.4",
+    "eslint": "^10.9.0",
+    "globals": "^17.11.0",
+    "typescript-eslint": "^8.67.0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",

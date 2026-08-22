@@ -3,7 +3,6 @@ import { ConsultationsClient } from '../../api/ConsultationsClient';
 import { dbClient } from '../../utils/dbClient';
 
 const PAYMENT_MODE = process.env.PAYMENT_MODE || 'disabled';
-const paymentEnabled = PAYMENT_MODE !== 'disabled';
 
 test("POST /api/v1/consultations — 503 FEATURE_DISABLED when PAYMENT_MODE=disabled @payment", async ({ request, user }) => {
     const consultations = new ConsultationsClient(request);

@@ -21,7 +21,9 @@ async function track() {
         if (url.hostname === 'localhost') {
           visitedRoutes.add(url.pathname);
         }
-      } catch {}
+      } catch {
+        // Not a parseable URL (about:blank, data:, chrome-extension:) — nothing to record.
+      }
     }
   });
 
@@ -31,7 +33,9 @@ async function track() {
       if (url.pathname.startsWith('/api/')) {
         calledEndpoints.add(`${request.method()} ${url.pathname}`);
       }
-    } catch {}
+    } catch {
+      // Not a parseable URL — nothing to record.
+    }
   });
 
   console.log('Browser launched. CDP available on port 9222.');

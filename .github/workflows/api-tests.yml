@@ -23,9 +23,38 @@ env:
   SUT_ROOT: sut
   RATE_LIMIT_REGISTER_MAX: "1000"
 
+# ── Lint ─────────────────────────────────────────────────────────────────────
+# Static only: no SUT, no browsers, no database. Kept separate from smoke so a naming
+# or dead-code problem is reported as itself instead of as a failed test run. Added
+# 2026-08-22, when the repository got its first ESLint config — the SUT had one from
+# the start, this repo never did, so its conventions lived only in CLAUDE.md.
+jobs:
+  lint:
+    name: Lint and types
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
 # ── Smoke ────────────────────────────────────────────────────────────────────
 # Fast gate on every push / PR. API and E2E jobs start only if this passes.
-jobs:
   smoke:
     name: Smoke
     runs-on: ubuntu-latest

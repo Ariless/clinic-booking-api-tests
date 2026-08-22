@@ -1,9 +1,7 @@
 import { APIRequestContext } from "@playwright/test";
 import { test, expect } from "../../fixtures/slotFixture";
 import { AppointmentsClient } from "../../api/AppointmentsClient";
-import { AuthClient } from "../../api/AuthClient";
 import { DoctorsClient } from "../../api/DoctorsClient";
-import { seedDoctors } from "../../data/seedAccounts";
 
 let recurringSeq = 0;
 

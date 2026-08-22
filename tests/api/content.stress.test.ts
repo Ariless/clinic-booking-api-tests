@@ -9,19 +9,6 @@ function edgeEmail(label: string): string {
   return `test_stress_${slug}_${rnd}@example.com`;
 }
 
-async function registerAndCleanup(
-  users: UserClient,
-  name: string,
-  email: string
-): Promise<{ status: number; body: Record<string, unknown> }> {
-  const { status, body } = await users.registerPatient({ email, name });
-  if (status === 201 && body.token) {
-    await users.getMe(body.token as string);
-    await users.deleteMyAccount(body.token as string);
-  }
-  return { status, body };
-}
-
 // ---------------------------------------------------------------------------
 // Static edge cases — always run, no API key required
 // ---------------------------------------------------------------------------

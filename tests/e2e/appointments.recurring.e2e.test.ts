@@ -106,7 +106,6 @@ test("patient cancels series via UI — all appointments cancelled in API and DB
                 weekly.slotIds[0], "weekly", 2, patientAuth,
             );
             expect(status).toBe(201);
-            const seriesId = booked.seriesId as string;
             const apptIds = (booked.booked as Array<{ id: number }>).map((a) => a.id);
 
             // 2. LOGIN via UI as patient
