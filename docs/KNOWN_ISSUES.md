@@ -75,18 +75,24 @@ Living document. Every bug found during testing — fixed or open — recorded h
 
 ## Open bugs
 
-### B-05 — Retrieval layer maps "chest pain" → Orthopedist instead of Cardiologist
+> As of 2026-08-22 nothing in this section is open: B-05 and B-07 are fixed, B-06 is resolved and
+> now covered by a test. The section keeps its name and its cards for history. The bugs that are
+> still open live further down: **B-14** (procedure booked into a slot shorter than it needs) and
+> **B-15** (`isAvailable` returned as `0`/`1` instead of a boolean).
+
+### B-05 — Retrieval layer maps "chest pain" → Orthopedist instead of Cardiologist (✅ Fixed 2026-08-21)
 
 | Field | Value |
 |---|---|
-| **Status** | 🔴 Open |
+| **Status** | ✅ Fixed 2026-08-21 |
 | **Found by** | Pact provider verification 2026-05-08 — provider returned `recommendedSpecialty: "Orthopedist"` for interaction body `{ symptoms: "chest pain" }` |
 | **Severity** | Medium |
 | **Business impact** | Patient with classic cardiac symptoms is directed to the wrong specialist. Silent misrouting — the API returns `200` with a valid-looking specialty. No error signal. |
 | **Root cause** | Keyword-overlap scoring in `retrieval.js`: "pain" matches Orthopedist keyword list; "chest" also triggers a match. Orthopedist total score > Cardiologist score for the input "chest pain". The LLM corrects this in real Claude mode (model has broader context), but in mock mode the raw retrieval result is returned directly — wrong specialty. |
 | **Workaround** | Use `AI_MOCK_RESPONSE=false` with a real API key for the recommendation endpoint. In mock mode, the retrieval ranking is the final answer. |
-| **Fix plan** | Improve retrieval scoring: add term specificity weighting (rare terms score higher than generic ones like "pain"); or add a symptom-to-specialty override table for high-confidence mappings. Regression test: `retrieve("chest pain")` → Cardiologist as top-1 in `unit/ai.retrieval.test.ts`. |
-| **Test gap** | No regression test for ambiguous symptoms. Tracked in `../BACKLOG.md`. |
+| **Fix** | `fcccd6d` in the SUT — `retrieval.js` now matches multi-word keywords word by word instead of by substring, so "chest pain" scores Cardiologist above Orthopedist. |
+| **Regression test** | `unit/ai.retrieval.test.ts` — "retrieve: bare 'chest pain' ranks Cardiologist first — B-05 regression @unit". The earlier `test.fail()` marker alerted on the fix and was removed. |
+| **Register note** | This card said 🔴 Open with "no regression test" until 2026-08-22, four months after `../BACKLOG.md` recorded the fix. Two documents, one fact, no link between them — the register is the one people read. |
 | **Where** | `SYSTEM_WEAKNESS_REPORT.md` §5.1 · `../BACKLOG.md` (Regression: "chest pain" → Cardiologist) · `PORTFOLIO_NARRATIVE.md` |
 
 ---
@@ -115,7 +121,8 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | **Business impact** | Patient receives a successful recommendation for Orthopedist or Pediatrician — but there are no doctors of that specialty in the system. No appointment can be made. Response looks successful; error is silent. |
 | **Root cause** | `ALLOWED_SPECIALTIES` and the knowledge base include 6 specialties. Seed data (`seed.js`) only seeds 3 doctors: Cardiologist (John Doe), Dermatologist (Jane Smith), Neurologist (Jim Beam). Orthopedist and Pediatrician have zero doctors in DB. |
 | **Fix applied** | Option B — `aiRoutes.js` now returns `404 DOCTORS_UNAVAILABLE` when `doctors: []` after a valid recommendation. Silent 200 replaced with an honest error contract. |
-| **Regression test** | `"404 DOCTORS_UNAVAILABLE: specialty in knowledge base but no doctors in DB @api"` — uses "my baby needs vaccination" (Pediatrician score=2, others=0). Runs in mock mode without API key. |
+| **Regression test** | `"404 DOCTORS_UNAVAILABLE: specialty is recommendable but nobody is on staff @api"` in `api/ai.recommend.test.ts`, added 2026-08-22. |
+| **Register note** | This row previously named a test that did not exist anywhere in the suite — `DOCTORS_UNAVAILABLE` appeared only in `sut/src/routes/aiRoutes.js`. The gap widened on 2026-08-21, when the seed started staffing all six specialties so that ordinary AI tests resolve to a real doctor: from then on the branch was unreachable from a seeded database, not merely untested. The test now creates the state instead of relying on the seed — `fixtures/unstaffedSpecialtyFixture.ts` parks the paediatric doctor's specialty for the duration of the test and restores it afterwards. |
 | **Where** | `SYSTEM_WEAKNESS_REPORT.md` §5.2 · `PORTFOLIO_NARRATIVE.md` |
 
 ---
@@ -441,8 +448,8 @@ or fails for the wrong reason, misreports the system exactly as a broken endpoin
 | B-02 | Missing landmarks + heading (a11y) | ✅ Fixed 2026-04-30 | Medium | `accessibility.test.ts` (axe-core) |
 | B-03 | WS never connected (`ClinicCore` undefined) | ✅ Fixed 2026-05-03 | High | `doctor-notifications.e2e.test.ts` |
 | B-04 | Confirm banner hidden in <1ms | ✅ Fixed 2026-05-03 | Low | `doctor-confirm.e2e.test.ts` |
-| B-05 | "chest pain" → Orthopedist (wrong retrieval ranking) | 🔴 Open | Medium | Pact provider verification |
-| B-06 | `doctors: []` on valid 200 (unseeded specialties) | 🔴 Open | Medium | Pact provider verification |
+| B-05 | "chest pain" → Orthopedist (wrong retrieval ranking) | ✅ Fixed 2026-08-21 | Medium | Pact provider verification |
+| B-06 | `doctors: []` on valid 200 (unseeded specialties) | ✅ Resolved 2026-06-22, covered by a test 2026-08-22 | Medium | Pact provider verification |
 | B-07 | Wrong operation order in reschedule → 409 with active waitlist | ✅ Fixed 2026-05-16 | High | `appointments.reschedule.test.ts` |
 | CI-01 | Rate limit test: 400 instead of 429 in CI | ✅ Fixed 2026-05-11: skip guard + `RATE_LIMIT_REGISTER_MAX` in CI env | Low | CI run 2026-05-11 |
 | CI-02 | Flaky SLOT_OVERLAP in waitlist offers test | ✅ Fixed 2026-05-20 | Low | CI run 2026-05-11 |

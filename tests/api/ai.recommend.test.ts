@@ -75,6 +75,21 @@ test.describe("POST /api/v1/ai/recommend-doctor", () => {
         expect(body.doctors.length).toBeGreaterThan(0);
     });
 
+    test("404 DOCTORS_UNAVAILABLE: specialty is recommendable but nobody is on staff @api", async ({ request, user, unstaffedSpecialty }) => {
+        // The honest-error half of B-06: a valid recommendation the clinic cannot act on must not
+        // come back as a cheerful 200 with doctors: []. The branch lives in sut/src/routes/aiRoutes.js
+        // and had no test at all — KNOWN_ISSUES.md claimed one existed. Since the 2026-08-21 seed
+        // staffs all six specialties, the state has to be created: the fixture parks the paediatric
+        // doctor's specialty for the duration of this test and restores it afterwards.
+        const ai = new AiRecommendClient(request);
+        const { status, body } = await ai.recommend(unstaffedSpecialty.symptoms, user.token);
+        skipIfThrottled(status);
+        expect(status).toBe(404);
+        expect(body.errorCode).toBe("DOCTORS_UNAVAILABLE");
+        expect(body.message).toBeTruthy();
+        expect(body.requestId).toBeTruthy();
+    });
+
     test("422 UNKNOWN_SPECIALTY: symptoms cannot be mapped @api", async ({ request, user }) => {
         const ai = new AiRecommendClient(request);
         const { status, body } = await ai.recommend("xyzzy gibberish", user.token);
