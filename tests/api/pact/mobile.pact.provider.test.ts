@@ -194,11 +194,10 @@ test.describe('clinic-booking-api — clinic-mobile Pact provider @pact', () => 
             await verifyInteraction('a cancel request from the mobile app', state);
         });
 
-        // B-15: the API answers `isAvailable: 1`, the contract pins a boolean. Marked failing rather
-        // than removed, so the day the SUT maps the column this test reports the fix instead of
-        // quietly going green — and so the mismatch cannot mask a regression in the five above.
+        // This one found B-15 on its first run: the API answered `isAvailable: 1` against a contract
+        // that pins a boolean. Fixed in the SUT the same day (`toApiSlot` in `slotsRepository`), so
+        // the test now guards the boolean instead of documenting the mismatch.
         test('GET /doctors/:id/slots — 200 carries id, startTime and boolean isAvailable @pact', async () => {
-            test.fail(true, 'B-15: isAvailable is serialised as 0/1, the contract pins a boolean');
             await verifyInteraction('a slots request from the mobile app', state);
         });
     });
