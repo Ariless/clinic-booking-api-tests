@@ -1,0 +1,13 @@
+[11:32:44.418] WARN (5597): pact@16.4.0: no state handler found for state: ""
+
+
+Verifying a pact between clinic-mobile and clinic-booking-api
+
+  a my-appointments request from the mobile app (0s loading, 20ms verification)
+    returns a response which
+      has status code 200 (OK)
+      includes headers
+        "Content-Type" with value "application/json" (OK)
+      has a matching body (OK)
+
+
