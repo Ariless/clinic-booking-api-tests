@@ -378,12 +378,14 @@ Smoke gates the rest; API, E2E and the invariant contract run in parallel:
 smoke  →  api         (tests/api)
        →  e2e         (tests/e2e + tests/ui)
        →  invariants  (tests/api against a SUT with ASSERT_INVARIANTS on)
+       →  ai-service  (tests/api against a SUT delegating to the standalone ai-service)
               ↓
        allure-report  (merges api + e2e + smoke results → GitHub Pages)
 ```
 
 - **SUT:** checked out from **`Ariless/clinic-booking-api`** (override: repo variable **`SUT_GITHUB_REPOSITORY`** under Settings → Actions → Variables), then started via `docker compose -f sut/docker-compose.test.yml up -d --wait` — same image as local, healthcheck-gated startup, `docker compose down` on cleanup.
 - **E2E job** uses `--pass-with-no-tests` — stays green until `tests/e2e` / `tests/ui` are committed; picks them up automatically once pushed.
+- **Delegated AI job** starts the SUT with the `docker-compose.ai-service.yml` overlay, so the specialty decision travels over HTTP to the standalone service instead of happening in-process. Three things run there: Pact provider verification against the service actually running in that job, the whole API layer over the delegated topology, and a deliberate outage — the service is stopped and the SUT must answer `503 AI_SERVICE_UNAVAILABLE` rather than blame the model. The job exists because the alternative was three months of an integration recorded as done, never wired, and guarded by a test that skipped on every run.
 - **Invariants job** starts the SUT with an overlay (`docker-compose.test.yml` + `docker-compose.invariants.yml`) that sets `ASSERT_INVARIANTS=true` and `NODE_ENV=development`, then runs the API layer against it. Two things have to hold: the oracle answers `500 INVARIANT_VIOLATED` on a deliberate breach, and the SUT logs no violation on any other path. It is `continue-on-error` until a week of runs is clean — gating merges on two days of local evidence would be premature, and leaving the flag in forever would make the job decorative.
 - **Allure** merges results from smoke, api and e2e and deploys even if a job fails (`if: always()`). The invariants job re-runs the same API suite under a different SUT configuration, so its results stay a separate artifact (`allure-results-invariants`) instead of doubling every test in the report.
 
@@ -424,7 +426,7 @@ npm run ai:test-gen         # Claude generates test stubs from openapi.yaml
 - **`DESIGN_PRINCIPLES.md`** — how we write tests and framework code (**SRP**, **DRY**, POM, clients, data, flakes, non-goals).
 - **`docs/TEST_STRATEGY.md`** — risk-first strategy, `@smoke` / `@api`, J1/J2/J3 split, CI pipeline, portfolio differentiators.
 - **`docs/RISK_ANALYSIS.md`** — short **impact × likelihood** table mapped to test files (and gaps).
-- **`docs/KNOWN_ISSUES.md`** — bug register: **25 closed entries** — product bugs (IDOR, a11y, WS `ClinicCore`, banner timing, reschedule 409 with an active waitlist, the three waitlist-offer defects the invariant contract surfaced), CI and environment issues (route pattern, private repo auth, SQLite readonly in Docker, teardown cascades) and suite defects (`TST-01…TST-04`); **4 open items** (retrieval ranking, empty doctors, procedure slot duration, and `DOC-03` — an extracted AI service recorded as wired in that never was); **3 design debt items** + 1 dead code finding (unreachable `INVALID_PATTERN` errorCode); each entry with business impact, severity, how found, fix applied.
+- **`docs/KNOWN_ISSUES.md`** — bug register: **26 closed entries** — product bugs (IDOR, a11y, WS `ClinicCore`, banner timing, reschedule 409 with an active waitlist, the three waitlist-offer defects the invariant contract surfaced), CI and environment issues (route pattern, private repo auth, SQLite readonly in Docker, teardown cascades) and suite defects (`TST-01…TST-04`); **3 open bugs** (retrieval ranking, empty doctors, procedure slot duration); **3 design debt items** + 1 dead code finding (unreachable `INVALID_PATTERN` errorCode); each entry with business impact, severity, how found, fix applied.
 - **`docs/TEST_SUMMARY_STAKEHOLDER.md`** — one-page non-technical summary for PM/stakeholder: traffic-light status per area, bugs in plain English, open issues with options, release recommendation.
 - **`docs/GO_NO_GO.md`** — release recommendation for the 2026-04-28 → 2026-05-12 cycle, kept as a dated snapshot rather than rewritten: Conditional Go; 4 bugs fixed in that cycle; 3 open issues (retrieval ranking, empty doctors, procedure slot duration); post-release monitoring signals.
 - **`docs/RTM.md`** — requirements traceability matrix: 121 requirements across 16 areas mapped to test files; 117 covered (97%), 1 partial, 3 gaps documented with explicit reasons.

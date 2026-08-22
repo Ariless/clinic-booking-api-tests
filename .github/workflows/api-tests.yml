@@ -245,6 +245,88 @@ jobs:
         if: always()
         run: docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.invariants.yml down
 
+
+# ── Delegated AI ─────────────────────────────────────────────────────────────
+# Runs the API layer against a SUT that delegates the specialty decision to the standalone
+# ai-service over HTTP, instead of deciding in-process.
+#
+# It exists because the alternative was what happened until 2026-08-21: the extraction was recorded
+# as done, `callAiService()` had never been written, and the one test that would have noticed
+# (503 AI_SERVICE_UNAVAILABLE) guarded on an env var nothing set — so it skipped on every run and the
+# missing integration looked accounted for. A topology nothing exercises is a topology nobody can
+# claim. Both containers run with AI_MOCK_RESPONSE=true, so no API key is needed.
+  ai-service:
+    name: Delegated AI service
+    needs: [smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    env:
+      # Mirrors the SUT's launch configuration so the degradation test knows it can run.
+      AI_SERVICE_DEGRADE: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
+          path: sut
+          token: ${{ secrets.SUT_GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Start SUT with the recommendation delegated
+        run: |
+          mkdir -p sut/data
+          docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.ai-service.yml up -d --wait
+
+      - name: SUT logs on failure
+        if: failure()
+        run: docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.ai-service.yml logs
+
+      - name: Install Playwright
+        run: npm ci && npx playwright install chromium --with-deps
+
+      # The provider side of the contract, verified against the service actually running in this job
+      # rather than against a stub of it.
+      - name: ai-service satisfies the consumer pact
+        env:
+          AI_SERVICE_URL: http://localhost:3001
+        run: npx playwright test tests/api/pact/ai.service.pact.provider.test.ts
+
+      - name: API tests against the delegated topology
+        run: npm run test:api
+
+      # Same suite, one deliberate misconfiguration: the SUT points at a dead port, and the
+      # unreachable-service path has to answer 503 AI_SERVICE_UNAVAILABLE rather than time out or
+      # blame the model. An error path nobody has watched fire is not an error path.
+      - name: Degradation — the service is unreachable
+        env:
+          AI_SERVICE_DEGRADE: "true"
+        run: |
+          docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.ai-service.yml \
+            stop ai-service
+          npx playwright test tests/api/ai.recommend.test.ts --grep "ai-service unreachable"
+
+      - name: Upload allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-ai-service
+          path: allure-results/
+          if-no-files-found: ignore
+
+      - name: Stop SUT
+        if: always()
+        run: docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.ai-service.yml down
+
 # ── E2E & UI ─────────────────────────────────────────────────────────────────
 # Browser tests (tests/e2e + tests/ui). --pass-with-no-tests keeps the job green
 # until those directories are committed. workers:1 for SQLite safety.
