@@ -82,6 +82,18 @@
 
 ---
 
+### 2.4 Storage type leaks into the JSON contract — `isAvailable` (found 2026-08-22)
+
+**Risk:** SQLite has no boolean type, so `slots.isAvailable` is `INTEGER NOT NULL`. `getAvailableByDoctorId` selects the column and the route serialises the row unchanged, so `GET /doctors/:id/slots` answers `"isAvailable": 1`. Every consumer that treats the API as typed disagrees with that: the mobile app declares `isAvailable: boolean`, and the pact it publishes pins a boolean.
+
+**Why it stayed invisible:** `1` is truthy. `slots.filter(s => s.isAvailable)` in `BookingScreen.tsx` behaves exactly as intended, and the web UI carries a `Boolean(s.isAvailable)` wrapper that quietly absorbs the same difference. No scenario test can see it — every assertion that reaches the value through its truthiness passes either way. Only a type-level oracle catches it, which is what the pact is.
+
+**Residual weakness:** The mismatch becomes a user-visible fault the moment a consumer tightens the check — `=== true`, a runtime schema validator, or a generated typed client. The failure mode is "this doctor has no free slots", which reads as a data problem, not a serialisation one.
+
+**Test coverage:** `mobile.pact.provider.test.ts` — the first run of the provider verification failed on `$[*].isAvailable` for every slot in the response. Registered as B-15; the SUT-side mapping is not applied yet.
+
+---
+
 ### 2.2 No audit trail — actor identity lost on state changes
 
 **Risk:** When a doctor cancels a patient's appointment, the `appointments` table records `status = 'cancelled'` and `updatedAt`. It does not record *who* made the change. A patient self-cancel and a doctor-initiated cancel are indistinguishable in the DB.
@@ -328,3 +340,4 @@
 | Lapsed offer leaves the same patient first in line | Medium | ✅ addressed B-12 (2026-08-13): `getNextWaitlistEntry` covers `expired` alongside `declined` | ✅ `expired offer is not handed back to the same patient` |
 | `isAvailable` consistency depended on scenario coverage | Medium | ✅ addressed 2026-08-13: `ASSERT_INVARIANTS` runtime contract (5 checks) answers 500 on a violation; `idx_offers_one_pending_per_slot` carries one of them structurally | ✅ `invariants.test.ts` — oracle proven to fail on deliberate desync |
 | `isAvailable` conflates doctor intent with occupancy | Medium | ❌ by design for now — a slot closed by the doctor and a slot frozen by a lost offer are indistinguishable | ⚠️ not detectable; schema split deferred, see `sut/DESIGN_PROPOSALS.md` §1 option D |
+| Storage type leaks into the JSON contract (`isAvailable` = `1`, not `true`) | Medium | open (B-15) — web UI wraps it in `Boolean()`, mobile relies on truthiness | `mobile.pact.provider.test.ts` — type-level oracle, found 2026-08-22 |

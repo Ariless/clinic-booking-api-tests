@@ -255,6 +255,20 @@ Living document. Every bug found during testing — fixed or open — recorded h
 
 ---
 
+### B-15 — `GET /doctors/:id/slots` returns `isAvailable` as `0`/`1`, not a boolean (Open)
+
+| Field | Value |
+|---|---|
+| **Status** | 🔴 Open — found 2026-08-22 by the first run of the clinic-mobile Pact provider verification |
+| **Found by** | `mobile.pact.provider.test.ts` — `$[*].isAvailable -> Expected 1 (Integer) to be the same type as true (Boolean)`, on every slot in the response |
+| **Severity** | Medium |
+| **Business impact** | The mobile app declares `isAvailable: boolean` (`BookingScreen.tsx`) and filters with `slots.filter(s => s.isAvailable)`. `1` is truthy, so today the screen renders correctly and the mismatch is invisible. It stops being invisible the moment anyone writes the stricter form — `s.isAvailable === true`, an `if (typeof … === 'boolean')` guard, a Zod/TS runtime validator, or a strongly typed client generated from the API. Then every slot is filtered out and patients are told the doctor has no free time. The web UI already works around it: `doctor-schedule.html` wraps the value in `Boolean(s.isAvailable)`. |
+| **Root cause** | SQLite has no boolean type — `slots.isAvailable` is `INTEGER NOT NULL` (`migrate.js`). `slotsRepository.getAvailableByDoctorId` selects the column directly and the route serialises the row as-is, so the storage type leaks into the JSON contract. |
+| **Fix** | Map the column at the edge, not at every call site: in `slotsRepository`, return `isAvailable: Boolean(row.isAvailable)` for the read paths that reach the API (`getAvailableByDoctorId`, `getSlotsByDoctorId`). Internal writes and the `ASSERT_INVARIANTS` checks keep using the integer column. Not fixed in this change — the verification test is the report; the SUT edit is a separate decision. |
+| **Where** | `tests/api/pact/mobile.pact.provider.test.ts` · `sut/src/repositories/slotsRepository.js` · `clinic-mobile/src/screens/BookingScreen.tsx` · `pacts/clinic-mobile-clinic-booking-api.json` |
+
+---
+
 ### B-14 — Procedure can be booked into a slot shorter than its required duration (Open)
 
 | Field | Value |
@@ -441,6 +455,7 @@ or fails for the wrong reason, misreports the system exactly as a broken endpoin
 | CI-06 | Doctor schedule pollution → ordering-dependent fixture failures | ✅ Fixed 2026-05-20 | Low | Full `@api` run 2026-05-18 |
 | DEAD-01 | `INVALID_PATTERN` errorCode unreachable — dead code in repository layer | ⚠️ Design debt | Low | `appointments.recurring.test.ts` 2026-05-17 |
 | B-14 | Procedure bookable into slot shorter than 60min — no SLOT_TOO_SHORT check | 🔴 Open | Medium | `appointments.type.test.ts` 2026-05-19 |
+| B-15 | `isAvailable` serialised as `0`/`1` where the mobile contract pins a boolean | 🔴 Open | Medium | `mobile.pact.provider.test.ts` 2026-08-22 |
 | B-08 | `deleteOwnedSlotIfUnused` FK violation: `waitlist_offers` not deleted before slot | ✅ Fixed 2026-05-20 | Medium | Teardown debugging 2026-05-20 |
 | B-09 | `softDeleteUser` missing `slot_waitlist` cleanup → ghost promotion in teardown | ✅ Fixed 2026-05-20 | Medium | Teardown debugging 2026-05-20 |
 | CI-07 | `slotFixture` teardown: `cancelAsDoctor` triggers `promoteFromWaitlist` loop | ✅ Fixed 2026-05-20 | Low | Teardown error surfacing 2026-05-20 |
