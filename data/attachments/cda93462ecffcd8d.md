@@ -1,0 +1,16 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: api/pact/mobile.pact.provider.test.ts >> clinic-booking-api — clinic-mobile Pact provider @pact >> interactions >> GET /doctors/:id/slots — 200 carries id, startTime and boolean isAvailable @pact
+- Location: tests/api/pact/mobile.pact.provider.test.ts:200:13
+
+# Error details
+
+```
+Error: {"errors":[{"interaction":"Verifying a pact between clinic-mobile and clinic-booking-api - a slots request from the mobile app","mismatch":{"interactionId":"","mismatches":[{"actual":"1","expected":"true","mismatch":"Expected 1 (Integer) to be the same type as true (Boolean)","path":"$[5].isAvailable","type":"BodyMismatch"},{"actual":"1","expected":"true","mismatch":"Expected 1 (Integer) to be the same type as true (Boolean)","path":"$[4].isAvailable","type":"BodyMismatch"},{"actual":"1","expected":"true","mismatch":"Expected 1 (Integer) to be the same type as true (Boolean)","path":"$[0].isAvailable","type":"BodyMismatch"},{"actual":"1","expected":"true","mismatch":"Expected 1 (Integer) to be the same type as true (Boolean)","path":"$[1].isAvailable","type":"BodyMismatch"},{"actual":"1","expected":"true","mismatch":"Expected 1 (Integer) to be the same type as true (Boolean)","path":"$[2].isAvailable","type":"BodyMismatch"},{"actual":"1","expected":"true","mismatch":"Expected 1 (Integer) to be the same type as true (Boolean)","path":"$[3].isAvailable","type":"BodyMismatch"}],"type":"mismatches"}}],"interactionResults":[{"description":"a slots request from the mobile app","duration":"30ms","result":"Error"}],"notices":[],"output":["\nVerifying a pact between \u001b[1mclinic-mobile\u001b[0m and \u001b[1mclinic-booking-api\u001b[0m","","  a slots request from the mobile app (0s loading, 30ms verification)","    returns a response which","      has status code \u001b[1m200\u001b[0m (\u001b[32mOK\u001b[0m)","      includes headers","        \"\u001b[1mContent-Type\u001b[0m\" with value \"\u001b[1mapplication/json\u001b[0m\" (\u001b[32mOK\u001b[0m)","      has a matching body (\u001b[31mFAILED\u001b[0m)","","\nFailures:\n","1) Verifying a pact between clinic-mobile and clinic-booking-api - a slots request from the mobile app","    1.1) has a matching body","           \u001b[1m$[5].isAvailable\u001b[0m -> Expected 1 (Integer) to be the same type as true (Boolean)","           \u001b[1m$[0].isAvailable\u001b[0m -> Expected 1 (Integer) to be the same type as true (Boolean)","           \u001b[1m$[1].isAvailable\u001b[0m -> Expected 1 (Integer) to be the same type as true (Boolean)","           \u001b[1m$[2].isAvailable\u001b[0m -> Expected 1 (Integer) to be the same type as true (Boolean)","           \u001b[1m$[3].isAvailable\u001b[0m -> Expected 1 (Integer) to be the same type as true (Boolean)","           \u001b[1m$[4].isAvailable\u001b[0m -> Expected 1 (Integer) to be the same type as true (Boolean)","\nThere were 1 pact failures\n"],"pendingErrors":[],"result":false}
+```

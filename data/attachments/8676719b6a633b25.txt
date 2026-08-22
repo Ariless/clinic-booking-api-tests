@@ -1,0 +1,28 @@
+[10:40:15.220] WARN (5436): pact@16.4.0: no state handler found for state: ""
+
+
+Verifying a pact between clinic-mobile and clinic-booking-api
+
+  a slots request from the mobile app (0s loading, 17ms verification)
+    returns a response which
+      has status code 200 (OK)
+      includes headers
+        "Content-Type" with value "application/json" (OK)
+      has a matching body (FAILED)
+
+
+Failures:
+
+1) Verifying a pact between clinic-mobile and clinic-booking-api - a slots request from the mobile app
+    1.1) has a matching body
+           $[0].isAvailable -> Expected 1 (Integer) to be the same type as true (Boolean)
+           $[1].isAvailable -> Expected 1 (Integer) to be the same type as true (Boolean)
+           $[2].isAvailable -> Expected 1 (Integer) to be the same type as true (Boolean)
+           $[3].isAvailable -> Expected 1 (Integer) to be the same type as true (Boolean)
+           $[4].isAvailable -> Expected 1 (Integer) to be the same type as true (Boolean)
+           $[5].isAvailable -> Expected 1 (Integer) to be the same type as true (Boolean)
+
+There were 1 pact failures
+
+[10:40:15.284] ERROR (5436): pact-core@19.2.0: Verification unsuccessful
+
