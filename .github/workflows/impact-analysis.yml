@@ -64,7 +64,7 @@ jobs:
         if: ${{ hashFiles('impact-tests.txt') != '' }}
         run: |
           mkdir -p sut/data
-          docker compose -f sut/docker-compose.test.yml up -d --wait
+          DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose -f sut/docker-compose.test.yml up -d --wait
 
       - name: SUT logs on failure
         if: failure()

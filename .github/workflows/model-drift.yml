@@ -58,7 +58,7 @@ jobs:
           mkdir -p sut/data
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} \
           ENABLE_AI_RECOMMENDATION=true \
-          docker compose -f sut/docker-compose.test.yml up -d --wait
+          DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose -f sut/docker-compose.test.yml up -d --wait
 
       - name: SUT logs on failure
         if: failure()

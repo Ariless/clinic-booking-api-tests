@@ -80,7 +80,7 @@ jobs:
       - name: Start SUT
         run: |
           mkdir -p sut/data
-          docker compose -f sut/docker-compose.test.yml up -d --wait
+          DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose -f sut/docker-compose.test.yml up -d --wait
 
       - name: SUT logs on failure
         if: failure()
@@ -132,7 +132,7 @@ jobs:
       - name: Start SUT
         run: |
           mkdir -p sut/data
-          docker compose -f sut/docker-compose.test.yml up -d --wait
+          DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose -f sut/docker-compose.test.yml up -d --wait
 
       - name: SUT logs on failure
         if: failure()
@@ -239,7 +239,7 @@ jobs:
       - name: Start SUT with the invariant contract on
         run: |
           mkdir -p sut/data
-          docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.invariants.yml up -d --wait
+          DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.invariants.yml up -d --wait
 
       - name: SUT logs on failure
         if: failure()
@@ -327,7 +327,7 @@ jobs:
       - name: Start SUT with the recommendation delegated
         run: |
           mkdir -p sut/data
-          docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.ai-service.yml up -d --wait
+          DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.ai-service.yml up -d --wait
 
       - name: SUT logs on failure
         if: failure()
@@ -398,7 +398,7 @@ jobs:
       - name: Start SUT
         run: |
           mkdir -p sut/data
-          docker compose -f sut/docker-compose.test.yml up -d --wait
+          DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose -f sut/docker-compose.test.yml up -d --wait
 
       - name: SUT logs on failure
         if: failure()
@@ -474,7 +474,7 @@ jobs:
       - name: Start SUT
         run: |
           mkdir -p sut/data
-          docker compose -f sut/docker-compose.test.yml up -d --wait
+          DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose -f sut/docker-compose.test.yml up -d --wait
 
       - name: SUT logs on failure
         if: failure()
