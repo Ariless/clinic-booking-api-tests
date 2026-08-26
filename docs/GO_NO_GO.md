@@ -88,7 +88,7 @@ Orthopedist and Pediatrician appear in the knowledge base but have no seeded doc
 Schemathesis (2026-05-12) generated 408 test scenarios from the OpenAPI spec and found:
 
 - **Malformed JWT → `400 <EMPTY>`** — when the Authorization header contains invalid-format bytes, the middleware returns 400 with no body, breaking the error contract. Medium severity. Fix: catch JWT parse errors in middleware and return `401` with standard error body.
-- **TRACE method → `404` instead of `405`** — HTTP spec compliance. Low severity.
+- ~~**TRACE method → `404` instead of `405`**~~ — fixed 2026-08-26; the defect was wider than TRACE (no path returned `405` under any method), see SYSTEM_WEAKNESS_REPORT §5.2.
 - **`401` not documented in spec for auth-required endpoints** — spec gap, not a runtime bug.
 
 None of these are release blockers. The malformed JWT case is worth fixing in the next dev cycle.

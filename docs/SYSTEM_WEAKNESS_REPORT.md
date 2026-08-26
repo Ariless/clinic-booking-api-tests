@@ -202,17 +202,36 @@
 
 ---
 
-### 5.2 TRACE method returns 404 instead of 405
+### 5.2 No path returned 405 under any method ✅ FIXED 2026-08-26
 
 **Risk:** Sending `TRACE <any-endpoint>` returns `404 NOT_FOUND` rather than `405 Method Not Allowed`. HTTP spec (RFC 7231) requires `405` for methods not supported by a route.
 
+Re-checked 2026-08-26 against the running SUT, and the gap is wider than TRACE: **no path returns `405` under any method**, and `405` does not appear anywhere in `sut/src`. `POST`, `PUT`, `PATCH` and `DELETE` on `/api/v1/doctors` — a real path that serves `GET` — all answer `404`, the same code as `/api/v1/nonexistent`. A client cannot distinguish "this path does not exist" from "this path exists but not for your method". `OPTIONS` and `HEAD` are the exception: Express answers those itself, both `200`.
+
 **Found by:** Schemathesis — automatically probes unsupported methods on every operation.
 
-**Scope:** Systemic — affects all 35 endpoints.
+**Scope:** The whole application, not a set of endpoints. TRACE has no handler anywhere, so the request falls through to `notFoundHandler` regardless of path — a path that has never existed answers identically. Counting endpoints here was misleading: the number described the API's size, while the defect belongs to the routing layer above it.
 
 **Severity:** Low — no security impact, no data risk. Pure HTTP compliance.
 
-**Fix direction:** Add `app.use((req, res, next) => { if (req.method === 'TRACE') return res.status(405).end(); next(); })` at the top of the Express app.
+**Fixed 2026-08-26.** `sut/src/middlewares/method-not-allowed.js`, mounted between the routes
+and the 404 handler. It walks the router the way Express does — each layer's matchers against
+the remaining path, recursing into mounted sub-routers — and collects the methods registered
+for the path, ignoring the one that was asked for. A non-empty set that lacks the request's
+method is a 405 with `Allow`; an empty set falls through to the 404 handler unchanged.
+
+Verified against a running SUT: `TRACE`, `POST`, `PUT` and `DELETE` on `/api/v1/doctors`
+answer `405` with `Allow: GET, HEAD, OPTIONS`; `GET /api/v1/auth/login` answers `405` with
+`Allow: OPTIONS, POST`; `/api/v1/nonexistent` still answers `404` under every method,
+`TRACE` included. Pinned by `tests/api/http.methods.test.ts` — 9 tests, of which 6 fail
+against the pre-fix build, checked by disabling the middleware and re-running.
+
+One subtlety cost a debugging pass: a router mounted at `"/"` (the health routes) carries a
+matcher that only accepts `"/"` itself, because Express skips the prefix check for it and
+hands the router every path. Without a branch for that, `PUT /health` looked like an unknown
+path rather than a wrong method.
+
+**Original fix direction, kept for the record:** A TRACE-only guard at the top of the app — `if (req.method === 'TRACE') return res.status(405).end()` — closes the reported symptom but not the defect: it would answer `405` for paths that do not exist, where `404` is correct, and it leaves `POST` on a `GET`-only path still answering `404`. Honest fix is a `405` handler that runs after routing and knows which methods the matched path allows (Express exposes this via a router layer walk, or `express-route-405`-style middleware), returning `405` with an `Allow` header only when the path matched and the method did not.
 
 ---
 
@@ -307,6 +326,241 @@
 
 ---
 
+## 8. Kafka event stream weaknesses (found 2026-08-24)
+
+The producer, the eight `clinic.appointment.*` topics and the companion test file were written on
+2026-05-15 and marked *"pending Docker verification"* in `PROJECT_PLAN.md`. 2026-08-24 was the first
+time any of it met a running broker. Everything below surfaced in that first session.
+
+### 8.1 `appointmentId` is reused across records — event correlation is unsafe
+
+**Risk:** Appointment ids come from the SQLite rowid without `AUTOINCREMENT`. When a record is
+deleted, the freed id is handed to the next insert. In a single suite run the SUT emitted:
+
+```
+booked    {appointmentId: 1, patientId: 11}
+cancelled {appointmentId: 1, patientId: 11, cancelledBy: "doctor"}
+booked    {appointmentId: 1, patientId: 12}
+cancelled {appointmentId: 1, patientId: 12, cancelledBy: "patient"}
+```
+
+Five different records of five different patients were published under `appointmentId: 1`.
+
+**Why it matters downstream:** a consumer that deduplicates, correlates or builds state keyed on
+`appointmentId` — the natural choice, and the one the project's own task in `TASKS.md` §"one Kafka
+event per booking" points at — will merge unrelated patients into one entity. In a clinic that means
+a cancellation notice addressed to the wrong person; the event itself is well-formed, so nothing
+alerts.
+
+**How it was found:** a test filtering events by `appointmentId` claimed the cancellation emitted by
+the *previous* test's account teardown and failed with `patientId 10 vs 11`. The mismatched id is
+the visible symptom; the reusable key is the defect.
+
+**Mitigation in the tests:** events are correlated on `X-Request-Id`, which is unique per request and
+present both in the response header and in every event payload. `BaseClient.parseResponse` now
+returns `headers` so any test can do this.
+
+**Not yet addressed in the SUT:** the id itself. Options are `AUTOINCREMENT` (monotonic rowids), or
+a UUID business key on the event. See `sut/DESIGN_PROPOSALS.md` before changing the schema.
+
+**Test coverage:** ✅ all 8 topics in `appointments.kafka.test.ts`, correlated by request id.
+
+---
+
+### 8.2 Deleting a patient account publishes `cancelled` with `cancelledBy: "doctor"`
+
+**Risk:** When the `user` fixture removes its account, the patient's booking is cancelled and the
+event goes out attributed to the doctor:
+
+```
+cancelled {appointmentId: 1, patientId: 11, cancelledBy: "doctor", doctorId: 1}
+```
+
+No doctor took that action. A consumer driving notifications would tell the patient their doctor
+cancelled on them; a consumer building cancellation metrics would charge the cancellation to the
+doctor's rate.
+
+**Status:** open — found 2026-08-24, no fix attempted. The event needs a third attribution value
+(`system`, `account_deleted`) rather than borrowing the doctor's.
+
+**Test coverage:** ❌ none — the behaviour was observed in the recorder log, not asserted.
+
+---
+
+### 8.3 A consumer group per test is never cleaned up
+
+**Risk:** The original helper created a consumer group per test (`test-${Date.now()}-...`) and only
+called `disconnect()`, which leaves the group registered until offsets retention expires — 7 days by
+default. After six suite runs the broker held 54 groups.
+
+**Effect:** rebalances slow down as the coordinator carries more groups, until the 5s wait for a
+message expires. The failure message reads `Kafka message not received within 5000ms`, which points
+at the producer while the actual cause is test litter on the broker. On CI this is the shape of a
+suite that passes for a month and then starts failing for no visible reason.
+
+**Mitigation:** one recorder per suite instead of one consumer per test, plus
+`cleanupTestConsumerGroups()` on start and `deleteGroups` on stop. Groups on the broker after five
+runs: 0.
+
+**Test coverage:** ✅ structural — the helper deletes its own group; verified by counting groups.
+
+---
+
+### 8.4 Topic auto-creation raced the subscribe
+
+**Risk:** The suite relied on `KAFKA_AUTO_CREATE_TOPICS_ENABLE`. Auto-creation is asynchronous: the
+metadata request that triggers it is answered with `This server does not host this topic-partition`
+while the topic is still being created.
+
+**Effect:** on a clean broker the suite failed 8/9; on the second run 2/9; by the third it passed.
+The suite was silently depending on topics left behind by earlier runs — and testing a broker
+configuration that production normally disables.
+
+**Mitigation:** `ensureKafkaTopics()` creates all eight topics through the admin client in
+`beforeAll`, with `waitForLeaders: true`.
+
+**Test coverage:** ✅ verified from a torn-down broker (`down -v`): 9/9, five consecutive runs.
+
+---
+
+### 8.5 `X-Request-Id` is generated, never accepted from the caller
+
+**Risk:** `src/middlewares/request-id.js` always assigns a fresh UUID and ignores any inbound
+`X-Request-Id`. A caller that already has a correlation id — an upstream service, a load test, a
+client retry — cannot carry it into the SUT's logs or its Kafka events.
+
+**Effect:** traces break at the SUT boundary. Correlating "this user action" with "this event" across
+services requires the id to survive the hop, which is exactly the guarantee tracing depends on.
+
+**Status:** open — found 2026-08-24. A one-line change (`req.requestId = req.get('X-Request-Id') ||
+uuidv4()`) would fix it, but accepting a caller-supplied id needs a validation and trust decision
+first, so it is written up rather than patched.
+
+**Test coverage:** ❌ none.
+
+---
+
+## 9. Response cache weaknesses (added 2026-08-24)
+
+A read-through Redis cache now serves `GET /doctors` and `GET /doctors/:id/slots` with a 30s TTL.
+Without `REDIS_URL` the cache is inert and every read goes to SQLite, the same degradation contract
+the Kafka producer follows — verified by stopping the container mid-session: both endpoints kept
+answering 200.
+
+### 9.1 A cached slot list is wrong the moment a slot is taken
+
+**Risk:** slot availability changes on booking, cancellation, rejection, reschedule, completion,
+slot creation, slot deletion, waitlist acceptance and series operations. A cache that misses any of
+those paths offers a slot that is already taken.
+
+**Effect:** two patients are handed the same slot and race for it. The unique index catches the
+second write with a 409, so the data stays correct — but the API advertised availability that did
+not exist, and the second patient sees a failure that looks like a bug.
+
+**How it is protected:** every mutating path invalidates. Where the doctor is known cheaply, the
+specific key is dropped; on waitlist and series paths, all slot keys are dropped through a SCAN
+sweep (never KEYS — it blocks the server for the whole keyspace).
+
+**Oracle proven:** invalidation on booking was disabled deliberately and the suite failed with the
+cached list still advertising the taken slot. A cache test that has never been seen failing is not
+evidence of anything.
+
+**Test coverage:** ✅ `doctors.cache.test.ts` — 6 tests: TTL is bounded (never `-1`), the read is
+genuinely served from the cache (a planted value the database could not produce comes back),
+booking drops the entry, cancelling restores the slot, slot create/delete invalidate, and a cached
+entry can never turn an unknown doctor into a 200.
+
+---
+
+### 9.2 Test-data collisions surfaced by suite growth (found 2026-08-24)
+
+Two failures appeared in the full API run once the Kafka and cache tests began executing. Neither
+was caused by the cache; both were latent test-data defects that a larger suite exposed.
+
+**`slotFixture` shares one doctor.** Every test books against `seedDoctors[0]`, so slot windows are
+a global resource. `nextSeedSlotWindow` walks forward four slots per day (10:00, 12:00, 14:00,
+16:00).
+
+1. **The recurring Kafka test left a slot behind forever.** It created a slot a week out and
+   deleted it in `finally`, but `deleteOwnedSlotIfUnused` refuses a slot carrying an active
+   appointment, and the series was still live. The slot survived every run, and once the window
+   counter reached that date, unrelated tests failed with `SLOT_OVERLAP`. Fixed: the series is
+   cancelled before the slot is dropped.
+
+2. **`doctors.schedule.test.ts` defended itself with a day offset that expired.** `slotAt` added
+   `+7` days with the comment *"avoids conflicts with slotFixture"*. At ~200 tests the fixture
+   already covers 50 days forward, so the gap was long gone. A day offset can always be overtaken
+   by suite growth; the hour cannot — the fixture only ever uses even hours, so the test moved to
+   11:00. Fixed.
+
+**Pattern worth keeping:** a test suite that shares a mutable resource has a capacity, and the
+defences written against collisions have to be checked against the suite's current size, not the
+size it had when they were written.
+
+**Test coverage:** ✅ full API suite green after both fixes — 199 passed, 0 failed (B-14 remains a
+deliberate, expected failure).
+
+---
+
+## 10. GraphQL surface weaknesses (added 2026-08-24)
+
+`POST /api/v1/graphql` exposes `doctors`, `doctor(id)` and `myAppointments` over the same
+repositories the REST routes use. A second read surface on one domain, added for the failure modes
+REST does not have.
+
+### 10.1 A rejected request still answers HTTP 200
+
+**Risk:** `{ doctors { id salary } }` fails schema validation before any resolver runs, and the
+server answers **200** with an `errors` array. `myAppointments` without a token behaves the same
+way: 200, `data: null`, `errors[0].extensions.errorCode = AUTH_REQUIRED`.
+
+**Effect:** every tool that judges health by status code — an uptime check, a 4xx/5xx alert, a
+latency dashboard split by status, a smoke test asserting `expect(status).toBe(200)` — reports a
+healthy API while every request is failing. In REST the same two failures are a 400 and a 401.
+
+**Sharper still:** the status depends on the `Accept` header. The same invalid query returns **400**
+under `application/graphql-response+json` and **200** under `application/json` or no Accept at all.
+A test written against one media type says nothing about clients using the other.
+
+**Test coverage:** ✅ `graphql.test.ts` — both media types pinned, and the unauthenticated case
+asserts the 200/`errors` pair rather than the status alone.
+
+**Not addressed:** monitoring. Nothing currently counts `errors[]` in GraphQL responses, so a rise
+in failures is invisible to the observability stack. Worth a counter next to the existing metrics.
+
+---
+
+### 10.2 Nested fields let the caller choose the database cost (fixed)
+
+**Risk:** `Doctor.slots` resolved per parent, so `{ doctors { slots } }` issued one query per
+doctor — measured at **6 queries for 6 doctors** through a new `db_slot_queries_total` counter. The
+multiplier is chosen by the client, by adding one nested field, and grows with the data.
+
+**Effect:** a request that looks small is expensive, and the cost scales with the doctor table. On a
+marketplace-sized dataset this is the standard GraphQL outage.
+
+**Fixed:** a per-request batching loader (the DataLoader pattern, ~30 lines, no dependency) collects
+the calls made in one tick and answers them with a single `IN` query. Measured after the fix: **1
+query**. The loader is per-request on purpose — a shared one would serve one caller's data to the
+next, and availability changes between requests.
+
+**Test coverage:** ✅ the test reads the counter before and after and requires ≤1 query; it was
+first written against the naive resolver and observed failing with "6 queries for 6 doctors".
+
+---
+
+### 10.3 Query depth is bounded by the schema, not by a rule
+
+**Status:** no depth or complexity limit is enforced. Today the schema has no cycle — `Doctor` leads
+to `Slot`, and `Slot` leads nowhere — so depth is naturally finite and an abusive query cannot be
+constructed. This holds only as long as that stays true: adding `Slot.doctor` or
+`Appointment.patient` would open the usual unbounded-nesting problem and a depth rule would become
+necessary. Recorded so the absence is a decision rather than an oversight.
+
+**Test coverage:** ❌ none — nothing to assert while the schema is acyclic.
+
+---
+
 ## 6. Summary table
 
 | Weakness | Severity | Mitigated? | Test exists? |
@@ -333,9 +587,23 @@
 | FK enforcement gap in `deleteOwnedSlotIfUnused` | Medium | ✅ fixed B-08: `waitlist_offers` deleted first in transaction | ✅ all waitlist teardowns pass clean (2026-05-20) |
 | `softDeleteUser` missing waitlist cascade | Medium | ✅ fixed B-09: slot_waitlist cleared in softDelete transaction | ✅ twoUsersFixture teardown passes clean (2026-05-20) |
 | `promoteFromWaitlist` side effect in teardown | Low | ✅ fixed CI-07: retry loop in slotFixture teardown | ✅ offers + promotion tests teardown clean (2026-05-20) |
-| Unanswered waitlist offer holds the slot past its TTL | High | ✅ addressed B-10 (2026-08-13): `expireStaleOffers()` sweep + `AUTO_EXPIRE_OFFERS_INTERVAL_MS` timer; the 410 path in `acceptOffer` releases the slot | ✅ 4 tests in `appointments.waitlist.offers.test.ts`; 2 confirmed failing against the pre-fix build |
+| Unanswered waitlist offer holds the slot past its TTL | High | ✅ addressed B-10 (2026-08-13): `expireStaleOffers()` sweep + `AUTO_EXPIRE_OFFERS_INTERVAL_MS` timer; the 410 path in `acceptOffer` releases the slot | ✅ covered by four expiry tests in `appointments.waitlist.offers.test.ts`; 2 confirmed failing against the pre-fix build |
 | Expiry write and its `410` throw shared one transaction | Medium | ✅ addressed B-11 (2026-08-13): expiry returns a marker, throw moved outside `db.transaction()` | ✅ `410 OFFER_EXPIRED is persisted, not rolled back` |
 | Lapsed offer leaves the same patient first in line | Medium | ✅ addressed B-12 (2026-08-13): `getNextWaitlistEntry` covers `expired` alongside `declined` | ✅ `expired offer is not handed back to the same patient` |
 | `isAvailable` consistency depended on scenario coverage | Medium | ✅ addressed 2026-08-13: `ASSERT_INVARIANTS` runtime contract (5 checks) answers 500 on a violation; `idx_offers_one_pending_per_slot` carries one of them structurally | ✅ `invariants.test.ts` — oracle proven to fail on deliberate desync |
 | `isAvailable` conflates doctor intent with occupancy | Medium | ❌ by design for now — a slot closed by the doctor and a slot frozen by a lost offer are indistinguishable | ⚠️ not detectable; schema split deferred, see `sut/DESIGN_PROPOSALS.md` §1 option D |
 | Storage type leaked into the JSON contract (`isAvailable` = `1`, not `true`) | Medium | fixed B-15 (2026-08-22): `toApiSlot` maps the API read paths; OpenAPI response schema corrected | `mobile.pact.provider.test.ts` — type-level oracle; found and now guards the fix |
+| `appointmentId` reused after deletion — unsafe as an event correlation key | High | ❌ open — rowid without `AUTOINCREMENT` (found 2026-08-24) | ✅ tests correlate on `X-Request-Id` instead; the id reuse itself is untested |
+| Account deletion publishes `cancelled` as `cancelledBy: "doctor"` | Medium | ❌ open — no `system` attribution value (found 2026-08-24) | ❌ observed in recorder log, not asserted |
+| Consumer group per test never deleted — broker accumulates groups | Medium | ✅ fixed 2026-08-24: one recorder per suite + `deleteGroups` on stop | ✅ 0 groups after five runs |
+| Kafka suite depended on asynchronous topic auto-creation | Medium | ✅ fixed 2026-08-24: `ensureKafkaTopics()` in `beforeAll` | ✅ 9/9 from a torn-down broker, five consecutive runs |
+| `X-Request-Id` ignored on inbound requests — trace breaks at the SUT | Medium | ❌ open (found 2026-08-24) | ❌ none |
+| Cached slot list served a slot already booked | High | ✅ invalidation on every availability-changing path (2026-08-24); SCAN sweep where the doctor is not cheaply known | ✅ `doctors.cache.test.ts` — oracle proven by disabling invalidation |
+| Cache entry without expiry would make a missed invalidation permanent | Medium | ✅ bounded TTL (30s) asserted, never `-1` | ✅ TTL test |
+| Redis outage taking the API down with it | High | ✅ cache inert without `REDIS_URL`; container stopped mid-session, endpoints kept answering 200 | ⚠️ verified manually, not asserted in the suite |
+| Recurring Kafka test leaked a slot on every run → `SLOT_OVERLAP` elsewhere | Medium | ✅ fixed 2026-08-24: series cancelled before the slot is deleted | ✅ full API suite green |
+| `slotAt` day-offset defence outgrown by the suite | Medium | ✅ fixed 2026-08-24: moved to an hour `slotFixture` never allocates | ✅ full API suite green |
+| GraphQL answers 200 for validation and auth failures | Medium | ⚠️ spec-compliant, not a defect — but status-based monitoring is blind to it (found 2026-08-24) | ✅ `graphql.test.ts` asserts the 200/`errors` pair; ❌ no metric counts GraphQL errors |
+| Same invalid query returns 400 or 200 depending on `Accept` | Medium | ⚠️ by spec; a test on one media type does not cover the other | ✅ both media types pinned |
+| `doctors { slots }` issued one query per doctor (N+1) | High | ✅ fixed 2026-08-24: per-request batching loader, 6 queries → 1 | ✅ counter-based test, observed failing before the fix |
+| No query depth/complexity limit | Low | ⚠️ acyclic schema makes it moot today; revisit if a back-reference is added | ❌ none |
