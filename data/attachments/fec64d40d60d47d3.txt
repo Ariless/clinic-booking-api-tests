@@ -1,0 +1,13 @@
+[08:49:56.120] WARN (5013): pact@16.4.0: no state handler found for state: ""
+
+
+Verifying a pact between clinic-mobile and clinic-booking-api
+
+  a login request with wrong credentials from the mobile app (0s loading, 114ms verification)
+    returns a response which
+      has status code 401 (OK)
+      includes headers
+        "Content-Type" with value "application/json" (OK)
+      has a matching body (OK)
+
+
