@@ -226,6 +226,105 @@ let facts;
     }
 }
 
+// ── 5. Per-file test counts quoted in prose ──────────────────────────────────
+// FACTS.json guards the totals; this guards the counts written next to a specific
+// file ("`doctors.schedule.test.ts` — 10 tests"). Those drift the same way and are
+// worse, because they read as precise. Found 2026-08-26: TEST_STRATEGY claimed 11
+// tests for content.stress.test.ts, which has 10.
+//
+// Counted statically rather than through `playwright --list` so the rule survives
+// --fast: test(), test.skip(), test.fixme(), it() — but not test.describe/beforeEach/step.
+{
+    const TEST_DECL = /(?:^|\s)(?:test|it)(?:\.(?:skip|fixme|only|fail))?\s*\(/gm;
+
+    function countTests(relPath) {
+        const abs = path.join(ROOT, relPath);
+        if (!fs.existsSync(abs)) return null;
+        return (fs.readFileSync(abs, "utf8").match(TEST_DECL) || []).length;
+    }
+
+    /** Resolve a bare filename to a tracked path, if it is unambiguous.
+     *  git-tracked only, for the same reason FACTS.json counts that way: an
+     *  untracked work-in-progress file must not make the check fail differently
+     *  here than it does in CI. */
+    const byName = new Map();
+    const tracked = execSync("git ls-files tests", { cwd: ROOT, encoding: "utf8" })
+        .split("\n")
+        .filter((f) => /\.test\.ts$/.test(f));
+    for (const rel of tracked) {
+        const base = path.basename(rel);
+        if (byName.has(base)) byName.set(base, null); // ambiguous — skip it
+        else byName.set(base, rel);
+    }
+
+    const docs = ["README.md", "CLAUDE.md"].concat(
+        fs.existsSync(path.join(ROOT, "docs"))
+            ? fs.readdirSync(path.join(ROOT, "docs")).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`)
+            : [],
+    );
+
+    for (const doc of docs) {
+        const abs = path.join(ROOT, doc);
+        if (!fs.existsSync(abs)) continue;
+        fs.readFileSync(abs, "utf8").split("\n").forEach((line, i) => {
+            // Only a count that follows the filename directly — "`x.test.ts` — 8 tests",
+            // "(10 tests," — is a claim about the file. Prose like "in all 4 tests that
+            // create slots" or "4 tests in `x.test.ts`" describes a subset and is left alone;
+            // both wordings exist in these docs and both are correct.
+            const fileMatch = line.match(
+                /`([\w./-]*?([\w.-]+\.test\.ts))`[^`]{0,3}?[—:(-]\s*(\d+)\s+tests\b/,
+            );
+            if (!fileMatch) return;
+
+            const rel = byName.get(fileMatch[2]);
+            if (!rel) return; // unknown or ambiguous filename — not this rule's business
+
+            const actual = countTests(rel);
+            const quoted = Number(fileMatch[3]);
+            if (actual !== null && actual !== quoted) {
+                fail(
+                    "file-test-count",
+                    `${doc}:${i + 1} says ${quoted} tests for ${fileMatch[2]}, the file declares ${actual}`,
+                );
+            }
+        });
+    }
+}
+
+// ── 6. Runners named in prose have to exist ──────────────────────────────────
+// TEST_STRATEGY described `npm run test:unit` as "jest — 14 tests" for long enough
+// that nobody noticed jest was never a dependency; the script is playwright. A
+// wrong runner sends a reader to the wrong docs and the wrong debugging.
+{
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+    const RUNNERS = ["jest", "mocha", "vitest", "ava", "jasmine"];
+    const absent = RUNNERS.filter((r) => !Object.keys(deps).some((d) => d === r || d.endsWith(`/${r}`)));
+
+    const docs = ["README.md", "CLAUDE.md"].concat(
+        fs.existsSync(path.join(ROOT, "docs"))
+            ? fs.readdirSync(path.join(ROOT, "docs")).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`)
+            : [],
+    );
+
+    for (const doc of docs) {
+        const abs = path.join(ROOT, doc);
+        if (!fs.existsSync(abs)) continue;
+        fs.readFileSync(abs, "utf8").split("\n").forEach((line, i) => {
+            // Only where prose describes how a command runs, not prose about the tools themselves.
+            if (!/npm run |npx /.test(line)) return;
+            for (const runner of absent) {
+                if (new RegExp(`\\b${runner}\\b`, "i").test(line)) {
+                    fail(
+                        "runner-not-installed",
+                        `${doc}:${i + 1} describes a command as ${runner}, which is not a dependency of this project`,
+                    );
+                }
+            }
+        });
+    }
+}
+
 // ── report ───────────────────────────────────────────────────────────────────
 if (failures.length) {
     console.error("\nConvention check failed:\n");

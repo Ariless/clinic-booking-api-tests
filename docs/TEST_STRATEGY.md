@@ -411,7 +411,7 @@ Not penetration testing — boundary assertions that prove the API rejects unaut
 
 **Status: ✅ shipped (2026-04-30)**
 
-File: `tests/ui/accessibility.test.ts` — 3 tests, tag `@a11y @ui`.
+File: `tests/ui/accessibility.test.ts` — 8 tests, tag `@a11y @ui`.
 
 Tool: **`@axe-core/playwright`** — axe-core runs against live pages in Chromium, asserts zero violations.
 
@@ -913,7 +913,7 @@ Each success case registers the user, then asserts that `GET /auth/me` returns t
 
 **What:** Two-layer guard against interface drift. Layer 1 fetches the live OpenAPI spec (`/api/openapi.yaml`) and asserts that all expected paths, error codes, and schema names are documented. Layer 2 calls key endpoints directly and validates that actual response bodies match the defined JSON schemas — catching cases where a refactor silently changes the response shape without updating the spec.
 
-**Implemented in:** `tests/api/contract.drift.test.ts` (9 tests, `@api`, no skip guard)
+**Implemented in:** `tests/api/contract.drift.test.ts` (10 tests, `@api`, no skip guard)
 
 What it catches:
 - Endpoint added to SUT, missing from spec
@@ -955,7 +955,7 @@ schemathesis run http://localhost:3000/api/openapi.yaml --checks all \
 
 **What it found on first run (2026-05-12):**
 - **Malformed JWT → `400 <EMPTY>`** — error contract violation. When Authorization header contains invalid-format bytes, middleware returns 400 with no body. All existing security tests only test missing or unauthorized tokens — never a malformed one.
-- **TRACE → 404 not 405** — HTTP compliance gap, systemic across all 35 endpoints.
+- **TRACE → 404 not 405** — HTTP compliance gap, systemic across every route.
 - **`401` undocumented in spec** for several auth-required endpoints.
 
 Full findings: `SYSTEM_WEAKNESS_REPORT.md` §5.
