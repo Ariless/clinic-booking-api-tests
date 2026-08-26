@@ -451,7 +451,7 @@ Files: `src/utils/appointmentStateMachine.js` (mutated) + `src/utils/__tests__/a
 
 **Commands (run from SUT root):**
 ```bash
-npm run test:unit      # jest — 14 tests, ~0.2s
+npm run test:unit      # playwright — 7 tests, ~0.4s
 npm run test:mutation  # stryker run — mutation report in reports/mutation/mutation.html
 ```
 
@@ -880,7 +880,7 @@ expect(entry).toMatchObject({
 
 **Before:** Registration tests only covered `test_<timestamp>@example.com` — ASCII email, generic name. No coverage of international scripts, special characters, or long inputs.
 
-**After:** `tests/api/content.stress.test.ts` — 11 tests across two describe blocks.
+**After:** `tests/api/content.stress.test.ts` — 10 tests across two describe blocks.
 
 **Static block (always runs, no API key required):**
 Covers known content edge cases and boundary conditions:
