@@ -1,0 +1,72 @@
+{
+  "request": {
+    "model": "claude-haiku-4-5-20251001",
+    "max_tokens": 256,
+    "messages": [
+      {
+        "role": "user",
+        "content": "You are a medical triage assistant. Based on the patient's symptoms, recommend the most appropriate specialist.\n\nPatient symptoms: \"lower back pain and stiffness\"\n\nChoose ONLY from the following specialties (respond with the exact name):\n- Orthopedist: Specialises in the musculoskeletal system — bones, joints, and muscles."
+      }
+    ],
+    "output_config": {
+      "format": {
+        "type": "json_schema",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "specialty": {
+              "type": "string",
+              "enum": [
+                "General Practitioner",
+                "Cardiologist",
+                "Neurologist",
+                "Dermatologist",
+                "Orthopedist",
+                "Pediatrician"
+              ]
+            },
+            "reasoning": {
+              "type": "string",
+              "description": "One sentence naming the specialty and why it fits the symptoms."
+            }
+          },
+          "required": [
+            "specialty",
+            "reasoning"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "recordedAt": "2026-08-27",
+  "responses": [
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "id": "msg_011CeTTv6WPtdaEz77ZBSwML",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"specialty\":\"Orthopedist\",\"reasoning\":\"An Orthopedist is the appropriate specialist for lower back pain and stiffness as these symptoms typically involve the musculoskeletal system including vertebrae, discs, joints, and muscles of the spine.\"}"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 321,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 60,
+        "service_tier": "standard",
+        "inference_geo": "not_available"
+      }
+    }
+  ]
+}

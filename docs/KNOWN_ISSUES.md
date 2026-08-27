@@ -497,12 +497,22 @@ which is worse than the gap it was closing.
 matter are *two different prompts do not share a key* and its nested twin for the schema — a
 top-level-only sort passes the first and fails the second.
 
-**Consequence, open:** the three existing cassettes cannot be salvaged. Only the first request of
-each file was ever stored (`entry.request` is written once, on creation), so 35 of the 36 responses
-in the large one belong to prompts nobody recorded. They have to be re-recorded against the live API
-— roughly 40 Haiku calls, one `npm run rag:record` with a funded key. Until then the `rag-replay`
-job in `api-tests.yml` fails loudly on missing recordings, which is the correct state: a job that
-cannot answer is better than one that answers from the wrong file.
+**Consequence, closed 2026-08-27:** the three existing cassettes could not be salvaged. Only the
+first request of each file was ever stored (`entry.request` is written once, on creation), so 35 of
+the 36 responses in the large one belonged to prompts nobody recorded. They were deleted and the
+layer re-recorded against the live API in one `npm run rag:record`: **40 responses across 29 files,
+`matched 0 · recorded 40 · missed 0`**. The replay run that follows reports `matched 40 · recorded 0
+· missed 0`, 8 passed in 3.5 s. `continue-on-error` is off the `rag-replay` job as of the same
+commit — it gates now.
+
+The file count is the part worth reading, and the check that separates a real fix from the old
+illusion. Forty responses live in twenty-nine files because some prompts genuinely repeat — the
+judge sends the same body three times, and `"chest pain and shortness of breath"` is shared by three
+tests. Under the defect the same forty responses fitted in **three** files. Verified beyond the
+count: every filename equals the hash of the request stored inside it (29/29), the 29 stored message
+sets are pairwise distinct, and `"my infant has an ear infection"` — the case that used to be
+answered from another question's recording — now owns a file whose recorded answer is
+`Pediatrician`.
 
 **Why the defect survived:** `cassetteKey` had no test. It is four lines and looks obviously right,
 which is exactly the profile of the code that gets read instead of run.
@@ -665,7 +675,7 @@ through the hop being guarded.
 | TST-06 | Claude degradation test gated on `AI_DEGRADE_TEST`, a variable nothing in either repository ever set — it had never run | ✅ Fixed 2026-08-22: `CLAUDE_DEGRADE` switch in the SUT + compose overlay + CI step; test rewired and a second assertion added | Medium | Repository audit 2026-08-21, fixed 2026-08-22 |
 | TST-07 | No Jest test in the SUT could load `src/app.js` — uuid 14 is ESM-only and Jest's CommonJS runtime dies on it, so every property of the *assembled* app was unreachable from the fast suite | ✅ Fixed 2026-08-26: `test-helpers/uuid-cjs.js` mapped in `jest.config.js`; production loads the real package unchanged | Medium | Writing the first test that needed the real app 2026-08-26 |
 | TST-08 | AI bug reporter sent a failed test's `error.message` and `error.stack` to Anthropic unredacted — Playwright quotes the compared values, so symptoms and bearer tokens travelled to a third party, a file and the Allure report | ✅ Fixed 2026-08-26: `utils/phi.ts` + `buildBugReportPrompt()` split out of the transport; 9 tests | High | PII audit of the three paths symptoms leave by 2026-08-26 |
-| TST-09 | Cassette key ignored the prompt — `JSON.stringify(body, keys)` filters properties at every depth instead of sorting them, so every recorded request shared one key and replay answered questions it was never asked (8/8 green in 2.1s, 40 matched, 0 missed) | ✅ Fixed 2026-08-27: explicit recursive `canonicalise()`; 6 tests. Existing cassettes unsalvageable — re-record required | High | Wiring the replay job into CI 2026-08-27 |
+| TST-09 | Cassette key ignored the prompt — `JSON.stringify(body, keys)` filters properties at every depth instead of sorting them, so every recorded request shared one key and replay answered questions it was never asked (8/8 green in 2.1s, 40 matched, 0 missed) | ✅ Fixed 2026-08-27: explicit recursive `canonicalise()`; 6 tests. Unsalvageable cassettes deleted and re-recorded the same day — 40 responses across 29 files (was 3), replay `matched 40 · missed 0`, job now gating | High | Wiring the replay job into CI 2026-08-27 |
 | TST-10 | `model-drift.yml` never called a model — shell variables before `docker compose up` reach the compose process, not the container, and the compose file hardcoded `AI_MOCK_RESPONSE: "true"`; the job reported "no drift" weekly from mid-May | ✅ Fixed 2026-08-27: `${...}` pass-through + a `/health` gate asserting `implementation === "claude"` in both AI jobs | High | Centralising the model id 2026-08-27 |
 | TST-04 | AI suite needs two mutually exclusive `AI_RATE_LIMIT_MAX` settings; a correct 429 was reported as a broken endpoint | ✅ Fixed 2026-08-21: `skipIfThrottled()` in all 9 multi-call loops | Medium | Verifying the TST-02 fix 2026-08-21 |
 | DOC-01 | Six docs claimed that tests living in this repository lived elsewhere, pointing at a README section that never existed | ✅ Fixed 2026-08-21: notices rewritten or removed; counts corrected and put under the convention check | Medium | Repository audit 2026-08-21 |

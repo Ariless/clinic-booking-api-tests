@@ -1,0 +1,72 @@
+{
+  "request": {
+    "model": "claude-haiku-4-5-20251001",
+    "max_tokens": 256,
+    "messages": [
+      {
+        "role": "user",
+        "content": "You are a medical triage assistant. Based on the patient's symptoms, recommend the most appropriate specialist.\n\nPatient symptoms: \"acne and dry flaking skin patches\"\n\nChoose ONLY from the following specialties (respond with the exact name):\n- Dermatologist: Treats conditions affecting the skin, hair, and nails."
+      }
+    ],
+    "output_config": {
+      "format": {
+        "type": "json_schema",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "specialty": {
+              "type": "string",
+              "enum": [
+                "General Practitioner",
+                "Cardiologist",
+                "Neurologist",
+                "Dermatologist",
+                "Orthopedist",
+                "Pediatrician"
+              ]
+            },
+            "reasoning": {
+              "type": "string",
+              "description": "One sentence naming the specialty and why it fits the symptoms."
+            }
+          },
+          "required": [
+            "specialty",
+            "reasoning"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "recordedAt": "2026-08-27",
+  "responses": [
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "id": "msg_011CeTTujkUgeop86xeivZ2a",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"specialty\": \"Dermatologist\", \"reasoning\": \"A Dermatologist is the appropriate specialist because they treat skin conditions including acne and dry flaking skin patches, which are both dermatological issues.\"}"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 315,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 49,
+        "service_tier": "standard",
+        "inference_geo": "not_available"
+      }
+    }
+  ]
+}

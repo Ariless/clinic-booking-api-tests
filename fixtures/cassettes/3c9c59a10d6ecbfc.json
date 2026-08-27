@@ -1,0 +1,99 @@
+{
+  "request": {
+    "model": "claude-haiku-4-5-20251001",
+    "max_tokens": 256,
+    "messages": [
+      {
+        "role": "user",
+        "content": "You are a medical triage assistant. Based on the patient's symptoms, recommend the most appropriate specialist.\n\nPatient symptoms: \"my child has high fever and cough\"\n\nChoose ONLY from the following specialties (respond with the exact name):\n- General Practitioner: First point of contact for general and non-specialist health concerns.\n- Pediatrician: Provides medical care for infants, children, and adolescents."
+      }
+    ],
+    "output_config": {
+      "format": {
+        "type": "json_schema",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "specialty": {
+              "type": "string",
+              "enum": [
+                "General Practitioner",
+                "Cardiologist",
+                "Neurologist",
+                "Dermatologist",
+                "Orthopedist",
+                "Pediatrician"
+              ]
+            },
+            "reasoning": {
+              "type": "string",
+              "description": "One sentence naming the specialty and why it fits the symptoms."
+            }
+          },
+          "required": [
+            "specialty",
+            "reasoning"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "recordedAt": "2026-08-27",
+  "responses": [
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "id": "msg_011CeTTs7LB4Y4CKvWNvFB77",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"specialty\": \"Pediatrician\", \"reasoning\": \"A pediatrician specializes in treating children and is the most appropriate choice for a child presenting with fever and cough, which are common pediatric symptoms requiring age-specific expertise.\"}"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 337,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 54,
+        "service_tier": "standard",
+        "inference_geo": "not_available"
+      }
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "id": "msg_011CeTTvD7GkaddrJppB87gW",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"specialty\": \"Pediatrician\", \"reasoning\": \"A pediatrician specializes in treating children and is the most appropriate specialist for a child presenting with high fever and cough, which are common pediatric symptoms that require age-appropriate evaluation and care.\"}"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 337,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 58,
+        "service_tier": "standard",
+        "inference_geo": "not_available"
+      }
+    }
+  ]
+}

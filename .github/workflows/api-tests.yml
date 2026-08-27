@@ -215,12 +215,11 @@ jobs:
     name: RAG (recorded responses)
     needs: [smoke]
     runs-on: ubuntu-latest
-    # continue-on-error until the cassettes are re-recorded. The three that exist were written under
-    # the key defect in TST-09 and cannot be salvaged, so this job reports missing recordings by
-    # design until one `npm run rag:record` replaces them. Remove the flag with that commit —
-    # leaving it in permanently would make this job decorative, the same trap the invariants job
-    # documents below.
-    continue-on-error: true
+    # Gating since 2026-08-27. The flag was here while the only three cassettes were the ones
+    # written under the key defect in TST-09 — unsalvageable, so the job reported missing recordings
+    # by design. `npm run rag:record` replaced them with 29 files carrying 40 responses, and
+    # `rag:replay` answers all 40 from disk. A miss now means the prompt, model or schema moved
+    # without the recordings moving with them, which is exactly what this job exists to say.
     timeout-minutes: 15
     permissions:
       contents: read
