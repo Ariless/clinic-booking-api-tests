@@ -19,10 +19,12 @@ export class HttpMethodsClient extends BaseClient {
         const response = await this.request.fetch(path, { method });
         const text = await response.text();
 
-        let body: unknown = null;
+        let body: unknown;
         try {
             body = text ? JSON.parse(text) : null;
         } catch {
+            // Not JSON, and that is a valid answer here: Express replies to OPTIONS with a bare
+            // `GET, HEAD` body. `text` keeps the raw reply for the caller either way.
             body = null;
         }
 
