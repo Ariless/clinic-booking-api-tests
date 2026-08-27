@@ -32,7 +32,9 @@
     "check:conventions": "node scripts/check-conventions.js",
     "check:conventions:fast": "node scripts/check-conventions.js --fast",
     "test:browserstack": "browserstack-node-sdk playwright test",
-    "test:browserstack:ui": "browserstack-node-sdk playwright test tests/ui/"
+    "test:browserstack:ui": "browserstack-node-sdk playwright test tests/ui/",
+    "rag:record": "CLAUDE_PROXY_MODE=record npx playwright test --grep @rag",
+    "rag:replay": "CLAUDE_PROXY_MODE=replay npx playwright test --grep @rag"
   },
   "private": true,
   "devDependencies": {
@@ -49,6 +51,7 @@
     "browserstack-node-sdk": "^1.53.4",
     "eslint": "^10.9.0",
     "globals": "^17.11.0",
+    "ioredis": "^6.0.0",
     "typescript-eslint": "^8.67.0"
   },
   "dependencies": {

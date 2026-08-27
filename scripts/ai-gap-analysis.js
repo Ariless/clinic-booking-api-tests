@@ -15,6 +15,8 @@ require("dotenv").config({ quiet: true });
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
+// One place names the models this repository uses; see config/models.ts for what each role is for.
+const MODEL = process.env.CLAUDE_TOOLING_MODEL || require("../config/models.json").tooling;
 
 const ROOT = path.join(__dirname, "..");
 const OPENAPI_PATH =
@@ -66,7 +68,7 @@ function collectTestInventory(dir, base = dir) {
 
 function callClaude(prompt, apiKey) {
     const body = JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: MODEL,
         max_tokens: 4096,
         messages: [{ role: "user", content: prompt }],
     });
@@ -165,7 +167,7 @@ Be specific — always name the exact endpoint and status code. Do not pad or re
     const output = `# AI Gap Analysis — clinic-booking-api-tests
 
 > **Generated:** ${now}
-> **Model:** claude-haiku-4-5-20251001
+> **Model:** ${MODEL}
 > **Source:** openapi.yaml (${Object.keys(yaml.match(/operationId:/g) ?? {}).length ?? "~30"} operations) + the ${path.basename(TESTS_DIR)}/ suite
 > **How to regenerate:** \`npm run ai:gap-analysis\` (key comes from \`.env\`)
 

@@ -2,7 +2,7 @@
 
 **Purpose:** trace every business requirement to the test file(s) that verify it, and confirm coverage status.  
 **Requirements last reviewed:** 2026-05-18 — the mapping below has not been re-walked since, while the suite has roughly doubled. Treat unmapped recent tests as a known gap in this document, not as missing coverage.  
-**Suite at the time of that review:** 148 automated tests. **Today:** 309 unique tests / 374 runs across 73 files (`npm run test:count`, verified 2026-08-22).
+**Suite at the time of that review:** 148 automated tests. **Today:** 350 unique tests / 415 runs across 80 files (`npm run test:count`, verified 2026-08-27).
 
 Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 
@@ -187,6 +187,23 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | AI-07 | "chest pain" routes to Cardiologist, not Orthopedist | ✅ `unit/ai.retrieval.test.ts` — B-05 fixed in SUT `fcccd6d` | ✅ |
 | AI-08 | Response always includes at least one available doctor | ❌ No test — B-06 open bug | ❌ |
 | AI-09 | `symptoms` max 500 characters → `400 VALIDATION_ERROR` (rejected before retrieval/Claude) | `ai.recommend.test.ts` | ✅ |
+| AI-10 | The route is reached only on behalf of an identified caller (`401` with no or malformed token) | `security.agentic.test.ts` (`@security`) | ✅ |
+| AI-11 | Patient symptoms never appear in the log stream on any status | `sut/src/__tests__/aiPrivacy.test.js` | ✅ |
+| AI-12 | No error body echoes the input back — on either deployable | `aiPrivacy.test.js`, `aiServicePrivacy.test.js` | ✅ |
+| AI-13 | Failure context sent to a third party carries no patient data | `unit/bug-reporter.redaction.test.ts` | ✅ |
+| AI-14 | A specialty outside the allow-list is refused and never becomes a database query | `sut/src/__tests__/aiSupplyChain.test.js` | ✅ |
+| AI-15 | The retrieval corpus cannot forge prompt structure (one entry, one prompt line) | `unit/knowledge-integrity.test.ts` (`@unit`) | ✅ |
+| AI-16 | The circuit breaker opens after repeated model failures and recovers | ❌ No test — implemented and published on `/circuit-state`, asserted nowhere (`SYSTEM_WEAKNESS_REPORT.md` §12.5) | ❌ |
+
+---
+
+## MCP server (agent-facing surface)
+
+| ID | Requirement | Test file(s) | Status |
+|----|-------------|--------------|--------|
+| MCP-01 | Tools outside the session's profile are not registered — absent from `tools/list`, not callable by name | `sut/src/__tests__/mcpServer.test.js` | ✅ |
+| MCP-02 | The server forwards the caller's token and holds no credential of its own | `sut/src/__tests__/mcpServer.test.js` | ✅ |
+| MCP-03 | Tool descriptions are screened before start-up; a poisoned description stops the server | `sut/src/__tests__/mcpServer.test.js` | ✅ |
 
 ---
 
@@ -246,12 +263,13 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | Waitlist | 6 | 6 | 0 | 0 |
 | Access control | 5 | 5 | 0 | 0 |
 | Real-time notifications | 5 | 5 | 0 | 0 |
-| AI symptom checker | 9 | 7 | 0 | 2 |
+| AI symptom checker | 16 | 13 | 0 | 3 |
+| MCP server | 3 | 3 | 0 | 0 |
 | Payments | 3 | 3 | 0 | 0 |
 | Error contract | 3 | 3 | 0 | 0 |
 | Performance | 5 | 5 | 0 | 0 |
 | Accessibility | 2 | 1 | 1 | 0 |
-| **Total** | **121** | **117 (97%)** | **1 (1%)** | **3 (2%)** |
+| **Total** | **131** | **126 (96%)** | **1 (1%)** | **4 (3%)** |
 
 **Not covered — known reasons:**
 

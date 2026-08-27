@@ -198,6 +198,99 @@ jobs:
         if: always()
         run: docker compose -f sut/docker-compose.test.yml down
 
+# ── RAG on recordings ────────────────────────────────────────────────────────
+# The `@rag` layer against the real recommendation path, on recorded Anthropic responses. Until
+# 2026-08-27 this layer ran only in `model-drift.yml` — weekly, against the live API, gated on a
+# funded key — so a change that broke the parsing, the schema handling or the reasoning text was
+# invisible on a pull request, and the whole layer sat out CI entirely once the balance ran out
+# (BACKLOG, "Pending verification — requires Anthropic API credits").
+#
+# What this covers that mock mode does not: mock mode answers from retrieval and never calls a
+# model, so it exercises none of what these tests are about. The proxy replays a real wire response,
+# which means everything downstream of the socket is the production path.
+#
+# What it does not cover: model drift. A recording is frozen by definition. That stays the weekly
+# job's work — replay guards our code, the scheduled run guards the assumption about the model.
+  rag-replay:
+    name: RAG (recorded responses)
+    needs: [smoke]
+    runs-on: ubuntu-latest
+    # continue-on-error until the cassettes are re-recorded. The three that exist were written under
+    # the key defect in TST-09 and cannot be salvaged, so this job reports missing recordings by
+    # design until one `npm run rag:record` replaces them. Remove the flag with that commit —
+    # leaving it in permanently would make this job decorative, the same trap the invariants job
+    # documents below.
+    continue-on-error: true
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      # Overrides the workflow default. Mock mode would make every @rag test skip itself, and the
+      # job would pass by running nothing.
+      AI_MOCK_RESPONSE: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
+          path: sut
+          token: ${{ secrets.SUT_GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # No ANTHROPIC_API_KEY anywhere in this job, deliberately. If a call escapes the proxy it
+      # fails on authentication instead of quietly costing money and reporting a pass.
+      - name: Start SUT pointed at the replay proxy
+        run: |
+          mkdir -p sut/data
+          DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose \
+            -f sut/docker-compose.test.yml \
+            -f sut/docker-compose.rag-replay.yml \
+            up -d --wait
+
+      - name: SUT logs on failure
+        if: failure()
+        run: docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.rag-replay.yml logs
+
+      # The SUT reports which of the three recommendation paths it is on. "mock" would answer every
+      # request from retrieval without touching the proxy, and this job would pass having replayed
+      # nothing — the same way `model-drift.yml` reported "no drift" for months.
+      - name: Fail unless the SUT is really calling the model
+        run: |
+          IMPL=$(curl -sf "$BASE_URL/health" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).checks.ai.implementation))")
+          echo "AI implementation: $IMPL"
+          if [ "$IMPL" != "claude" ]; then
+            echo "::error::SUT is on '$IMPL', not 'claude' — nothing would reach the replay proxy."
+            exit 1
+          fi
+
+      - name: Install Playwright
+        run: npm ci && npx playwright install chromium --with-deps
+
+      # Playwright's global setup starts the proxy on port 3010 when CLAUDE_PROXY_MODE is set; the
+      # container reaches it through host.docker.internal. A missing recording is a 404 from the
+      # proxy, a 503 from the SUT, and a named cassette key in the log — not a flake.
+      - name: RAG suite on cassettes
+        run: npm run rag:replay
+
+      - name: Upload allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-rag-replay
+          path: allure-results/
+          if-no-files-found: ignore
+
+      - name: Stop SUT
+        if: always()
+        run: docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.rag-replay.yml down
+
 # ── Invariant contract ───────────────────────────────────────────────────────
 # Runs the API layer against a SUT with ASSERT_INVARIANTS on: after every mutating request the
 # SUT verifies five cross-table rules and answers 500 INVARIANT_VIOLATED on a breach. The oracle

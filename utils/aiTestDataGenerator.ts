@@ -1,4 +1,5 @@
 import https from 'https';
+import { TOOLING_MODEL } from '../config/models';
 
 export interface EdgeCaseUser {
   name: string;
@@ -19,7 +20,7 @@ const STATIC_FALLBACK: EdgeCaseUser[] = [
 
 function callClaude(prompt: string, apiKey: string): Promise<string> {
   const body = JSON.stringify({
-    model: 'claude-haiku-4-5-20251001',
+    model: TOOLING_MODEL,
     max_tokens: 1024,
     messages: [{ role: 'user', content: prompt }],
   });

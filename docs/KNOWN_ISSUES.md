@@ -181,6 +181,37 @@ Living document. Every bug found during testing — fixed or open — recorded h
 
 ---
 
+### D-04 — Retrieval does not normalise words: a paraphrase retrieves nothing (measured 2026-08-26)
+
+| Field | Value |
+|---|---|
+| **Status** | ⚠️ Design debt — measured, accepted, not planned |
+| **Found by** | `tests/unit/ai.retrieval.metrics.test.ts` against `data/retrievalGoldenSet.ts`. RAG-08 ("itchy" not matching the keyword "itching") was the single known instance; the golden set turned one anecdote into a number. |
+| **Severity** | Medium — the patient gets `422 UNKNOWN_SPECIALTY`, not a wrong doctor |
+| **Measured** | 34 clinically-decided cases: overall accuracy@1 61.8%, recall@3 64.7%, MRR 0.632, coverage 67.6%. Split by phrasing: `direct` recall@3 100%, `morphology` 60%, `synonym` 0%, `colloquial` 14.3%. |
+| **Root cause** | `retrieve()` matches on `word === keyword \|\| word.includes(keyword)`. Substring containment covers suffixes ("coughing" → "cough", "joints" → "joint") and nothing else: a prefix change ("itchy" vs "itching", "tingle" vs "tingling") fails, and a word that shares no stem with any keyword ("ribcage", "blotches", "forgetting") cannot match at all. There is no stemming and no synonym layer. |
+| **Why it is accepted** | The knowledge base has six entries and `topK` is 3 — half the corpus is returned on every hit, so a denser retriever has little room to win. The gap to a competent lexical retriever (BM25: stemming plus IDF weighting) is larger than the gap from BM25 to embeddings on a corpus this size, and Anthropic has no embeddings API, so a vector path would add a second provider (Voyage AI) or model weights in the repository. Measured first, decided second. |
+| **Countervailing strength** | False-positive rate is 0/3: nothing is retrieved for "what are your opening hours". The retriever stays silent rather than guessing, which is the safer failure for a medical route. |
+| **Where** | `sut/src/services/retrieval.js` · `sut/ai-service/retrieval.js` (two copies, kept in step by `aiServiceParity.test.js`) |
+| **Portfolio note** | The interesting artefact is not the retriever, it is the measurement: a golden set decided clinically, metrics that mirror what production serves (accuracy@1 = mock mode's `retrieved[0]`, recall@3 = what the model receives), and a breakdown by phrasing that names *where* the algorithm stops working instead of reporting one number. |
+
+---
+
+### D-05 — Ranking counts matches instead of weighting them: a child complaint routes to GP (found 2026-08-26)
+
+| Field | Value |
+|---|---|
+| **Status** | ⚠️ Design debt — reproducible, guarded by a test |
+| **Found by** | `tests/unit/ai.retrieval.metrics.test.ts` — the only golden-set case that lands in the top 3 without ranking first |
+| **Severity** | Medium in mock mode, low with a live model |
+| **Reproduce** | `retrieve("my child has high fever and cough")` → `["General Practitioner", "Pediatrician"]` |
+| **Root cause** | The score is a count of matched keywords, and every keyword carries the same weight. "fever" and "cough" are two generic General Practitioner keywords; "child" is one specific Pediatrician keyword. Two beats one, so the generic specialty wins. IDF exists to prevent exactly this and the retriever has none. |
+| **Impact** | `AI_MOCK_RESPONSE=true` answers from `retrieved[0]`, so the configuration CI runs recommends a General Practitioner for a child with a fever. With a real model the ranking matters less: both specialties reach the prompt as context and the model picks — `LLM eval` measures that end of it. |
+| **Fix** | Weight keywords by inverse document frequency, or rank by best single-keyword specificity rather than match count. Not planned — see D-04 on why the retriever stays lexical. |
+| **Where** | `sut/src/services/retrieval.js:19` (scoring loop) |
+
+---
+
 ### DEAD-01 — `INVALID_PATTERN` errorCode unreachable via HTTP — dead code in repository layer (found 2026-05-17)
 
 | Field | Value |
@@ -257,6 +288,21 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | **Fix** | Catch `SQLITE_READONLY` error code in `global-teardown.ts` and skip cleanup with a log message. The DB is ephemeral in CI (fresh container each run) — teardown cleanup is only needed for local persistent DBs. |
 | **Category** | CI environment — Docker volume ownership difference between container (root) and host runner |
 | **Portfolio note** | All 8 tests passed. The exit code 1 came from teardown, not from a test. Without knowing where Playwright reports teardown errors separately from test results, this looks like a test failure — it isn't. Environment-aware teardown: if the DB is readonly, the cleanup environment is ephemeral, so skipping is correct behaviour, not an error to propagate. |
+
+---
+
+### CI-07 — `.gitignore` hid the test-data source directory; a `@rag` baseline was never committed (✅ Fixed 2026-08-26)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-08-26 |
+| **Symptom** | `git add data/retrievalGoldenSet.ts` refused: "The following paths are ignored by one of your .gitignore files". |
+| **Root cause** | `.gitignore:13` read `data/` — a whole-directory rule sitting in the block of run artefacts (`test-results/`, `allure-results/`, `coverage/`). But `data/` is the **source** directory for test data (`testData.ts`, `seedAccounts.ts`, `schemas/`); the only artefact in it is an empty `clinic.db`, which is what the rule was written for. |
+| **Not the first time** | Commit `18f41284 fix: add data layer TS files excluded by gitignore` is the same trap firing earlier. It was resolved by force-adding the affected files; the rule that caused it was left in place, so the next file added to `data/` hit it again. |
+| **The unnoticed casualty** | `data/specialty-distribution-baseline.json` had never been committed. `tests/api/ai.recommend.test.ts:493` loads it with `require`, so on a fresh clone that line throws `MODULE_NOT_FOUND`. The test is `@rag`-gated and skips without an API key — but `model-drift.yml` runs `@rag` **with** a real key on a schedule, which is precisely the path that reaches the `require`. Same class as TST-06: listed as coverage, unable to run where it counts. Whether the scheduled job actually failed is unverified — per BACKLOG it had been sitting on an exhausted balance. |
+| **Fix** | `data/` → `data/clinic.db`. `data/.DS_Store` stays covered by the repo-wide `.DS_Store` rule on line 11. Verified per file with `git check-ignore -v`: only `clinic.db` and `.DS_Store` remain ignored, and the two missing sources became visible to `git status`. |
+| **Category** | Repository hygiene — an ignore rule aimed at artefacts that covered sources |
+| **Portfolio note** | The failure mode is silence: a new file under `data/` is simply absent from the repository, every local run stays green, and the gap only surfaces on a fresh clone or in a scheduled job nobody watches. It had already been patched once at the symptom (`git add -f`) without touching the cause, which is why it recurred. Worth pairing with TST-06 as the same lesson from a different direction — a test can be listed, tagged, and counted while having no way to execute. |
 
 ---
 
@@ -392,6 +438,118 @@ or fails for the wrong reason, misreports the system exactly as a broken endpoin
 | **Category** | Documentation drift — a claim that ages instead of breaking |
 | **Portfolio note** | Test counts drift quietly; access claims drift loudly. This one told every reader that the interesting parts were held back, in a repository that had just published them. The fix worth keeping is not the edit — it is that three of the four numbers behind it now fail a check instead of ageing. |
 
+### TST-10 — `model-drift.yml` never called a model (✅ Fixed 2026-08-27)
+
+**Before:** the job exported `ANTHROPIC_API_KEY` and `ENABLE_AI_RECOMMENDATION` on the line that ran
+`docker compose -f sut/docker-compose.test.yml up`, and the compose file hardcoded
+`AI_MOCK_RESPONSE: "true"` and never mentioned `ANTHROPIC_API_KEY` at all. Variables exported before
+`docker compose up` reach the **compose process**, not the container — only a `${...}` reference puts
+them inside. So the SUT came up in mock mode: it answered every `@rag` request from retrieval, never
+called Claude, and the job reported "no drift" every Monday.
+
+The golden dataset is five direct symptom phrasings, which keyword retrieval gets right, so the run
+was green — for the wrong reason, weekly, for as long as the job has existed. The suite's own
+`AI_MOCK_RESPONSE: "false"` was set on the *runner*, which is what made the mismatch invisible: the
+tests believed they were talking to a real model and the SUT was not.
+
+**After:** `docker-compose.test.yml` reads `AI_MOCK_RESPONSE`, `ANTHROPIC_API_KEY` and
+`ANTHROPIC_MODEL` through `${...}` with defaults that leave an ordinary run byte-identical, and the
+drift job sets them in a proper `env:` block.
+
+**The part worth keeping — a gate, not a fix.** Both AI jobs now fail unless `/health` reports
+`checks.ai.implementation === "claude"`. The SUT already published which of its three paths it is on;
+nothing asked. A corrected configuration can regress silently, and this class of defect — a job that
+passes while measuring something other than what it claims — has now appeared four times in this
+repository (TST-06, DOC-03, TST-09, this). The gate is the only part that makes the next one loud.
+
+**Why it survived:** every signal pointed the right way. The workflow named the variables, the
+comments described real Claude calls, the tests passed, the artifacts were dated and uploaded. The
+only place the truth was visible was inside the container, and nothing looked there.
+
+---
+
+### TST-09 — The cassette key ignored the prompt, so every recorded request shared one key (✅ Fixed 2026-08-27)
+
+**Before:** `cassetteKey()` hashed `JSON.stringify(body, Object.keys(body).sort())`. Given an array,
+`JSON.stringify`'s second parameter is an **allow-list of property names applied at every depth**,
+not a sort order — so passing the top-level keys deleted everything nested beneath them. The string
+actually hashed was:
+
+```
+{"max_tokens":256,"messages":[{}],"model":"claude-haiku-4-5-20251001","output_config":{}}
+```
+
+No prompt in it at all. `chest pain and shortness of breath`, `knee pain after running` and a
+question about tacos all produced `b02e25d435f3b13e`. The docstring above the function claimed the
+opposite in as many words: *"the whole body participates: changing the prompt, the model, or the
+schema should miss the cassette."*
+
+**Effect — the one a replay suite cannot survive:** cassettes answer questions they were never
+asked. Three files held the whole suite, one of them with 36 responses appended under a single key,
+handed out in recording order to whatever asked next. Measured on the real suite before the fix:
+**8 of 8 `@rag` tests passed in 2.1 seconds, 40 requests matched, 0 missed** — including
+`my infant has an ear infection` and the prompt-injection battery, each served an answer recorded
+for a different question. Wiring that into CI would have added a green job that asserted nothing,
+which is worse than the gap it was closing.
+
+**After:** an explicit `canonicalise()` that sorts keys recursively and keeps every value.
+`cassetteKey` hashes the whole body. Six tests in `tests/unit/claude-cassette.test.ts`; the two that
+matter are *two different prompts do not share a key* and its nested twin for the schema — a
+top-level-only sort passes the first and fails the second.
+
+**Consequence, open:** the three existing cassettes cannot be salvaged. Only the first request of
+each file was ever stored (`entry.request` is written once, on creation), so 35 of the 36 responses
+in the large one belong to prompts nobody recorded. They have to be re-recorded against the live API
+— roughly 40 Haiku calls, one `npm run rag:record` with a funded key. Until then the `rag-replay`
+job in `api-tests.yml` fails loudly on missing recordings, which is the correct state: a job that
+cannot answer is better than one that answers from the wrong file.
+
+**Why the defect survived:** `cassetteKey` had no test. It is four lines and looks obviously right,
+which is exactly the profile of the code that gets read instead of run.
+
+---
+
+### TST-07 — No Jest test in the SUT could load `src/app.js` (✅ Fixed 2026-08-26)
+
+**Before:** `sut/src/__tests__/` held five suites, all of them module-level with the dependencies
+stubbed. None reached `src/app.js`, and none could: `middlewares/request-id.js` requires `uuid`,
+uuid 14 ships ESM in both its builds, and Jest's CommonJS runtime dies on it with
+`SyntaxError: Unexpected token 'export'` before the first assertion. Node 22 loads it from CJS via
+`require(esm)`, so production and the Playwright suite never saw the problem — the gap was invisible
+from both sides, and showed up only when a test first tried to drive the real app.
+
+**Effect:** anything that is a property of the *assembled* application — middleware order, what the
+logger actually writes, which handler answers a given status — was unreachable from the fast suite.
+The privacy tests are exactly that kind of property, so the gap surfaced the moment one was written.
+
+**After:** `sut/test-helpers/uuid-cjs.js` (`v4()` = `crypto.randomUUID()`, the same platform source
+uuid uses when it is available), mapped in `jest.config.js` under `moduleNameMapper`. Production
+loads the real package unchanged.
+
+**Why this and not a transform:** Babel would pull a toolchain into a repo that has none, to
+translate one function of one dependency. The shim states the substitution in six lines where a
+reader will find it.
+
+---
+
+### TST-08 — The AI bug reporter sent a failed test's values to Anthropic unredacted (✅ Fixed 2026-08-26)
+
+**Before:** `utils/aiBugReporter.ts` built its prompt from `error.message` and `error.stack` as they
+came. Playwright quotes the values an assertion compared, so a failing `@rag` test carried the
+symptoms and a failing auth test carried an address and a bearer token — to a third party, into
+`bug-reports/`, and into the Allure attachment. The reporter is wired into one demo spec today; the
+obvious next step for it is every spec.
+
+**After:** `utils/phi.ts` redacts known field values, bare addresses and JWTs;
+`buildBugReportPrompt()` is exported so what leaves is assertable without a key or a network call.
+Nine tests in `tests/unit/bug-reporter.redaction.test.ts`, including one that a report with nothing
+personal in it comes back byte-identical — a redactor that eats everything is as useless as none.
+
+**Why a field list and not a model:** asking a model which parts are sensitive sends the text
+through the hop being guarded.
+
+---
+
 ### TST-06 — The Claude degradation test was gated on a variable nothing set (✅ Fixed 2026-08-22)
 
 | Field | Value |
@@ -505,6 +663,10 @@ or fails for the wrong reason, misreports the system exactly as a broken endpoin
 | TST-03 | `test:visual` pointed at `visual.test.ts` after the TS migration — "No tests found", never red | ✅ Fixed 2026-08-21: path corrected, 14 checks pass | Low | Repository audit 2026-08-21 |
 | TST-05 | Convention check looked for a literal `from "./pages"`; a longer fixture chain moved it and the check went red on a healthy barrel | ✅ Fixed 2026-08-22: the check walks the export chain and asks whether `fixtures/pages.ts` is reachable | Low | Full run after the B-15 fix 2026-08-22 |
 | TST-06 | Claude degradation test gated on `AI_DEGRADE_TEST`, a variable nothing in either repository ever set — it had never run | ✅ Fixed 2026-08-22: `CLAUDE_DEGRADE` switch in the SUT + compose overlay + CI step; test rewired and a second assertion added | Medium | Repository audit 2026-08-21, fixed 2026-08-22 |
+| TST-07 | No Jest test in the SUT could load `src/app.js` — uuid 14 is ESM-only and Jest's CommonJS runtime dies on it, so every property of the *assembled* app was unreachable from the fast suite | ✅ Fixed 2026-08-26: `test-helpers/uuid-cjs.js` mapped in `jest.config.js`; production loads the real package unchanged | Medium | Writing the first test that needed the real app 2026-08-26 |
+| TST-08 | AI bug reporter sent a failed test's `error.message` and `error.stack` to Anthropic unredacted — Playwright quotes the compared values, so symptoms and bearer tokens travelled to a third party, a file and the Allure report | ✅ Fixed 2026-08-26: `utils/phi.ts` + `buildBugReportPrompt()` split out of the transport; 9 tests | High | PII audit of the three paths symptoms leave by 2026-08-26 |
+| TST-09 | Cassette key ignored the prompt — `JSON.stringify(body, keys)` filters properties at every depth instead of sorting them, so every recorded request shared one key and replay answered questions it was never asked (8/8 green in 2.1s, 40 matched, 0 missed) | ✅ Fixed 2026-08-27: explicit recursive `canonicalise()`; 6 tests. Existing cassettes unsalvageable — re-record required | High | Wiring the replay job into CI 2026-08-27 |
+| TST-10 | `model-drift.yml` never called a model — shell variables before `docker compose up` reach the compose process, not the container, and the compose file hardcoded `AI_MOCK_RESPONSE: "true"`; the job reported "no drift" weekly from mid-May | ✅ Fixed 2026-08-27: `${...}` pass-through + a `/health` gate asserting `implementation === "claude"` in both AI jobs | High | Centralising the model id 2026-08-27 |
 | TST-04 | AI suite needs two mutually exclusive `AI_RATE_LIMIT_MAX` settings; a correct 429 was reported as a broken endpoint | ✅ Fixed 2026-08-21: `skipIfThrottled()` in all 9 multi-call loops | Medium | Verifying the TST-02 fix 2026-08-21 |
 | DOC-01 | Six docs claimed that tests living in this repository lived elsewhere, pointing at a README section that never existed | ✅ Fixed 2026-08-21: notices rewritten or removed; counts corrected and put under the convention check | Medium | Repository audit 2026-08-21 |
 | DOC-02 | `ai-gap-analysis.js` filtered on `.test.js`; after the TS migration it reported 0% coverage over an empty inventory | ✅ Fixed 2026-08-21: filter accepts `.ts`, report regenerated, `dotenv` added to all `ai:*` scripts | Medium | Regenerating the report 2026-08-21 |

@@ -1,0 +1,25 @@
+{
+  "corpus": [
+    { "symptoms": "chest pain and shortness of breath",          "expectedSpecialty": "Cardiologist" },
+    { "symptoms": "heart palpitations and irregular heartbeat",  "expectedSpecialty": "Cardiologist" },
+    { "symptoms": "skin rash and itching all over body",         "expectedSpecialty": "Dermatologist" },
+    { "symptoms": "acne and dry flaking skin patches",           "expectedSpecialty": "Dermatologist" },
+    { "symptoms": "severe migraine and light sensitivity",        "expectedSpecialty": "Neurologist" },
+    { "symptoms": "numbness in hands and dizziness spells",      "expectedSpecialty": "Neurologist" },
+    { "symptoms": "knee pain after running",                     "expectedSpecialty": "Orthopedist" },
+    { "symptoms": "lower back pain and stiffness",               "expectedSpecialty": "Orthopedist" },
+    { "symptoms": "my child has high fever and cough",           "expectedSpecialty": "Pediatrician" },
+    { "symptoms": "my toddler has ear pain and won't sleep",     "expectedSpecialty": "Pediatrician" },
+    { "symptoms": "general fatigue and mild persistent headache","expectedSpecialty": "General Practitioner" },
+    { "symptoms": "frequent colds and mild sore throat",         "expectedSpecialty": "General Practitioner" }
+  ],
+  "expectedDistribution": {
+    "Cardiologist":          0.167,
+    "Dermatologist":         0.167,
+    "Neurologist":           0.167,
+    "Orthopedist":           0.167,
+    "Pediatrician":          0.167,
+    "General Practitioner":  0.167
+  },
+  "tolerancePerSpecialty": 0.15
+}

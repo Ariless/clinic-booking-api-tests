@@ -10,7 +10,7 @@ reports/
 bug-reports/
 .DS_Store
 .idea/
-data/
+data/clinic.db
 .hypothesis/
 local.log
 log/

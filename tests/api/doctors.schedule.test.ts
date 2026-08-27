@@ -12,7 +12,11 @@ function slotAt(dayOfWeek: number, startHour: number, endHour: number): { startT
     let daysUntil = (dayOfWeek - nowDay + 7) % 7;
     if (daysUntil === 0) daysUntil = 7;
     const base = new Date(now);
-    base.setUTCDate(base.getUTCDate() + daysUntil + 7); // +7 avoids conflicts with slotFixture
+    // +7 was meant to keep these slots clear of slotFixture, but a day offset is not a stable
+    // defence: slotFixture walks forward four slots per day, so a suite of ~200 tests already
+    // covers 50 days and swallows the gap. What does hold is the hour — slotFixture only ever uses
+    // 10:00, 12:00, 14:00 and 16:00, so tests here take an odd hour and never collide.
+    base.setUTCDate(base.getUTCDate() + daysUntil + 7);
     base.setUTCHours(startHour, 0, 0, 0);
     const end = new Date(base);
     end.setUTCHours(endHour, 0, 0, 0);
@@ -69,7 +73,7 @@ test.describe("doctor schedule", () => {
             headers: { Authorization: `Bearer ${doctorToken}` },
         });
         const doctorAuth = { headers: { Authorization: `Bearer ${doctorToken}` } };
-        const { startTime, endTime } = slotAt(1, 10, 11); // Tuesday 10:00–11:00 UTC
+        const { startTime, endTime } = slotAt(1, 11, 12); // Tuesday 11:00–12:00 UTC — an hour slotFixture never uses
         const { status, body } = await doctors.createSlot(
             doctor.doctorRecordId, startTime, endTime, true,
             doctorAuth,

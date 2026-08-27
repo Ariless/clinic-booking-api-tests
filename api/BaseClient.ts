@@ -6,7 +6,9 @@ export class BaseClient {
     protected async parseResponse(response: Awaited<ReturnType<APIRequestContext["post"]>>) {
         const text = await response.text();
         const body = text ? JSON.parse(text) : null;
-        return { status: response.status(), body };
+        // headers are returned alongside the body so a test can correlate an async side effect
+        // (a Kafka event, a webhook) with the exact request that caused it, via X-Request-Id
+        return { status: response.status(), body, headers: response.headers() };
     }
 
     protected async parseResponseFull(response: Awaited<ReturnType<APIRequestContext["post"]>>) {

@@ -31,7 +31,7 @@ utils/        dbClient, schemaValidator, slotAssertion, webhookTestServer, aiBug
 tests/api/    API tests
 tests/e2e/    E2E cross-layer tests
 tests/ui/     UI browser tests
-tests/unit/   Unit tests (ai.retrieval, bug-reporter.demo)
+tests/unit/   Unit tests (retrieval metrics, cassette keys, model config, PHI redaction, knowledge integrity)
 ```
 
 ## SUT surface map

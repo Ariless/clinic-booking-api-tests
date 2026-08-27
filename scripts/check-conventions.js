@@ -235,12 +235,24 @@ let facts;
 // Counted statically rather than through `playwright --list` so the rule survives
 // --fast: test(), test.skip(), test.fixme(), it() — but not test.describe/beforeEach/step.
 {
-    const TEST_DECL = /(?:^|\s)(?:test|it)(?:\.(?:skip|fixme|only|fail))?\s*\(/gm;
+    // The title argument is what separates a test from a suite-level guard: Playwright's
+    // `test.skip(condition, reason)` inside a describe takes a boolean first and declares
+    // nothing. Requiring a string literal after the paren keeps those out of the count —
+    // it cost a false positive on doctors.cache.test.ts before the check was tightened.
+    const TEST_DECL = /(?:^|\s)(?:test|it)(?:\.(?:skip|fixme|only|fail))?\s*\(\s*['"`]/gm;
+
+    // A table-driven file declares `test(...)` once inside a loop and produces one test per
+    // row, so counting declarations undercounts it — http.methods.test.ts reads as 5 and runs
+    // as 10. Rather than guess the row count, the rule declines to judge such files: a check
+    // that is right about 70 files and quietly wrong about one is worse than a narrower check.
+    const PARAMETRISED = /^(?:for\s*\(|\w[\w.]*\.forEach\()/m;
 
     function countTests(relPath) {
         const abs = path.join(ROOT, relPath);
         if (!fs.existsSync(abs)) return null;
-        return (fs.readFileSync(abs, "utf8").match(TEST_DECL) || []).length;
+        const source = fs.readFileSync(abs, "utf8");
+        if (PARAMETRISED.test(source)) return null; // table-driven — see above
+        return (source.match(TEST_DECL) || []).length;
     }
 
     /** Resolve a bare filename to a tracked path, if it is unambiguous.

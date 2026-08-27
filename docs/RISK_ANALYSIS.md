@@ -14,11 +14,11 @@
          LIKELIHOOD →
           1 (rare)   2          3 (edge)   4          5 (common)
          ┌──────────┬──────────┬──────────┬──────────┬──────────┐
-5 ($$)   │    5     │   10     │ ■■ 15    │ ■■ 20    │ ■■■ 25   │  ← double book, RBAC, book path
+5 ($$)   │    5     │   10     │ ■■ 15    │ ■■ 20    │ ■■■ 25   │  ← double book, RBAC, book path, AI route identity
          ├──────────┼──────────┼──────────┼──────────┼──────────┤
 4        │    4     │    8     │ ■■ 12    │ ■■ 16    │   20     │  ← confirm invariant, cancel, RBAC ext
          ├──────────┼──────────┼──────────┼──────────┼──────────┤
-3        │    3     │    6     │    9     │   12     │   15     │  ← auth, AI rate limit
+3        │    3     │    6     │    9     │   12     │   15     │  ← auth, AI rate limit, PHI exits, cassette identity
          ├──────────┼──────────┼──────────┼──────────┼──────────┤
 2        │    2     │    4     │    6     │    8     │   10     │
          ├──────────┼──────────┼──────────┼──────────┼──────────┤
@@ -62,18 +62,25 @@ IMPACT ↑
 | GET idempotency — same result on repeated calls | 2 | 1 | 2 | `doctors.list.test.ts` (`@api`) — low risk score, high interview value: "I verify HTTP semantics explicitly" |
 | AI rate limit (`429 RATE_LIMITED`) | 3 | 2 | 6 | `ai.recommend.test.ts` (`@api`) |
 | AI feature flag (`ENABLE_AI_RECOMMENDATION=false` → 503) | 3 | 2 | 6 | `ai.recommend.test.ts` (`@api`) — shipped |
-| RAG: response schema `{ specialty, reasoning }` always present | 4 | 2 | 8 | **Planned** → `ai.recommend.test.ts` (`@rag`); skip without `ANTHROPIC_API_KEY` |
-| RAG: hallucination — model recommends specialty not in knowledge base | 4 | 2 | 8 | **Planned** → `ai.recommend.test.ts` (`@rag`); context grounding assertion |
-| RAG: prompt injection in symptoms field hijacks recommendation | 4 | 1 | 4 | **Planned** → `ai.recommend.test.ts` (`@rag`); adversarial inputs |
-| RAG: Claude unavailable → graceful 503, not unhandled exception | 4 | 1 | 4 | **Planned** → `ai.recommend.test.ts` (`@rag`); wrong API key simulation |
+| RAG: response schema `{ specialty, reasoning }` always present | 4 | 2 | 8 | **shipped** — the shape is now a request parameter (`output_config.format`, `enum`), not a hope → `ai.recommend.test.ts` (`@rag`); skip without `ANTHROPIC_API_KEY` |
+| RAG: hallucination — model recommends specialty not in knowledge base | 4 | 2 | 8 | **shipped** — structurally prevented by the schema enum, and re-checked after the answer because the service is a separate deployable → `ai.recommend.test.ts` (`@rag`); context grounding assertion |
+| RAG: prompt injection in symptoms field hijacks recommendation | 4 | 1 | 4 | **shipped** → `ai.recommend.test.ts` (`@rag`); adversarial inputs |
+| RAG: Claude unavailable → graceful 503, not unhandled exception | 4 | 1 | 4 | **shipped** → `ai.recommend.test.ts` (`@rag`); wrong API key simulation |
 | Login rate limit (`429 RATE_LIMITED` after N failed/valid attempts per IP) | 4 | 2 | 8 | `auth.login.test.ts` (`@rate-limit`) — **shipped**; requires `RATE_LIMIT_LOGIN_MAX=2 RATE_LIMIT_LOGIN_WINDOW_MS=5000` |
 | Register rate limit (`429 RATE_LIMITED` after N attempts per IP) | 3 | 1 | 3 | `auth.register.test.ts` (`@rate-limit`) — **shipped**; requires `RATE_LIMIT_REGISTER_MAX=2 RATE_LIMIT_REGISTER_WINDOW_MS=5000` |
 | Booking rate limit (`429 RATE_LIMITED` after N booking attempts per IP) | 4 | 2 | 8 | `appointments.booking.rate-limit.test.ts` (`@rate-limit`) — **shipped**; requires `RATE_LIMIT_BOOKING_MAX=2 RATE_LIMIT_BOOKING_WINDOW_MS=5000` |
-| Chaos mode active but health misreports `disabled` | 3 | 1 | 3 | **Planned** → `chaos.test.ts` (`@chaos`) — `GET /health` shape when chaos on |
-| Chaos 503 format breaks error contract (missing `errorCode`/`requestId`) | 3 | 1 | 3 | **Planned** → `chaos.test.ts` (`@chaos`) — 503 body matches `{ errorCode: "CHAOS_ERROR", message, requestId }` |
-| `CHAOS_FAIL_PROBABILITY=0.0` knob broken — chaos fires even when off | 3 | 1 | 3 | **Planned** → `chaos.test.ts` (`@chaos`) — probability off-switch |
-| Seed non-deterministic — sequence differs across restarts with same seed | 2 | 1 | 2 | **Planned** → `chaos.test.ts` (`@chaos`) — two runs same seed → identical pass/fail |
-| Chaos bleeds into `/health` / `/metrics` — these must always respond 200 | 4 | 1 | 4 | **Planned** → `chaos.test.ts` (`@chaos`) — health/metrics exempt even at `FAIL_PROBABILITY=1.0` |
+| Chaos mode active but health misreports `disabled` | 3 | 1 | 3 | **shipped** → `chaos.test.ts` (`@chaos`) — `GET /health` shape when chaos on |
+| Chaos 503 format breaks error contract (missing `errorCode`/`requestId`) | 3 | 1 | 3 | **shipped** → `chaos.test.ts` (`@chaos`) — 503 body matches `{ errorCode: "CHAOS_ERROR", message, requestId }` |
+| `CHAOS_FAIL_PROBABILITY=0.0` knob broken — chaos fires even when off | 3 | 1 | 3 | **shipped** → `chaos.test.ts` (`@chaos`) — probability off-switch |
+| Seed non-deterministic — sequence differs across restarts with same seed | 2 | 1 | 2 | **shipped** → `chaos.test.ts` (`@chaos`) — two runs same seed → identical pass/fail |
+| Chaos bleeds into `/health` / `/metrics` — these must always respond 200 | 4 | 1 | 4 | **shipped** → `chaos.test.ts` (`@chaos`) — health/metrics exempt even at `FAIL_PROBABILITY=1.0` |
+| Patient symptoms (health data about an identified person) reach the log stream, an error body, or a third party | 5 | 3 | 15 | three files added 2026-08-26 — `sut/src/__tests__/aiPrivacy.test.js`, `aiServicePrivacy.test.js`, `tests/unit/bug-reporter.redaction.test.ts` — twenty tests between them. Two of the three exits were already correct and guarded by nothing; the reporter one was a real leak |
+| The model is reached on behalf of an unidentified caller — unbounded cost, no attribution (OWASP ASI03) | 5 | 4 | 20 | `security.agentic.test.ts` (`@security`) — `requireAuth` added 2026-08-27; the route had answered 200 with no `Authorization` header at all |
+| Retrieval corpus poisoned through a data-file change — a newline in a description buys extra prompt lines (ASI06) | 4 | 2 | 8 | `tests/unit/knowledge-integrity.test.ts` (`@unit`) — offline by design: the check has to run before the row is sent |
+| A second deployable returns a specialty outside the allow-list and the SUT queries for it (ASI04) | 4 | 2 | 8 | `sut/src/__tests__/aiSupplyChain.test.js` — the refused value must never become a database query |
+| An agent reaches a tool its session was not given (ASI02) | 4 | 2 | 8 | `sut/src/__tests__/mcpServer.test.js` — tools outside the profile are never registered, so there is nothing to refuse |
+| Replayed model responses answer the wrong question — false green that is also *fast* | 5 | 3 | 15 | `tests/unit/claude-cassette.test.ts` — found live: 8/8 green in 2.1s on answers recorded for other prompts (`TST-09`) |
+| The circuit breaker never opens under a real outage cascade (ASI08) | 4 | 2 | 8 | **open — no test anywhere.** Implemented and published on `/circuit-state`; see `SYSTEM_WEAKNESS_REPORT.md` §12.5 |
 | Infrastructure health / error contract | 2 | 1 | 2 | `infrastructure.test.ts` (`@smoke`) |
 
 ---

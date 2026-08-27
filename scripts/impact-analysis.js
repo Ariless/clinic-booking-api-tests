@@ -18,6 +18,8 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+// One place names the models this repository uses; see config/models.ts for what each role is for.
+const MODEL = process.env.CLAUDE_TOOLING_MODEL || require("../config/models.json").tooling;
 
 const ROOT = path.join(__dirname, "..");
 const CHANGED_FILES_PATH = path.join(ROOT, "changed-files.txt");
@@ -48,7 +50,7 @@ function categorize(files) {
 
 function callClaude(prompt, apiKey) {
     const body = JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: MODEL,
         max_tokens: 1024,
         messages: [{ role: "user", content: prompt }],
     });

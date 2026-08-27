@@ -1,7 +1,8 @@
 import { test, expect } from '../../fixtures';
 import { AiRecommendClient } from '../../api/AiRecommendClient';
 import { allure } from 'allure-playwright';
-import Anthropic from '@anthropic-ai/sdk';
+import { claudeTestClient, isReplayRun } from '../../utils/claudeTestClient';
+import { JUDGE_MODEL, SUBJECT_MODEL } from '../../config/models';
 
 const ALLOWED_SPECIALTIES = [
     "General Practitioner",
@@ -13,7 +14,11 @@ const ALLOWED_SPECIALTIES = [
 ];
 
 const isMockMode = process.env.AI_MOCK_RESPONSE === 'true';
-const hasRealKey = !!process.env.ANTHROPIC_API_KEY && !isMockMode;
+// A replay run has no key and needs none: the proxy answers from recorded responses, so every @rag
+// test below runs the same code against the same wire bodies it saw when they were recorded. Before
+// 2026-08-26 this gate was the key alone, which is why the whole @rag layer sat out ordinary CI and
+// stopped entirely when the API balance ran out.
+const hasRealKey = (!!process.env.ANTHROPIC_API_KEY || isReplayRun()) && !isMockMode;
 
 // Two configurations of the same SUT pull in opposite directions: the throttle test needs the
 // default AI_RATE_LIMIT_MAX of 5, every multi-call test here needs it raised past the number of
@@ -181,7 +186,7 @@ test.describe("POST /api/v1/ai/recommend-doctor — real Claude @rag", () => {
         const { status, body } = await ai.recommend(symptoms, user.token);
         expect(status).toBe(200);
 
-        const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+        const client = claudeTestClient();
         const judgePrompt = [
             `A medical triage system recommended a "${body.recommendedSpecialty}" for symptoms: "${symptoms}".`,
             `The system's reasoning: "${body.reasoning}"`,
@@ -199,7 +204,9 @@ test.describe("POST /api/v1/ai/recommend-doctor — real Claude @rag", () => {
         const verdicts = await Promise.all(
             Array.from({ length: JUDGE_RUNS }, async () => {
                 const message = await client.messages.create({
-                    model: "claude-haiku-4-5-20251001",
+                    // A different family and a stronger one than the model being judged — see
+                    // `config/models.ts`. Until 2026-08-27 this was the defendant's own model.
+                    model: JUDGE_MODEL,
                     max_tokens: 128,
                     messages: [{ role: "user", content: judgePrompt }],
                 });
@@ -271,9 +278,11 @@ test.describe("POST /api/v1/ai/recommend-doctor — real Claude @rag", () => {
         const ai = new AiRecommendClient(request);
 
         // Claude generates adversarial inputs dynamically — AI attacking AI
-        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+        const anthropic = claudeTestClient();
         const genMessage = await anthropic.messages.create({
-            model: "claude-haiku-4-5-20251001",
+            // The attacker is the subject's own class on purpose: this measures whether the endpoint
+            // holds against inputs a peer model produces, not against a stronger one's best effort.
+            model: SUBJECT_MODEL,
             max_tokens: 256,
             messages: [{
                 role: "user",

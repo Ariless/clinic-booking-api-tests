@@ -35,6 +35,7 @@ const EXPECTED_PATHS = [
 ];
 
 const EXPECTED_ERROR_CODES = [
+    "METHOD_NOT_ALLOWED",
     "SLOT_TAKEN",
     "SLOT_IN_USE",
     "SLOT_OVERLAP",

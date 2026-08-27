@@ -6,6 +6,9 @@ import "dotenv/config";
 // Mobile project uses Pixel 7 (Android Chrome) — no WebKit dependency.
 export default defineConfig({
   testDir: "./tests",
+  // Brings up the Claude record/replay proxy when CLAUDE_PROXY_MODE asks for it, and is inert
+  // otherwise. Returns its own teardown, which runs alongside global-teardown below.
+  globalSetup: "./global-setup",
   globalTeardown: "./global-teardown",
   fullyParallel: false,
   workers: 1,

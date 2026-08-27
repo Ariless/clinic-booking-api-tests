@@ -12,6 +12,11 @@ on:
   schedule:
     - cron: "0 9 * * 1"   # every Monday at 09:00 UTC
   workflow_dispatch:        # manual trigger for on-demand baseline check
+    inputs:
+      model:
+        description: "Model id to sweep (blank = the default in config/models.json)"
+        required: false
+        type: string
 
 concurrency:
   group: model-drift
@@ -22,6 +27,9 @@ env:
   DB_PATH: sut/data/clinic.db
   AI_MOCK_RESPONSE: "false"   # real Claude calls — this is the point of drift detection
   RATE_LIMIT_REGISTER_MAX: "1000"
+  # Blank on the schedule, set by hand to sweep. Read by both the SUT (ANTHROPIC_MODEL, via compose)
+  # and the suite (CLAUDE_MODEL, via config/models.ts), so one value moves the whole run.
+  CLAUDE_MODEL: ${{ inputs.model || '' }}
 
 jobs:
   rag-drift:
@@ -53,12 +61,32 @@ jobs:
           echo "Add the secret to enable weekly model drift detection."
           exit 0
 
+      # Was: the same three variables exported here, with `docker-compose.test.yml` hardcoding
+      # AI_MOCK_RESPONSE: "true" and never mentioning ANTHROPIC_API_KEY. Exported variables reach the
+      # compose process, not the container — so this job brought up a SUT in mock mode and had been
+      # reporting "no drift" against answers assembled from retrieval, weekly, without ever calling a
+      # model. The compose file now references them; the gate below is what makes the mistake
+      # impossible to repeat silently.
       - name: Start SUT (AI recommendation enabled, real key)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ inputs.model || '' }}
+          AI_MOCK_RESPONSE: "false"
+          ENABLE_AI_RECOMMENDATION: "true"
         run: |
           mkdir -p sut/data
-          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} \
-          ENABLE_AI_RECOMMENDATION=true \
           DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose -f sut/docker-compose.test.yml up -d --wait
+
+      # The SUT reports which of the three recommendation paths it is on. "mock" here means the run
+      # would measure retrieval, not the model — the exact failure this job spent months in.
+      - name: Fail unless the SUT is really calling the model
+        run: |
+          IMPL=$(curl -sf "$BASE_URL/health" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).checks.ai.implementation))")
+          echo "AI implementation: $IMPL"
+          if [ "$IMPL" != "claude" ]; then
+            echo "::error::SUT is on '$IMPL', not 'claude' — a drift run against mock answers measures nothing."
+            exit 1
+          fi
 
       - name: SUT logs on failure
         if: failure()
@@ -89,7 +117,7 @@ jobs:
           cp test-results.json rag-drift-results/results-${DATE}.json 2>/dev/null || true
           cp ci-summary/summary.md rag-drift-results/summary-${DATE}.md 2>/dev/null || true
           echo "Run date: ${DATE}" > rag-drift-results/metadata.txt
-          echo "Model: claude-haiku-4-5-20251001" >> rag-drift-results/metadata.txt
+          node -e "console.log('Model: ' + (process.env.CLAUDE_MODEL || require('./config/models.json').subject))" >> rag-drift-results/metadata.txt
           echo "Trigger: ${{ github.event_name }}" >> rag-drift-results/metadata.txt
 
       - name: Upload drift results

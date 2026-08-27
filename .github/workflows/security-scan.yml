@@ -1,9 +1,17 @@
-# OWASP ZAP baseline security scan — manual trigger only.
-# Scans the running SUT for OWASP Top 10 vulnerabilities, missing headers,
-# and known misconfigurations. Produces an HTML report saved as a CI artifact.
+# Security scan — manual trigger only. Two jobs against two different OWASP lists.
 #
-# Usage: Actions tab → "Security scan (ZAP)" → Run workflow
-name: Security scan (ZAP)
+#   zap      — OWASP Top 10 (web). ZAP baseline against the running SUT: missing headers, known
+#              misconfigurations. HTML + JSON report as an artifact.
+#   agentic  — OWASP Top 10 for Agentic Applications (ASI01–ASI10, published 2025-12-09), added
+#              2026-08-27. Runs the @security layer plus the offline context-integrity guard.
+#
+# The agentic list is mostly *inapplicable* to this system, and that is the finding rather than a
+# gap: a single model call with no tools, no memory and no second agent cannot have six of the ten
+# failure modes. `docs/OWASP_AGENTIC.md` maps each category to what it would take for it to apply,
+# and records the two that are open (ASI07, ASI09). Four apply today and are tested.
+#
+# Usage: Actions tab → "Security scan" → Run workflow
+name: Security scan
 
 on:
   workflow_dispatch:
@@ -58,6 +66,73 @@ jobs:
           name: zap-report
           path: zap-report/
           if-no-files-found: warn
+
+      - name: Stop SUT
+        if: always()
+        run: docker compose -f sut/docker-compose.test.yml down
+
+# ── OWASP Top 10 for Agentic Applications ────────────────────────────────────
+  agentic:
+    name: Agentic AI security (ASI01-ASI10)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      # Mock mode: every assertion here is about authorisation, the contract, and the corpus that
+      # feeds the prompt — none of it needs a model call, and none of it should cost money to check.
+      AI_MOCK_RESPONSE: "true"
+      RATE_LIMIT_REGISTER_MAX: "1000"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
+          path: sut
+          token: ${{ secrets.SUT_GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Start SUT
+        run: |
+          mkdir -p sut/data
+          DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose -f sut/docker-compose.test.yml up -d --wait
+
+      - name: SUT logs on failure
+        if: failure()
+        run: docker compose -f sut/docker-compose.test.yml logs
+
+      - name: Install Playwright
+        run: npm ci && npx playwright install chromium --with-deps
+
+      # ASI03 (identity), ASI09 (what the answer claims), plus the pre-existing IDOR / BOLA / JWT
+      # tampering tests — the web Top 10 half of the same tag.
+      - name: Security layer (@security)
+        run: npx playwright test --grep @security
+
+      # ASI06. Offline by design: the check that catches a poisoned retrieval row has to run before
+      # the row is ever sent to a model.
+      - name: Context integrity (ASI06)
+        run: npx playwright test tests/unit/knowledge-integrity.test.ts
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "## OWASP Top 10 for Agentic Applications"
+            echo ""
+            echo "Applicable and tested: ASI01 (partly, @rag), ASI03, ASI04, ASI06, ASI08 (partly)."
+            echo "Open and recorded: ASI07 (services do not authenticate each other), ASI09 (no server-side disclosure)."
+            echo "Not applicable without tool use: ASI02, ASI05, ASI10."
+            echo ""
+            echo "Full mapping: \`docs/OWASP_AGENTIC.md\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Stop SUT
         if: always()

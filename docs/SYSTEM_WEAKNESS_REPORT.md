@@ -223,7 +223,7 @@ method is a 405 with `Allow`; an empty set falls through to the 404 handler unch
 Verified against a running SUT: `TRACE`, `POST`, `PUT` and `DELETE` on `/api/v1/doctors`
 answer `405` with `Allow: GET, HEAD, OPTIONS`; `GET /api/v1/auth/login` answers `405` with
 `Allow: OPTIONS, POST`; `/api/v1/nonexistent` still answers `404` under every method,
-`TRACE` included. Pinned by `tests/api/http.methods.test.ts` — 9 tests, of which 6 fail
+`TRACE` included. Pinned by `tests/api/http.methods.test.ts` — 10 tests, of which 6 fail
 against the pre-fix build, checked by disabling the middleware and re-running.
 
 One subtlety cost a debugging pass: a router mounted at `"/"` (the health routes) carries a
@@ -561,6 +561,163 @@ necessary. Recorded so the absence is a decision rather than an oversight.
 
 ---
 
+## 11. Patient data leaving the SUT (added 2026-08-26)
+
+`symptoms` is the only free-text field this API carries that is health information about an
+*identified* person — the request arrives with a bearer token, so the text is not anonymous. It
+leaves the SUT by design in exactly one direction, into the prompt. Everything below is about the
+directions it must not leave by, and what was and was not guarding them.
+
+### 11.1 Three exits, none of them tested (found 2026-08-26)
+
+**Risk:** the input reached three surfaces that outlive the request — the log stream (Loki keeps it),
+the error bodies handed back to the client, and the AI bug reporter, which sends a failed test's
+error message and stack to Anthropic, writes them to `bug-reports/`, and attaches them to Allure.
+Nothing asserted anything about any of them.
+
+**What was found on inspection.** Two of the three were already correct and simply unguarded. The
+route logs `symptomsCharCount`, not the text (`sut/src/routes/aiRoutes.js`), and no error message on
+any status is built from the input. That is the reason to write the tests rather than a reason not
+to: the next `req.log.info({ symptoms })` added while debugging would have been caught by nothing,
+and the redaction list in `logger.js` covered `authorization` and `cookie` on the same terms — right,
+and asserted nowhere.
+
+The third was a real gap. `utils/aiBugReporter.ts` passed `error.message` and `error.stack` straight
+into a prompt. Playwright builds an assertion message out of the values it compared, so a failing
+`@rag` test carries the symptoms and a failing auth test carries an address and a bearer token — to
+a third party, into a file, and into a report artifact.
+
+**Fix:** `utils/phi.ts` — `redactPhi()` replaces the field values this API actually carries
+(`symptoms`, `email`, `password`, `name`, `reasoning`, and the three token fields), plus bare
+addresses and JWTs wherever they appear. `buildBugReportPrompt()` was split out of the transport so
+what leaves can be asserted without a key or a network call. Deliberately not a classifier: what it
+does not recognise stays, because a report reduced to `[redacted]` is not a report, and handing the
+text to a model to decide what is sensitive routes it through the very hop this guards.
+
+**Tests:** `sut/src/__tests__/aiPrivacy.test.js` (6) drives the real `src/app.js` over a real socket
+with a marker string in the symptoms and asserts it appears in no log line on the 200, 400, 422, 404
+and 503 paths, and that the bearer token is redacted rather than merely absent.
+`sut/src/__tests__/aiServicePrivacy.test.js` (5) does the same for the standalone service's answers.
+`tests/unit/bug-reporter.redaction.test.ts` (9) covers the redactor and the prompt.
+
+Each was proven from both sides: adding `symptoms` to the route's log line, emptying the redaction
+list, building `err.message` from the prompt, and removing `redactPhi` from the reporter each turn
+exactly the corresponding test red.
+
+**Deliberately not covered.** The Allure parameters in `ai.recommend.test.ts` print symptoms, but
+those are literals written in the test file, not input from a patient — redacting them would hide
+the evidence a failed AI test exists to show.
+
+### 11.2 A malformed model answer is reported as an outage (found 2026-08-26, open)
+
+**Risk:** `callClaude()` in `ai-service/index.js` wraps both the network call and
+`message.content[0].text` in one `try` with a bare `catch`, so a 200 whose body is not the expected
+shape raises `CLAUDE_UNAVAILABLE` — a `503 claude_unavailable`. The service's own 500 branch is
+unreachable through the model path.
+
+**Effect:** a parse failure and an outage are the same signal, and they send whoever is on call to
+different systems. It is also the failure structured outputs were adopted to make visible: the SUT
+copy distinguishes the two in its message, the service does not.
+
+**Direction of a fix:** narrow the `try` to the request, and classify a body that does not match the
+schema separately — the SUT copy's wording (`did not match the requested schema`) already exists to
+be reused. Not done here; found while writing 11.1 and recorded rather than folded into it.
+
+**Test:** `aiServicePrivacy.test.js` pins the current behaviour (`503`, no input echoed), so a fix
+will surface as that test failing on the status rather than silently changing the contract.
+
+## 12. Agentic AI weaknesses (added 2026-08-27)
+
+Mapped against the OWASP Top 10 for Agentic Applications (ASI01–ASI10, published 2025-12-09). The
+full applicability analysis — including the six categories this system cannot have, and what would
+have to be built for them to apply — is `docs/OWASP_AGENTIC.md`. Only the weaknesses are here.
+
+### 12.1 The AI route reached a paid external model for an unidentified caller ✅ FIXED 2026-08-27
+
+**Risk:** `POST /api/v1/ai/recommend-doctor` had no `requireAuth`. A request with no `Authorization`
+header returned `200` and a recommendation; so did `Bearer garbage.token.here`, because the token was
+never parsed — a malformed credential was indistinguishable from a valid one. Every other domain
+route required a token. The one route that spends money at a third party did not.
+
+**Effect:** three, in the order they bite. (1) Unbounded cost — anyone could spend the operator's
+Anthropic balance. (2) The rate limiter degraded: `aiRateLimitKey` hashes the `Authorization` header
+and falls back to the literal `guest`, so all anonymous callers shared one `<ip>:guest` bucket, and
+the per-user half of the key engaged only for authenticated callers. Combined with per-IP-only
+limiting (D-03), the practical ceiling was low. (3) Free text from an unauthenticated source reached
+a prompt with no barrier in front of it.
+
+**Why it maps to ASI03 rather than to a plain missing auth check:** the category is about an action
+performed under a borrowed identity. The caller borrowed the operator's Anthropic credential without
+presenting one of their own.
+
+**Fix:** `requireAuth` on the route; `security: [bearerAuth]` and the `401`/`404` responses added to
+`openapi/openapi.yaml`, which had documented neither. Both consumers already send a token, so nothing
+changed on either client.
+
+**Tests:** `tests/api/security.agentic.test.ts` (3) — 401 without a token, 401 with a malformed token,
+200 for an authenticated patient. Removing `requireAuth` turns exactly the two 401 tests red.
+
+**Why it survived:** the suite's own client always sent a token, so every test of this route
+exercised the authenticated path. Nothing asked the opposite question.
+
+### 12.5 The circuit breaker is implemented and tested nowhere (ASI08, open — found 2026-08-27)
+
+**Risk:** `aiRecommendation.js` implements a closed → open → half-open breaker over
+`CLAUDE_UNAVAILABLE` failures and publishes it on `GET /api/v1/ai/circuit-state`; `getCircuitState`,
+`resetCircuit` and `forceCircuitOpen` are exported. No test in either repository calls any of them.
+
+**Effect:** the component whose job is to stop a model outage becoming a retry storm against a paid
+API is the one link in the chain nothing asserts. The two propagation paths around it *are* covered
+("Claude unreachable", "ai-service unreachable"), which is what made the gap easy to miss.
+
+**How it was found:** writing a cross-reference comment that claimed ASI08 was covered by "the
+circuit breaker tests"; grepping for `circuit` across both suites returns that comment and nothing
+else. The claim came from assuming a component that visible must be tested.
+
+**Direction of a fix:** three states and two transitions through `/circuit-state` with
+`CLAUDE_DEGRADE` on. `CIRCUIT_BREAKER_THRESHOLD` and `CIRCUIT_BREAKER_RECOVERY_MS` are already
+per-run configurable, so no new seam is needed.
+
+### 12.2 The two services do not authenticate each other (ASI07, open)
+
+**Risk:** `POST /recommend` on `ai-service` accepts any caller that can reach the port. The service
+holds an Anthropic key and sends any text it is given to a model. Nothing binds a request to the SUT.
+
+**Mitigated in one direction only:** the SUT does not trust what comes back — `recommendViaService`
+re-checks the specialty against the allow-list, now covered by
+`sut/src/__tests__/aiSupplyChain.test.js` (4 tests, ASI04). The missing direction is that the service
+does not know who is asking.
+
+**Direction of a fix:** a shared secret header verified by the service, or mTLS if the topology grows.
+Not done here: it changes the contract between two deployables and the Pact file that pins it.
+
+### 12.3 The recommendation carries no disclosure that it is machine-generated (ASI09, open)
+
+**Risk:** the response is `{ recommendedSpecialty, doctors, reasoning }` and nothing else. Nothing
+marks it as an AI recommendation rather than clinical advice, and `reasoning` is model-written prose
+that reads like a clinician's note.
+
+**Where it is covered and where it is not:** EU AI Act Art. 13 transparency is tested on the mobile
+client (`clinic-mobile-tests/features/eu-ai-act.feature` — a disclosure banner in the UI). The
+requirement is therefore met at one surface and absent at the API, where any other consumer meets it.
+
+**Direction of a fix:** a constant flag on the response body, documented in the spec, so a consumer
+cannot present the output as a diagnosis without ignoring the contract. Left open deliberately —
+adding a field is a product decision; `security.agentic.test.ts` pins the current shape and says so.
+
+### 12.4 The retrieval corpus is interpolated into the prompt unescaped (ASI06, guarded)
+
+**Risk:** the top three knowledge entries become prompt lines as `- ${specialty}: ${description}`,
+joined by newlines, with no delimiter and no role boundary. A `\n` inside a description does not
+corrupt the JSON and does not fail a schema check — it buys the author of that row as many extra
+prompt lines as they want, in the position the model reads as the system's own instructions.
+Poisoning this context needs a pull request against a data file, not access to the model.
+
+**Guard rather than fix:** `tests/unit/knowledge-integrity.test.ts` (4) asserts one prompt line per
+entry, a line count equal to the entry count, no directive phrasing, and a length bound. Escaping the
+interpolation would be the structural fix and is not done — the corpus is a checked-in file with six
+rows, so the guard sits where a change to it would be reviewed.
+
 ## 6. Summary table
 
 | Weakness | Severity | Mitigated? | Test exists? |
@@ -607,3 +764,11 @@ necessary. Recorded so the absence is a decision rather than an oversight.
 | Same invalid query returns 400 or 200 depending on `Accept` | Medium | ⚠️ by spec; a test on one media type does not cover the other | ✅ both media types pinned |
 | `doctors { slots }` issued one query per doctor (N+1) | High | ✅ fixed 2026-08-24: per-request batching loader, 6 queries → 1 | ✅ counter-based test, observed failing before the fix |
 | No query depth/complexity limit | Low | ⚠️ acyclic schema makes it moot today; revisit if a back-reference is added | ❌ none |
+| Symptoms reachable in logs / error bodies / bug reports — no assertion either way | High | ✅ two exits were already clean; the reporter now redacts (`utils/phi.ts`) | ✅ 20 tests across `aiPrivacy`, `aiServicePrivacy`, `bug-reporter.redaction` (2026-08-26) |
+| `ai-service` reports a malformed model answer as `503 claude_unavailable` | Medium | ❌ open — one `try`, one bare `catch` (found 2026-08-26) | ⚠️ current behaviour pinned, not endorsed |
+| SUT and `ai-service` carry separate `@anthropic-ai/sdk` copies at different versions | Medium | ❌ open — 0.92.0 vs 0.95.1 (found 2026-08-26) | ❌ `aiServiceParity.test.js` compares prompt and schema, not the client |
+| AI route performed a delegated call to a paid model with no caller identity (ASI03) | High | ✅ fixed 2026-08-27: `requireAuth` + spec updated | ✅ `security.agentic.test.ts` — proven red without the fix |
+| SUT and `ai-service` do not authenticate each other (ASI07) | Medium | ❌ open — the return direction is checked, the inbound one is not | ⚠️ ASI04 half covered by `aiSupplyChain.test.js` |
+| No server-side disclosure that a recommendation is machine-generated (ASI09) | Medium | ❌ open — met on the mobile client only | ⚠️ current response shape pinned, deliberately |
+| Retrieval corpus interpolated into the prompt unescaped (ASI06) | Medium | ⚠️ guarded, not escaped | ✅ `knowledge-integrity.test.ts` — proven red on a poisoned row |
+| Circuit breaker implemented, exposed on `/circuit-state`, asserted nowhere (ASI08) | Medium | ❌ open (found 2026-08-27) | ❌ none — the two paths around it are covered, the breaker is not |

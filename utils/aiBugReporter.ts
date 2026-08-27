@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import type { TestInfo } from '@playwright/test';
+import { redactPhi } from './phi';
+import { TOOLING_MODEL } from '../config/models';
 
 interface ClaudeResponse {
   error?: { message: string };
@@ -10,7 +12,7 @@ interface ClaudeResponse {
 
 function callClaude(prompt: string, apiKey: string): Promise<string> {
   const body = JSON.stringify({
-    model: 'claude-haiku-4-5-20251001',
+    model: TOOLING_MODEL,
     max_tokens: 1024,
     messages: [{ role: 'user', content: prompt }],
   });
@@ -48,19 +50,30 @@ function callClaude(prompt: string, apiKey: string): Promise<string> {
   });
 }
 
-async function generateBugReport(testInfo: TestInfo): Promise<string | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || testInfo.status !== 'failed') return null;
-
+/**
+ * The prompt sent to Claude for a failed test, with patient data taken out of it.
+ *
+ * Exported so `tests/unit/bug-reporter.redaction.test.ts` can assert what leaves without a network
+ * call or a key: the redaction is the whole point of this function, and a guarantee that can only be
+ * checked by watching real traffic is not one this suite can hold.
+ *
+ * A Playwright assertion message quotes the values it compared, so an AI test that fails carries the
+ * symptoms into `error.message` and an auth test carries an address and a bearer token. Both go
+ * through `redactPhi` before they reach the prompt, the `bug-reports/` file, or the Allure report.
+ */
+function buildBugReportPrompt(testInfo: TestInfo): string {
   const error = testInfo.errors?.[0];
-  const errorMessage = error?.message?.split('\n').slice(0, 3).join(' ') || 'no error';
-  const stack = (error?.stack || '')
+  const rawMessage = error?.message?.split('\n').slice(0, 3).join(' ') || 'no error';
+  const rawStack = (error?.stack || '')
     .split('\n')
     .filter((l) => !l.includes('node_modules'))
     .slice(0, 6)
     .join('\n');
 
-  const prompt = [
+  const errorMessage = redactPhi(rawMessage);
+  const stack = redactPhi(rawStack);
+
+  return [
     'You are a senior QA engineer. A Playwright automated test just failed.',
     'Write a concise, actionable bug report a developer can act on immediately.',
     '',
@@ -91,12 +104,21 @@ async function generateBugReport(testInfo: TestInfo): Promise<string | null> {
   ]
     .filter((l) => l !== undefined)
     .join('\n');
+}
+
+async function generateBugReport(testInfo: TestInfo): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || testInfo.status !== 'failed') return null;
+
+  const prompt = buildBugReportPrompt(testInfo);
 
   try {
     return await callClaude(prompt, apiKey);
   } catch (e) {
     const err = e as Error;
-    return `## Bug report generation failed\n\nError: ${err.message}\n\nTest: ${testInfo.title}\nError: ${errorMessage}`;
+    // The fallback is written to the same three places as the report, so it is redacted too — the
+    // original built its own copy of the error message straight from `testInfo`.
+    return `## Bug report generation failed\n\nError: ${redactPhi(err.message)}\n\nTest: ${testInfo.title}`;
   }
 }
 
@@ -123,4 +145,4 @@ async function attachBugReport(testInfo: TestInfo): Promise<void> {
   console.log(`\n  [AI bug report] ${filename}`);
 }
 
-export { attachBugReport };
+export { attachBugReport, buildBugReportPrompt };

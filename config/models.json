@@ -1,0 +1,6 @@
+{
+  "_comment": "The model ids this repository names. Data, not code, so the CommonJS scripts in scripts/ and the TypeScript in config/models.ts read one source. Documentation of what each role is for lives in config/models.ts — read that before changing a value here.",
+  "subject": "claude-haiku-4-5-20251001",
+  "judge": "claude-opus-5",
+  "tooling": "claude-haiku-4-5-20251001"
+}

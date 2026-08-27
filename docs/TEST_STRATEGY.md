@@ -68,6 +68,8 @@ Prove **high-impact failures** early, not maximize endpoint coverage:
 | Slot visibility vs appointment state | Payment integrations |
 | Tags for selective CI | |
 | Performance baseline — k6 (see §14.4) | |
+| The AI surface: retrieval quality against a golden set, the paths patient symptoms take out of the system, and the agentic risk categories that actually apply — `docs/OWASP_AGENTIC.md` | Categories that need machinery this system lacks: code execution by the model, autonomous loops. Recorded with what would have to exist, not silently skipped |
+| The MCP server as an object under test — per-session tool profiles, forwarded credentials, screened tool descriptions | Multi-agent orchestration; there is no second agent |
 
 ---
 
@@ -83,7 +85,9 @@ Prove **high-impact failures** early, not maximize endpoint coverage:
 | **`@ui`** | Pure UI state checks — no API assertion; headed Chromium | PR or nightly alongside `@api` |
 | **`@e2e`** | Cross-layer journeys — UI action + API assertion (or vice-versa); `workers: 1` | PR or nightly |
 | **`@chaos`** | Chaos mode feature verification — requires a **chaos-enabled server** (see §12); never runs in normal smoke/api jobs | Separate CI job or local manual run |
-| **`@unit`** | Pure unit tests — no HTTP, no SUT, no browser; test SUT modules in isolation (retrieval scoring, prompt construction) | Always — no env setup needed |
+| **`@unit`** | Pure unit tests — no HTTP, no SUT, no browser. Retrieval scoring and prompt construction, and since 2026-08 the checks that have to run *before* anything is sent: retrieval quality metrics against a golden set, cassette-key identity, the model configuration's three roles, PHI redaction, and the integrity of the corpus that is interpolated into the prompt | Always — no env setup needed |
+| **`@security`** | Access boundaries and the questions an attacker asks: IDOR, BOLA, tampered JWT, and — since 2026-08-27 — whether a route that spends money at a third party identifies its caller at all (OWASP ASI03). See `docs/OWASP_AGENTIC.md` | With `@api`; also the `agentic` job in `security-scan.yml` |
+| **`@rag`** | The real recommendation path — response parsed, schema honoured, reasoning read by a judge and a completeness check. Cannot run in mock mode, which answers from retrieval and never calls a model | `rag-replay` job on recorded responses; `model-drift.yml` weekly against the live API |
 
 Filter examples:
 
@@ -391,9 +395,28 @@ Five patterns that distinguish this suite from typical QA portfolios. Each ships
 
 ### 14.1 Security testing (`@security`)
 
-File: **`tests/api/security.test.ts`**
+Files: **`tests/api/security.test.ts`** (the web Top 10 half) and **`tests/api/security.agentic.test.ts`**
+(the agentic half, added 2026-08-27).
 
 Not penetration testing — boundary assertions that prove the API rejects unauthorized or malformed access at the contract level.
+
+The agentic file is scoped by an applicability analysis rather than by the list: `docs/OWASP_AGENTIC.md`
+maps all ten OWASP Agentic categories against a system that is a single model call with retrieval, and
+records for each one what would have to exist for it to apply. Four applied, two are open and written
+down, four need machinery this system does not have. The alternative — running ten categories as a
+checklist — would have produced ten green tests and no information.
+
+| Case | What | Assertion |
+| --- | --- | --- |
+| ASI03 — the model is reached for an unidentified caller | `POST /ai/recommend-doctor` with no `Authorization` | `401 AUTH_REQUIRED` |
+| ASI03 — a malformed credential is not the same as none | same route, `Bearer garbage.token.here` | `401 AUTH_INVALID` |
+| ASI03 — the gate does not refuse everyone | same route, authenticated patient | `200` |
+| ASI09 — the answer routes, it does not diagnose | `200` body keys | exactly `doctors`, `reasoning`, `recommendedSpecialty` |
+
+Covered elsewhere, same list: ASI04 in `sut/src/__tests__/aiSupplyChain.test.js` (the SUT re-checks the
+specialty a second deployable sends), ASI06 in `tests/unit/knowledge-integrity.test.ts` (the retrieval
+corpus is interpolated into the prompt unescaped), and ASI02 / ASI10 in `sut/src/__tests__/mcpServer.test.js`.
+
 
 | Case | What | Assertion |
 | --- | --- | --- |
@@ -516,7 +539,7 @@ The recommendation endpoint uses **RAG (Retrieval-Augmented Generation)**:
 
 1. **Knowledge base** — `src/data/specialtyKnowledge.json`: specialty → symptom descriptions
 2. **Retrieval layer** — `src/services/retrieval.js`: keyword overlap scoring; returns top-K specialties for given symptoms
-3. **Generation** — Claude API called with retrieved context injected into prompt; constrained to respond with `{ "specialty": "<from list>", "reasoning": "<one sentence>" }`
+3. **Generation** — Claude API called with the retrieved context injected into the prompt. The shape of the answer is a **request parameter**, not a request: `output_config.format` carries a JSON schema whose `specialty` is an `enum` of the allowed specialties. Before 2026-08-21 the prompt asked for JSON in prose and the reply went through a regex that stripped ```` ```json ```` fences — and every real call failed, because stripping markup after the fact is a workaround for never having stated the format. The allow-list check after the answer is kept anyway: the standalone service is a separate deployable and can be redeployed on its own
 
 **Why RAG over vanilla LLM call:** Without retrieval, Claude can hallucinate specialties not in our system. With retrieval, the prompt contains only specialties we actually have doctors for — the model is grounded to our context.
 
@@ -528,6 +551,25 @@ The recommendation endpoint uses **RAG (Retrieval-Augmented Generation)**:
 4. Top-1 result is used as the recommended specialty in mock mode
 
 Example: `"chest pain and palpitations"` → Cardiologist scores 3 (matches `chest`, `pain` via `back pain` partial, `palpitation`), all others score 0–1.
+
+**How the retrieval half is measured (added 2026-08-26).** `data/retrievalGoldenSet.ts` holds 34
+answerable symptom→specialty pairs plus 3 that should match nothing, with the expected answer decided
+clinically *before* measuring and the category assigned by a property of the phrase, never by running
+the retriever and seeing what happened. `utils/retrievalMetrics.ts` scores accuracy@1 (what mock mode
+serves), recall@3 (what reaches the prompt), MRR, coverage and the false-positive rate. Measured:
+acc@1 61.8%, recall@3 64.7%, MRR 0.632 — and the breakdown is the finding: direct phrasings 100%,
+morphological variants 60%, **synonyms 0%**. Two tests hold the strengths, two bound the weakness from
+above, so they go red when the retriever gets *better*. Embeddings were considered and declined with
+the numbers attached: on a six-record corpus top-3 already returns half the corpus, so the gap to a
+competent lexical retriever (stemming + IDF) is larger than the gap from there to vectors.
+
+**How `@rag` runs without a funded key (added 2026-08-26/27).** A record/replay proxy sits between the
+system and api.anthropic.com; anything holding an Anthropic client is pointed at it by base URL. Mock
+mode is not a substitute — it answers from retrieval and never calls a model, so it exercises none of
+what these tests are about. What replay does not cover is model drift, which is why `model-drift.yml`
+still runs weekly against the live API. The judge runs on a **different model class** than the endpoint
+it judges (`config/models.ts`): until 2026-08-27 it was the defendant's own model, which is a judge
+that shares the defendant's blind spots.
 
 **Test cases — no API key needed:**
 
