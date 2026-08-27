@@ -132,7 +132,7 @@ The comment claimed ASI08 was covered by "the circuit breaker tests in `ai.recom
 for `circuit` across both suites returns that comment and nothing else. The claim was written from
 the assumption that a component this visible must be tested.
 
-**Closed by** `sut/src/__tests__/aiCircuitBreaker.test.js` — 13 tests: the state machine through a
+**Closed by** `sut/src/__tests__/aiCircuitBreaker.test.js` — 16 tests: the state machine through a
 mocked dependency, and the route itself over real HTTP in `CLAUDE_DEGRADE` mode, because what an open
 breaker looks like to a caller is a separate question from what the module's internal state says.
 

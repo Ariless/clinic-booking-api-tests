@@ -80,7 +80,7 @@ IMPACT ↑
 | A second deployable returns a specialty outside the allow-list and the SUT queries for it (ASI04) | 4 | 2 | 8 | `sut/src/__tests__/aiSupplyChain.test.js` — the refused value must never become a database query |
 | An agent reaches a tool its session was not given (ASI02) | 4 | 2 | 8 | `sut/src/__tests__/mcpServer.test.js` — tools outside the profile are never registered, so there is nothing to refuse |
 | Replayed model responses answer the wrong question — false green that is also *fast* | 5 | 3 | 15 | `tests/unit/claude-cassette.test.ts` — found live: 8/8 green in 2.1s on answers recorded for other prompts (`TST-09`) |
-| The circuit breaker never opens under a real outage cascade (ASI08) | 4 | 2 | 8 | `sut/src/__tests__/aiCircuitBreaker.test.js` — 13 tests, added 2026-08-27; states through a mock plus the route in `CLAUDE_DEGRADE` |
+| The circuit breaker never opens under a real outage cascade (ASI08) | 4 | 2 | 8 | `sut/src/__tests__/aiCircuitBreaker.test.js` — 16 tests, added 2026-08-27; states through a mock plus the route in `CLAUDE_DEGRADE` |
 | The breaker opens during normal operation — it counts failures over the process lifetime, not consecutive ones | 4 | 3 | 12 | **open** — found by the test above; behaviour pinned as-is, `SYSTEM_WEAKNESS_REPORT.md` §12.6 |
 | Infrastructure health / error contract | 2 | 1 | 2 | `infrastructure.test.ts` (`@smoke`) |
 

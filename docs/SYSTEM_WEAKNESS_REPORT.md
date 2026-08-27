@@ -676,11 +676,21 @@ to miss — the propagation of a failure looks like the handling of a failure.
 circuit breaker tests"; grepping for `circuit` across both suites returned that comment and nothing
 else. The claim came from assuming a component that visible must be tested.
 
-**Closed by:** `sut/src/__tests__/aiCircuitBreaker.test.js` — 13 tests in two halves. States and
-transitions through a mocked dependency (closed → open → half-open → closed, plus what counts as a
-failure and what does not), and the route itself over real HTTP against the assembled app in
+**Closed by:** `sut/src/__tests__/aiCircuitBreaker.test.js` — 16 tests in two halves: 14 on states
+and transitions through a mocked dependency (closed → open → half-open → closed, plus what counts as
+a failure and what does not), and 2 on the route itself over real HTTP against the assembled app in
 `CLAUDE_DEGRADE` mode, because what an open breaker looks like to a caller is a separate question
 from what the module's internal state says. Writing it immediately surfaced 12.6 below.
+
+**Checked by mutation, not by coverage:** five deliberate breaks in `aiRecommendation.js` — fail-fast
+removed, no transition to half-open, the threshold comparison shifted, `openedAt` not restamped on
+reopening, and the failure condition widened to count every thrown error. The first four turned the
+suite red immediately. **The fifth survived**, because the test meant to pin the condition used an
+unroutable specialty — which returns `{ ok: false }` rather than throwing, so it never reaches the
+`catch` at all and cannot distinguish "only these two codes count" from "everything counts". The
+14th test (`an error that is not an unavailable dependency does not count`) was added for that
+mutation and kills it. Worth recording as its own small lesson: a test that exercises the right
+scenario can still be blind to the branch it was written for.
 
 ### 12.6 The breaker counts failures that are not consecutive (open — found 2026-08-27)
 
@@ -714,6 +724,32 @@ fixed. A red test there after the fix is the signal to come back to this entry.
 intent and the code did something else (the first was the prompt asking for JSON while nothing
 enforced it). Both were found by writing a test against the documented behaviour rather than against
 the observed one.
+
+### 12.7 An open breaker answers 500, not 503 — and its error code is in no contract (open — found 2026-08-27)
+
+**Risk:** when the breaker is open, `recommendDoctors` throws an error carrying
+`code = "CIRCUIT_OPEN"`. `routes/aiRoutes.js` maps exactly two codes to a status — `CLAUDE_UNAVAILABLE`
+and `AI_SERVICE_UNAVAILABLE` — so `CIRCUIT_OPEN` falls through to the generic error handler with no
+`status` set and is answered as **`500 INTERNAL_ERROR`**.
+
+**Effect:** the breaker works, and then tells the caller the wrong thing. `503` means "the dependency
+is down, back off and retry"; `500` means "this service is broken". A client, a retry policy, an
+uptime check and an on-call alert all treat those differently — and the breaker exists precisely to
+produce the first one cheaply. So the mechanism that is supposed to shed load politely announces
+itself as a server fault instead.
+
+**Second half of the same gap:** `CIRCUIT_OPEN` appears in no contract document — not in
+`CONTRACT_PACK.md`'s error catalogue, not in `API_ENDPOINTS.md`, not in `openapi/openapi.yaml`. A
+code that can reach a client and is written down nowhere cannot be depended on by one.
+
+**Direction of a fix:** map `CIRCUIT_OPEN` to `503` in the route alongside the other two — the
+breaker is a dependency-unavailable condition by definition — and add it to the three contract
+documents. Whether it deserves its own code separate from `CLAUDE_UNAVAILABLE` is a real question:
+they mean different things to an operator (one says the model failed, the other says we stopped
+asking), and the existing split between `CLAUDE_UNAVAILABLE` and `AI_SERVICE_UNAVAILABLE` was made on
+exactly that reasoning.
+
+**Pinned, not endorsed:** `aiCircuitBreaker.test.js` asserts the `500` as it stands.
 
 ### 12.2 The two services do not authenticate each other (ASI07, open)
 
@@ -808,5 +844,6 @@ rows, so the guard sits where a change to it would be reviewed.
 | SUT and `ai-service` do not authenticate each other (ASI07) | Medium | ❌ open — the return direction is checked, the inbound one is not | ⚠️ ASI04 half covered by `aiSupplyChain.test.js` |
 | No server-side disclosure that a recommendation is machine-generated (ASI09) | Medium | ❌ open — met on the mobile client only | ⚠️ current response shape pinned, deliberately |
 | Retrieval corpus interpolated into the prompt unescaped (ASI06) | Medium | ⚠️ guarded, not escaped | ✅ `knowledge-integrity.test.ts` — proven red on a poisoned row |
-| Circuit breaker implemented, exposed on `/circuit-state`, asserted nowhere (ASI08) | Medium | ✅ covered 2026-08-27 | ✅ `aiCircuitBreaker.test.js` — 13 tests, states plus the route in `CLAUDE_DEGRADE` |
+| Circuit breaker implemented, exposed on `/circuit-state`, asserted nowhere (ASI08) | Medium | ✅ covered 2026-08-27 | ✅ `aiCircuitBreaker.test.js` — 16 tests, states plus the route in `CLAUDE_DEGRADE` |
 | Breaker counts non-consecutive failures — a long-lived process opens it during normal operation | Medium | ❌ open (found 2026-08-27 by the test above) | ⚠️ behaviour pinned as-is; the assertions invert when fixed |
+| An open breaker answers `500 INTERNAL_ERROR` instead of `503`, and `CIRCUIT_OPEN` is in no contract | Medium | ❌ open (found 2026-08-27) | ⚠️ behaviour pinned as-is |
