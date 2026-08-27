@@ -1,0 +1,46 @@
+[12:39:54.630] WARN (5100): pact@16.4.0: no state handler found for state: ""
+
+[12:39:54.660] WARN (5100): pact@16.4.0: no state handler found for state: ""
+
+[12:39:54.683] WARN (5100): pact@16.4.0: no state handler found for state: ""
+
+[12:39:54.707] WARN (5100): pact@16.4.0: no state handler found for state: ""
+
+2026-08-27T12:39:54.810755Z  WARN ThreadId(10) pact_matching::metrics: 
+
+Please note:
+We are tracking events anonymously to gather important usage statistics like Pact version and operating system. To disable tracking, set the 'PACT_DO_NOT_TRACK' environment variable to 'true'.
+
+
+
+Verifying a pact between clinic-booking-api-tests and clinic-booking-api
+
+  a POST with empty symptoms (0s loading, 40ms verification)
+    returns a response which
+      has status code 400 (OK)
+      includes headers
+        "Content-Type" with value "application/json" (OK)
+      has a matching body (OK)
+
+  a POST with unrecognised symptoms (0s loading, 23ms verification)
+    returns a response which
+      has status code 422 (OK)
+      includes headers
+        "Content-Type" with value "application/json" (OK)
+      has a matching body (OK)
+
+  a POST with valid symptoms (0s loading, 23ms verification)
+    returns a response which
+      has status code 200 (OK)
+      includes headers
+        "Content-Type" with value "application/json" (OK)
+      has a matching body (OK)
+
+  a login request from the web test suite (0s loading, 114ms verification)
+    returns a response which
+      has status code 200 (OK)
+      includes headers
+        "Content-Type" with value "application/json" (OK)
+      has a matching body (OK)
+
+
