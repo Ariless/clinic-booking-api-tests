@@ -193,7 +193,8 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | AI-13 | Failure context sent to a third party carries no patient data | `unit/bug-reporter.redaction.test.ts` | ✅ |
 | AI-14 | A specialty outside the allow-list is refused and never becomes a database query | `sut/src/__tests__/aiSupplyChain.test.js` | ✅ |
 | AI-15 | The retrieval corpus cannot forge prompt structure (one entry, one prompt line) | `unit/knowledge-integrity.test.ts` (`@unit`) | ✅ |
-| AI-16 | The circuit breaker opens after repeated model failures and recovers | ❌ No test — implemented and published on `/circuit-state`, asserted nowhere (`SYSTEM_WEAKNESS_REPORT.md` §12.5) | ❌ |
+| AI-16 | The circuit breaker opens after repeated model failures and recovers | `sut/src/__tests__/aiCircuitBreaker.test.js` | ✅ |
+| AI-17 | The breaker counts *consecutive* failures, as its own comment states | ⚠️ `aiCircuitBreaker.test.js` pins the current behaviour, which is cumulative — `SYSTEM_WEAKNESS_REPORT.md` §12.6 | ⚠️ |
 
 ---
 
@@ -263,13 +264,13 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | Waitlist | 6 | 6 | 0 | 0 |
 | Access control | 5 | 5 | 0 | 0 |
 | Real-time notifications | 5 | 5 | 0 | 0 |
-| AI symptom checker | 16 | 13 | 0 | 3 |
+| AI symptom checker | 17 | 15 | 1 | 1 |
 | MCP server | 3 | 3 | 0 | 0 |
 | Payments | 3 | 3 | 0 | 0 |
 | Error contract | 3 | 3 | 0 | 0 |
 | Performance | 5 | 5 | 0 | 0 |
 | Accessibility | 2 | 1 | 1 | 0 |
-| **Total** | **131** | **126 (96%)** | **1 (1%)** | **4 (3%)** |
+| **Total** | **132** | **128 (97%)** | **2 (2%)** | **2 (2%)** |
 
 **Not covered — known reasons:**
 

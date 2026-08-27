@@ -660,23 +660,60 @@ changed on either client.
 **Why it survived:** the suite's own client always sent a token, so every test of this route
 exercised the authenticated path. Nothing asked the opposite question.
 
-### 12.5 The circuit breaker is implemented and tested nowhere (ASI08, open — found 2026-08-27)
+### 12.5 The circuit breaker was implemented and tested nowhere (ASI08, ✅ COVERED 2026-08-27)
 
 **Risk:** `aiRecommendation.js` implements a closed → open → half-open breaker over
 `CLAUDE_UNAVAILABLE` failures and publishes it on `GET /api/v1/ai/circuit-state`; `getCircuitState`,
-`resetCircuit` and `forceCircuitOpen` are exported. No test in either repository calls any of them.
+`resetCircuit` and `forceCircuitOpen` are exported. For a long time no test in either repository
+called any of them.
 
-**Effect:** the component whose job is to stop a model outage becoming a retry storm against a paid
-API is the one link in the chain nothing asserts. The two propagation paths around it *are* covered
-("Claude unreachable", "ai-service unreachable"), which is what made the gap easy to miss.
+**Effect while it lasted:** the component whose job is to stop a model outage becoming a retry storm
+against a paid API was the one link in the chain nothing asserted. The two propagation paths around
+it *were* covered ("Claude unreachable", "ai-service unreachable"), which is what made the gap easy
+to miss — the propagation of a failure looks like the handling of a failure.
 
 **How it was found:** writing a cross-reference comment that claimed ASI08 was covered by "the
-circuit breaker tests"; grepping for `circuit` across both suites returns that comment and nothing
+circuit breaker tests"; grepping for `circuit` across both suites returned that comment and nothing
 else. The claim came from assuming a component that visible must be tested.
 
-**Direction of a fix:** three states and two transitions through `/circuit-state` with
-`CLAUDE_DEGRADE` on. `CIRCUIT_BREAKER_THRESHOLD` and `CIRCUIT_BREAKER_RECOVERY_MS` are already
-per-run configurable, so no new seam is needed.
+**Closed by:** `sut/src/__tests__/aiCircuitBreaker.test.js` — 13 tests in two halves. States and
+transitions through a mocked dependency (closed → open → half-open → closed, plus what counts as a
+failure and what does not), and the route itself over real HTTP against the assembled app in
+`CLAUDE_DEGRADE` mode, because what an open breaker looks like to a caller is a separate question
+from what the module's internal state says. Writing it immediately surfaced 12.6 below.
+
+### 12.6 The breaker counts failures that are not consecutive (open — found 2026-08-27)
+
+**Risk:** the comment above the implementation reads *"Tracks consecutive CLAUDE_UNAVAILABLE
+failures"*. It does not. `_onSuccess()` — which resets the counter — runs only when the state is
+already half-open:
+
+```js
+if (_state === "half-open") _onSuccess();
+```
+
+So a success on the ordinary closed path leaves `_failures` where it was. One failure, any number of
+healthy calls in between, one more failure, and a breaker configured for two consecutive failures
+opens.
+
+**Effect:** the breaker trips on a cumulative failure count over the process's whole lifetime rather
+than on a burst. On a long-running instance it will eventually open during normal operation — two
+unrelated blips hours apart are enough — and take a healthy endpoint out of service. That is the
+opposite of what a breaker is for: it is meant to shed load during an outage, not to accumulate a
+grudge.
+
+**Direction of a fix:** call `_onSuccess()` on any success, not only in half-open — or, if a
+cumulative window is actually wanted, say so in the comment and decay the count over time. The first
+is almost certainly the intended behaviour; the docstring is evidence of intent.
+
+**Pinned, not endorsed:** the test `BUG: a success while closed does not clear the count` asserts the
+behaviour as it is and says in its own comment that its last two expectations invert when this is
+fixed. A red test there after the fix is the signal to come back to this entry.
+
+**Why this one is worth the paragraph:** it is the second time on this route that a comment described
+intent and the code did something else (the first was the prompt asking for JSON while nothing
+enforced it). Both were found by writing a test against the documented behaviour rather than against
+the observed one.
 
 ### 12.2 The two services do not authenticate each other (ASI07, open)
 
@@ -771,4 +808,5 @@ rows, so the guard sits where a change to it would be reviewed.
 | SUT and `ai-service` do not authenticate each other (ASI07) | Medium | ❌ open — the return direction is checked, the inbound one is not | ⚠️ ASI04 half covered by `aiSupplyChain.test.js` |
 | No server-side disclosure that a recommendation is machine-generated (ASI09) | Medium | ❌ open — met on the mobile client only | ⚠️ current response shape pinned, deliberately |
 | Retrieval corpus interpolated into the prompt unescaped (ASI06) | Medium | ⚠️ guarded, not escaped | ✅ `knowledge-integrity.test.ts` — proven red on a poisoned row |
-| Circuit breaker implemented, exposed on `/circuit-state`, asserted nowhere (ASI08) | Medium | ❌ open (found 2026-08-27) | ❌ none — the two paths around it are covered, the breaker is not |
+| Circuit breaker implemented, exposed on `/circuit-state`, asserted nowhere (ASI08) | Medium | ✅ covered 2026-08-27 | ✅ `aiCircuitBreaker.test.js` — 13 tests, states plus the route in `CLAUDE_DEGRADE` |
+| Breaker counts non-consecutive failures — a long-lived process opens it during normal operation | Medium | ❌ open (found 2026-08-27 by the test above) | ⚠️ behaviour pinned as-is; the assertions invert when fixed |

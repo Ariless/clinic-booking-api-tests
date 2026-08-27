@@ -8,7 +8,7 @@
   "knownIssuesClosed": 34,
   "knownIssuesOpen": 1,
   "knownIssuesDesignDebt": 4,
-  "rtmRequirements": 131,
-  "rtmCovered": 126,
+  "rtmRequirements": 132,
+  "rtmCovered": 128,
   "visualTests": 7
 }
