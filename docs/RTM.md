@@ -194,7 +194,8 @@ Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 | AI-14 | A specialty outside the allow-list is refused and never becomes a database query | `sut/src/__tests__/aiSupplyChain.test.js` | ✅ |
 | AI-15 | The retrieval corpus cannot forge prompt structure (one entry, one prompt line) | `unit/knowledge-integrity.test.ts` (`@unit`) | ✅ |
 | AI-16 | The circuit breaker opens after repeated model failures and recovers | `sut/src/__tests__/aiCircuitBreaker.test.js` | ✅ |
-| AI-17 | The breaker counts *consecutive* failures, as its own comment states | ⚠️ `aiCircuitBreaker.test.js` pins the current behaviour, which is cumulative — `SYSTEM_WEAKNESS_REPORT.md` §12.6 | ⚠️ |
+| AI-17 | The breaker counts *consecutive* failures, as its own comment states | `sut/src/__tests__/aiCircuitBreaker.test.js` — defect found and fixed 2026-08-27, `SYSTEM_WEAKNESS_REPORT.md` §12.6 | ✅ |
+| AI-18 | A request shed by an open breaker is answered `503 CIRCUIT_OPEN`, and the code appears in the contract | `sut/src/__tests__/aiCircuitBreaker.test.js` over real HTTP; `openapi/openapi.yaml` + `API_ENDPOINTS.md` — defect found and fixed 2026-08-27, §12.7 | ✅ |
 
 ---
 

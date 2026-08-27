@@ -16,12 +16,22 @@
 // Deterministic and offline: it asserts on the corpus, not on what a model does with it. That is the
 // point — the check that would catch a poisoned row has to run before the row is ever sent.
 
+import path from 'path';
 import { test, expect } from '@playwright/test';
 
 type KnowledgeEntry = { specialty: string; description: string; keywords: string[] };
 
+// Same resolution the other SUT-reading unit tests use. The literal `../../../sut` that stood here
+// until 2026-08-27 only worked on a machine where the two repositories are siblings: in CI the SUT
+// is checked out *inside* this one (`path: sut`, `SUT_ROOT: sut`), so the relative path pointed a
+// level above the workspace and the file threw on load — which took the whole run down, `@smoke`
+// included, because Playwright loads every spec to build the list before it greps.
+const SUT_ROOT = process.env.SUT_ROOT
+    ? path.resolve(process.env.SUT_ROOT)
+    : path.resolve(__dirname, '../../../sut');
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const corpus = require('../../../sut/src/data/specialtyKnowledge.json') as KnowledgeEntry[];
+const corpus = require(path.join(SUT_ROOT, 'src/data/specialtyKnowledge.json')) as KnowledgeEntry[];
 
 /**
  * The prompt line the SUT builds for one entry. Restated here rather than imported: importing

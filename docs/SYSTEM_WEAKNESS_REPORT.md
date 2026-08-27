@@ -692,7 +692,7 @@ unroutable specialty — which returns `{ ok: false }` rather than throwing, so 
 mutation and kills it. Worth recording as its own small lesson: a test that exercises the right
 scenario can still be blind to the branch it was written for.
 
-### 12.6 The breaker counts failures that are not consecutive (open — found 2026-08-27)
+### 12.6 The breaker counted failures that were not consecutive (✅ FIXED 2026-08-27)
 
 **Risk:** the comment above the implementation reads *"Tracks consecutive CLAUDE_UNAVAILABLE
 failures"*. It does not. `_onSuccess()` — which resets the counter — runs only when the state is
@@ -712,20 +712,29 @@ unrelated blips hours apart are enough — and take a healthy endpoint out of se
 opposite of what a breaker is for: it is meant to shed load during an outage, not to accumulate a
 grudge.
 
-**Direction of a fix:** call `_onSuccess()` on any success, not only in half-open — or, if a
-cumulative window is actually wanted, say so in the comment and decay the count over time. The first
-is almost certainly the intended behaviour; the docstring is evidence of intent.
+**Fix:** `_onSuccess()` is now called on any success, not only in half-open — the reading the
+docstring was already claiming. The alternative (keep the cumulative count, decay it over time, and
+correct the comment) was rejected: nothing in the design wanted a lifetime tally, and the comment is
+evidence of intent rather than of a deliberate choice.
 
-**Pinned, not endorsed:** the test `BUG: a success while closed does not clear the count` asserts the
-behaviour as it is and says in its own comment that its last two expectations invert when this is
-fixed. A red test there after the fix is the signal to come back to this entry.
+```js
+// before                                  // after
+if (_state === "half-open") _onSuccess();  _onSuccess();
+```
+
+**Proven by the test going red.** The test had been written against the defect and pinned it
+deliberately; applying the fix turned it — and only it, plus 12.7's — red, which is the evidence that
+it was testing the thing it claimed to. It is now `a success clears the count, so the failures that
+open it are consecutive ones`, and it carries a second half the pinned version did not need: a
+genuine run of adjacent failures still opens the breaker. Without that, a fix that simply disabled
+the breaker would pass every other assertion in the file.
 
 **Why this one is worth the paragraph:** it is the second time on this route that a comment described
 intent and the code did something else (the first was the prompt asking for JSON while nothing
 enforced it). Both were found by writing a test against the documented behaviour rather than against
 the observed one.
 
-### 12.7 An open breaker answers 500, not 503 — and its error code is in no contract (open — found 2026-08-27)
+### 12.7 An open breaker answered 500, not 503 — and its error code was in no contract (✅ FIXED 2026-08-27)
 
 **Risk:** when the breaker is open, `recommendDoctors` throws an error carrying
 `code = "CIRCUIT_OPEN"`. `routes/aiRoutes.js` maps exactly two codes to a status — `CLAUDE_UNAVAILABLE`
@@ -738,18 +747,27 @@ uptime check and an on-call alert all treat those differently — and the breake
 produce the first one cheaply. So the mechanism that is supposed to shed load politely announces
 itself as a server fault instead.
 
-**Second half of the same gap:** `CIRCUIT_OPEN` appears in no contract document — not in
-`CONTRACT_PACK.md`'s error catalogue, not in `API_ENDPOINTS.md`, not in `openapi/openapi.yaml`. A
-code that can reach a client and is written down nowhere cannot be depended on by one.
+**Second half of the same gap:** `CIRCUIT_OPEN` appeared in no contract document — not in
+`API_ENDPOINTS.md`, not in `openapi/openapi.yaml`. A code that can reach a client and is written down
+nowhere cannot be depended on by one. (An earlier draft of this entry also named `CONTRACT_PACK.md`;
+there is no such file in either repository.)
 
-**Direction of a fix:** map `CIRCUIT_OPEN` to `503` in the route alongside the other two — the
-breaker is a dependency-unavailable condition by definition — and add it to the three contract
-documents. Whether it deserves its own code separate from `CLAUDE_UNAVAILABLE` is a real question:
-they mean different things to an operator (one says the model failed, the other says we stopped
-asking), and the existing split between `CLAUDE_UNAVAILABLE` and `AI_SERVICE_UNAVAILABLE` was made on
-exactly that reasoning.
+**And a third thing the fix surfaced.** Documenting the code meant looking at what else was missing
+from the same block, and two more things were: `AI_SERVICE_UNAVAILABLE` had been answerable since
+2026-08-21 and was in `API_ENDPOINTS.md` but never in the OpenAPI spec, and `GET /api/v1/ai/circuit-state`
+— unauthenticated, as old as the breaker itself — was in neither. The route that publishes the
+breaker's state was as undocumented as the breaker's error code.
 
-**Pinned, not endorsed:** `aiCircuitBreaker.test.js` asserts the `500` as it stands.
+**Fix:** `CIRCUIT_OPEN` is mapped to `503` in `aiRoutes.js` alongside the other two — the breaker is
+a dependency-unavailable condition by definition. It keeps its own code rather than collapsing into
+`CLAUDE_UNAVAILABLE`: to an operator "the model failed" and "we stopped asking" are different events,
+which is the same reasoning that split `CLAUDE_UNAVAILABLE` from `AI_SERVICE_UNAVAILABLE`. Written
+down in `API_ENDPOINTS.md` and `openapi/openapi.yaml`, together with the two omissions above.
+
+**Proven by the test going red**, the same way as 12.6. `aiCircuitBreaker.test.js` now asserts
+`503` / `CIRCUIT_OPEN` over real HTTP, and the 405 rule the spec follows applies to the newly
+documented `/circuit-state` path without a change — the handler walks the router rather than a
+second table, so a path added to the spec is already answering correctly.
 
 ### 12.2 The two services do not authenticate each other (ASI07, open)
 
@@ -845,5 +863,5 @@ rows, so the guard sits where a change to it would be reviewed.
 | No server-side disclosure that a recommendation is machine-generated (ASI09) | Medium | ❌ open — met on the mobile client only | ⚠️ current response shape pinned, deliberately |
 | Retrieval corpus interpolated into the prompt unescaped (ASI06) | Medium | ⚠️ guarded, not escaped | ✅ `knowledge-integrity.test.ts` — proven red on a poisoned row |
 | Circuit breaker implemented, exposed on `/circuit-state`, asserted nowhere (ASI08) | Medium | ✅ covered 2026-08-27 | ✅ `aiCircuitBreaker.test.js` — 16 tests, states plus the route in `CLAUDE_DEGRADE` |
-| Breaker counts non-consecutive failures — a long-lived process opens it during normal operation | Medium | ❌ open (found 2026-08-27 by the test above) | ⚠️ behaviour pinned as-is; the assertions invert when fixed |
-| An open breaker answers `500 INTERNAL_ERROR` instead of `503`, and `CIRCUIT_OPEN` is in no contract | Medium | ❌ open (found 2026-08-27) | ⚠️ behaviour pinned as-is |
+| Breaker counted non-consecutive failures — a long-lived process would open it during normal operation | Medium | ✅ fixed 2026-08-27: any success clears the count | ✅ `aiCircuitBreaker.test.js`, observed red against the pre-fix build |
+| An open breaker answered `500 INTERNAL_ERROR` instead of `503`, and `CIRCUIT_OPEN` was in no contract | Medium | ✅ fixed 2026-08-27: mapped to 503; code, `AI_SERVICE_UNAVAILABLE` and `/circuit-state` added to the spec | ✅ `aiCircuitBreaker.test.js`, observed red against the pre-fix build |

@@ -3,6 +3,16 @@ import { AiRecommendClient } from '../../api/AiRecommendClient';
 import { allure } from 'allure-playwright';
 import { claudeTestClient, isReplayRun } from '../../utils/claudeTestClient';
 import { JUDGE_MODEL, SUBJECT_MODEL } from '../../config/models';
+import nodePath from 'path';
+// Resolves a file inside the SUT checkout. In CI the SUT lives *inside* this repository
+// (`path: sut`, `SUT_ROOT: sut`); on a dev machine the two are siblings. A literal relative path
+// only works in one of those, and the two `require`s below used to hold the sibling version.
+function sutPath(relative: string): string {
+    const root = process.env.SUT_ROOT
+        ? nodePath.resolve(process.env.SUT_ROOT)
+        : nodePath.resolve(__dirname, '../../../sut');
+    return nodePath.join(root, relative);
+}
 
 const ALLOWED_SPECIALTIES = [
     "General Practitioner",
@@ -236,11 +246,11 @@ test.describe("POST /api/v1/ai/recommend-doctor — real Claude @rag", () => {
     test("RAG completeness: retrieved specialty names appear in reasoning @rag", async ({ request, user }) => {
         if (isMockMode) test.skip();
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { retrieve } = require('../../../sut/src/services/retrieval') as {
+        const { retrieve } = require(sutPath('src/services/retrieval')) as {
             retrieve: (q: string, kb: unknown, n: number) => Array<{ specialty: string }>;
         };
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const specialtyKnowledge = require('../../../sut/src/data/specialtyKnowledge.json') as unknown;
+        const specialtyKnowledge = require(sutPath('src/data/specialtyKnowledge.json')) as unknown;
 
         const ai = new AiRecommendClient(request);
         const symptoms = "chest pain and shortness of breath";

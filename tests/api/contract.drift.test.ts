@@ -30,6 +30,7 @@ const EXPECTED_PATHS = [
     "/api/v1/appointments/{id}/cancel",
     "/api/v1/appointments/{id}/cancel-as-doctor",
     "/api/v1/ai/recommend-doctor",
+    "/api/v1/ai/circuit-state",
     "/api/v1/consultations",
     "/api/v1/consultations/me",
 ];
@@ -45,6 +46,11 @@ const EXPECTED_ERROR_CODES = [
     "UNKNOWN_SPECIALTY",
     "FEATURE_DISABLED",
     "CLAUDE_UNAVAILABLE",
+    // Both added to the guard 2026-08-27. AI_SERVICE_UNAVAILABLE had been answerable since
+    // 2026-08-21 and CIRCUIT_OPEN since the breaker was written; neither was in the spec, so this
+    // list could not have caught their absence — it only guards what it already knows about.
+    "AI_SERVICE_UNAVAILABLE",
+    "CIRCUIT_OPEN",
     "PAYMENT_REQUIRED",
     "RATE_LIMITED",
     "AUTH_REQUIRED",
@@ -62,6 +68,7 @@ const EXPECTED_SCHEMAS = [
     "Payment",
     "ConsultationResponse",
     "RecommendDoctorResponse",
+    "CircuitState",
     "ErrorBody",
     "TokenResponse",
 ];
