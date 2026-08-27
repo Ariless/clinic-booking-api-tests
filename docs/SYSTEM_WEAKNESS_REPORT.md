@@ -668,9 +668,20 @@ exercised the authenticated path. Nothing asked the opposite question.
 called any of them.
 
 **Effect while it lasted:** the component whose job is to stop a model outage becoming a retry storm
-against a paid API was the one link in the chain nothing asserted. The two propagation paths around
-it *were* covered ("Claude unreachable", "ai-service unreachable"), which is what made the gap easy
-to miss — the propagation of a failure looks like the handling of a failure.
+against a paid API was the one link in the chain nothing asserted here. The two propagation paths
+around it *were* covered ("Claude unreachable", "ai-service unreachable"), which is what made the gap
+easy to miss — the propagation of a failure looks like the handling of a failure.
+
+**One correction to "tested nowhere" (2026-08-27).** The mobile project does test it:
+`clinic-mobile-tests/features/circuit-breaker.feature` drives all three states through
+`POST /api/v1/debug/ai-circuit-control` and reads `/circuit-state`, and those scenarios were green
+throughout. They could not have found either defect below, and that is the point worth keeping rather
+than the correction itself. A mobile scenario asserts that the state reads `open` and that the
+patient sees an error — the right questions for that layer. The status code behind the error never
+reaches an assertion (12.7), and the counting semantics are invisible from outside a single scenario,
+because seeing them requires a failure, then a success, then another failure in one process (12.6).
+So the accurate statement is not "untested" but "tested only where these defects cannot be seen",
+which is a claim about layers rather than about effort.
 
 **How it was found:** writing a cross-reference comment that claimed ASI08 was covered by "the
 circuit breaker tests"; grepping for `circuit` across both suites returned that comment and nothing
