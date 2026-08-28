@@ -780,6 +780,25 @@ down in `API_ENDPOINTS.md` and `openapi/openapi.yaml`, together with the two omi
 documented `/circuit-state` path without a change — the handler walks the router rather than a
 second table, so a path added to the spec is already answering correctly.
 
+**What the fix uncovered on the client (project 2, fixed the same day).** Giving the condition a name
+made it reachable by name, and the mobile app was not handling it. `SymptomCheckerScreen.tsx` branches
+on `errorCode`: `FEATURE_DISABLED` and `CLAUDE_UNAVAILABLE` get *"AI recommendations are temporarily
+unavailable. Please browse all doctors instead"*, and everything else falls through to *"Something
+went wrong. Please try again."* An open breaker landed in the second — asking the patient to retry a
+request the backend has deliberately stopped making, which is the exact load the breaker exists to
+prevent. `CIRCUIT_OPEN` now joins the first branch, with five new unit tests
+(`clinic-mobile/__tests__/SymptomCheckerScreen.test.tsx`, none existed for that screen) of which one
+was observed failing without the fix.
+
+**And why the mobile suite had not caught it**, despite testing the breaker end to end since 2026-08-21:
+the step `the symptom checker shows a patient-appropriate error within 3 seconds` read the error text
+through `this.el?.('symptom-error')?.getText?.()` — and `this.el` is defined nowhere in that project's
+`support/`, so the optional chain collapsed to `''` on every run, was attached to the report, and was
+never asserted on. `getErrorText()` existed on the page object and went unused. The step proved an
+error appeared quickly, which is a real fast-fail assertion, and named itself after a claim it never
+checked. Now fixed to read through the page object and to assert that the copy does not say *"try
+again"*. Written up as §17 of `clinic-mobile-tests/MOBILE_TESTING_INSIGHTS.md`.
+
 ### 12.2 The two services do not authenticate each other (ASI07, open)
 
 **Risk:** `POST /recommend` on `ai-service` accepts any caller that can reach the port. The service

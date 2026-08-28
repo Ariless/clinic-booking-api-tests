@@ -212,11 +212,76 @@ let facts;
     // README quotes the closed-entry count in prose; tie it to the same number so the two cannot
     // drift apart again — the exact failure this whole section exists to prevent.
     const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
-    const quoted = readme.match(/\*\*(\d+) closed entries\*\*/);
+    // The row states three counts, not one. Only the closed count was tied to FACTS.json, so
+    // "4 design debt" survived two new debt entries (D-04, D-05) that existed as cards and were
+    // missing from the summary table — a number can only stay true if something reads it.
+    const quoted = readme.match(/\*\*(\d+) closed entries\*\*, (\d+) open, (\d+) design debt/);
     if (!quoted) {
-        fail("facts-readme-register", "README.md no longer quotes the register size as '**N closed entries**' — update the check or restore the phrasing");
-    } else if (Number(quoted[1]) !== facts.knownIssuesClosed) {
-        fail("facts-readme-register", `README.md says ${quoted[1]} closed entries, docs/FACTS.json says ${facts.knownIssuesClosed}`);
+        fail("facts-readme-register", "README.md no longer quotes the register as '**N closed entries**, N open, N design debt' — update the check or restore the phrasing");
+    } else {
+        const [, closedQuoted, openQuoted, debtQuoted] = quoted.map(Number);
+        if (closedQuoted !== facts.knownIssuesClosed) {
+            fail("facts-readme-register", `README.md says ${closedQuoted} closed entries, docs/FACTS.json says ${facts.knownIssuesClosed}`);
+        }
+        if (openQuoted !== facts.knownIssuesOpen) {
+            fail("facts-readme-register", `README.md says ${openQuoted} open entries, docs/FACTS.json says ${facts.knownIssuesOpen}`);
+        }
+        if (debtQuoted !== facts.knownIssuesDesignDebt) {
+            fail("facts-readme-register", `README.md says ${debtQuoted} design debt entries, docs/FACTS.json says ${facts.knownIssuesDesignDebt}`);
+        }
+    }
+
+    // The header table quotes three more totals, and they are the first thing anyone opening the
+    // repository reads. They had aged to 350/415/80 against a FACTS.json holding 364/429/82, and
+    // the register line above was the only prose this section guarded — so the check stayed green
+    // over a README that undersold the suite by 14 tests. Guard every number the table states.
+    const suiteRow = readme.match(
+        /\|\s*\*\*Suite\*\*\s*\|\s*(\d+) unique tests · (\d+) runs across projects · (\d+) test files\s*\|/,
+    );
+    if (!suiteRow) {
+        fail(
+            "facts-readme-suite",
+            "README.md no longer states the suite as 'N unique tests · N runs across projects · N test files' — update the check or restore the phrasing",
+        );
+    } else {
+        const [, unique, runs, files] = suiteRow.map(Number);
+        if (unique !== facts.uniqueTests || runs !== facts.testRunsAllProjects || files !== facts.testFiles) {
+            fail(
+                "facts-readme-suite",
+                `README.md says ${unique} unique / ${runs} runs / ${files} files, docs/FACTS.json says ${facts.uniqueTests} / ${facts.testRunsAllProjects} / ${facts.testFiles}`,
+            );
+        }
+    }
+
+    const reqRow = readme.match(/\|\s*\*\*Requirements\*\*\s*\|\s*(\d+) of (\d+) covered/);
+    if (!reqRow) {
+        fail(
+            "facts-readme-requirements",
+            "README.md no longer states requirement coverage as 'N of N covered' — update the check or restore the phrasing",
+        );
+    } else if (Number(reqRow[1]) !== facts.rtmCovered || Number(reqRow[2]) !== facts.rtmRequirements) {
+        fail(
+            "facts-readme-requirements",
+            `README.md says ${reqRow[1]} of ${reqRow[2]} requirements covered, docs/FACTS.json says ${facts.rtmCovered} of ${facts.rtmRequirements}`,
+        );
+    }
+
+    // RTM.md restates the same totals under a "verified" date, which is worse than stating them
+    // once: a stale number that claims to have been checked reads as a checked number.
+    const rtmToday = rtm.match(/\*\*Today:\*\* (\d+) unique tests \/ (\d+) runs across (\d+) files/);
+    if (!rtmToday) {
+        fail(
+            "facts-rtm-today",
+            "docs/RTM.md no longer states 'Today: N unique tests / N runs across N files' — update the check or restore the phrasing",
+        );
+    } else {
+        const [, unique, runs, files] = rtmToday.map(Number);
+        if (unique !== facts.uniqueTests || runs !== facts.testRunsAllProjects || files !== facts.testFiles) {
+            fail(
+                "facts-rtm-today",
+                `docs/RTM.md says ${unique} unique / ${runs} runs / ${files} files, docs/FACTS.json says ${facts.uniqueTests} / ${facts.testRunsAllProjects} / ${facts.testFiles}`,
+            );
+        }
     }
 
     const visual = fs.readFileSync(path.join(ROOT, "tests/ui/visual.test.ts"), "utf8");

@@ -88,12 +88,15 @@ Living document. Every bug found during testing — fixed or open — recorded h
 
 ---
 
-## Open bugs
+## Open bugs — none; the cards below are kept for history
 
-> As of 2026-08-22 nothing in this section is open: B-05 and B-07 are fixed, B-06 is resolved and
-> now covered by a test. The section keeps its name and its cards for history. The bugs that are
-> still open live further down: **B-14** (procedure booked into a slot shorter than it needs) and
-> **B-15** (`isAvailable` returned as `0`/`1` instead of a boolean).
+> Nothing in this section is open, and the heading is kept because the cards are cited elsewhere by
+> their position. B-05 and B-07 are fixed; B-06 is resolved and covered by a test.
+>
+> One entry in the whole register is still open: **B-14** (a procedure booked into a slot shorter
+> than it needs). Until 2026-08-28 this note also named **B-15**, which had in fact been fixed on
+> 2026-08-22 — the same day the note was written. The summary table had it right and the prose did
+> not, which is the argument for reading the table first.
 
 ### B-05 — Retrieval layer maps "chest pain" → Orthopedist instead of Cardiologist (✅ Fixed 2026-08-21)
 
@@ -291,7 +294,7 @@ Living document. Every bug found during testing — fixed or open — recorded h
 
 ---
 
-### CI-07 — `.gitignore` hid the test-data source directory; a `@rag` baseline was never committed (✅ Fixed 2026-08-26)
+### CI-09 — `.gitignore` hid the test-data source directory; a `@rag` baseline was never committed (✅ Fixed 2026-08-26)
 
 | Field | Value |
 |---|---|
@@ -302,6 +305,7 @@ Living document. Every bug found during testing — fixed or open — recorded h
 | **The unnoticed casualty** | `data/specialty-distribution-baseline.json` had never been committed. `tests/api/ai.recommend.test.ts:493` loads it with `require`, so on a fresh clone that line throws `MODULE_NOT_FOUND`. The test is `@rag`-gated and skips without an API key — but `model-drift.yml` runs `@rag` **with** a real key on a schedule, which is precisely the path that reaches the `require`. Same class as TST-06: listed as coverage, unable to run where it counts. Whether the scheduled job actually failed is unverified — per BACKLOG it had been sitting on an exhausted balance. |
 | **Fix** | `data/` → `data/clinic.db`. `data/.DS_Store` stays covered by the repo-wide `.DS_Store` rule on line 11. Verified per file with `git check-ignore -v`: only `clinic.db` and `.DS_Store` remain ignored, and the two missing sources became visible to `git status`. |
 | **Category** | Repository hygiene — an ignore rule aimed at artefacts that covered sources |
+| **Register note** | Filed as `CI-07` on 2026-08-26, a number `slotFixture` teardown already held since 2026-05-20 — two cards, one id, and the summary table listed only the older one. Renumbered to `CI-09` on 2026-08-28; the 2026-05-20 card keeps `CI-07` because `SYSTEM_WEAKNESS_REPORT.md` §7.3 cites it by that id. |
 | **Portfolio note** | The failure mode is silence: a new file under `data/` is simply absent from the repository, every local run stays green, and the gap only surfaces on a fresh clone or in a scheduled job nobody watches. It had already been patched once at the symptom (`git add -f`) without touching the cause, which is why it recurred. Worth pairing with TST-06 as the same lesson from a different direction — a test can be listed, tagged, and counted while having no way to execute. |
 
 ---
@@ -656,6 +660,8 @@ through the hop being guarded.
 | D-01 | Color contrast below WCAG AA | ⚠️ Design debt | Low | `accessibility.test.ts` |
 | D-02 | Doctor self-registration — no `doctorRecordId` validation | ⚠️ Design debt | High (prod) | Manual review |
 | D-03 | Rate limiting per-IP only | ⚠️ Design debt | Low | Manual review |
+| D-04 | Retrieval does not normalise words: a paraphrase retrieves nothing (accuracy@1 61.8% over 34 clinical cases) | ⚠️ Design debt | Medium | `ai.retrieval.metrics.test.ts` 2026-08-26 |
+| D-05 | Ranking counts matches instead of weighting them: a child complaint routes to GP | ⚠️ Design debt | Medium | `ai.retrieval.metrics.test.ts` 2026-08-26 |
 | CI-06 | Doctor schedule pollution → ordering-dependent fixture failures | ✅ Fixed 2026-05-20 | Low | Full `@api` run 2026-05-18 |
 | DEAD-01 | `INVALID_PATTERN` errorCode unreachable — dead code in repository layer | ⚠️ Design debt | Low | `appointments.recurring.test.ts` 2026-05-17 |
 | B-14 | Procedure bookable into slot shorter than 60min — no SLOT_TOO_SHORT check | 🔴 Open | Medium | `appointments.type.test.ts` 2026-05-19 |
@@ -664,6 +670,7 @@ through the hop being guarded.
 | B-09 | `softDeleteUser` missing `slot_waitlist` cleanup → ghost promotion in teardown | ✅ Fixed 2026-05-20 | Medium | Teardown debugging 2026-05-20 |
 | CI-07 | `slotFixture` teardown: `cancelAsDoctor` triggers `promoteFromWaitlist` loop | ✅ Fixed 2026-05-20 | Low | Teardown error surfacing 2026-05-20 |
 | CI-08 | `withSecondSlot`: no appointment cancel before `deleteSlot` after offer accept | ✅ Fixed 2026-05-20 | Low | DB inspection 2026-05-20 |
+| CI-09 | `.gitignore` rule for artefacts covered `data/` sources; a `@rag` baseline was never committed | ✅ Fixed 2026-08-26: rule narrowed to `data/clinic.db` | Medium | `git add` refusal 2026-08-26 |
 | B-10 | Waitlist offer held a slot until accepted or declined; an unanswered offer kept the slot off sale past its TTL | ✅ Fixed 2026-08-13: `expireStaleOffers()` sweep + `AUTO_EXPIRE_OFFERS_INTERVAL_MS` timer | High | Invariant review of `isAvailable` 2026-08-13 |
 | B-11 | Expiry write in `acceptOffer` ran inside `db.transaction()` with the 410 thrown from the same block; better-sqlite3 rolls back on throw, so the row kept its previous status | ✅ Fixed 2026-08-13: expiry returns a marker, throw moved outside the transaction | Medium | Same review; confirmed with a `better-sqlite3` rollback probe |
 | B-12 | Eligibility rule covered `declined`; an offer that lapsed left the same patient first in line for that slot | ✅ Fixed 2026-08-13: `expired` added alongside `declined`, shipped with the sweep | Medium | Surfaced while implementing B-10 |
