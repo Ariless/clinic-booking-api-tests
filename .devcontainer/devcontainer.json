@@ -4,7 +4,7 @@
   // browsers were built for 1.49.1, and Playwright refuses to run against a browser build it does
   // not know. Bump both together, or not at all.
   "name": "clinic-booking-api-tests",
-  "image": "mcr.microsoft.com/playwright:v1.59.1-noble",
+  "image": "mcr.microsoft.com/playwright:v1.62.1-noble",
   "features": {
     // Node 20 to match the CI runners in .github/workflows/api-tests.yml.
     "ghcr.io/devcontainers/features/node:1": {

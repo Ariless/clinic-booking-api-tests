@@ -1,0 +1,6 @@
+{
+  "_comment": "What one run of this suite is allowed to spend on the Anthropic API. Enforced by utils/tokenLedger via global-teardown; override with CLAUDE_RUN_BUDGET_USD for a deliberate one-off (a drift sweep costs more than a pull request).",
+  "_recorded": "2026-08-28",
+  "maxUsd": 0.5,
+  "maxCalls": 120
+}

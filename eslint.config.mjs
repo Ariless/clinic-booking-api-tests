@@ -53,8 +53,11 @@ export default [
   },
   {
     // Scripts are Node CommonJS utilities, not part of the typed test suite: require() is
-    // how they are written, so the TS rule banning it does not apply here.
-    files: ["scripts/**/*.js", "*.js"],
+    // how they are written, so the TS rule banning it does not apply here. `utils/**/*.js` is in
+    // the same category and for a specific reason: `utils/tokenLedger.js` is read by both halves of
+    // the repository — the TypeScript tests through `require`, and the plain-`node` scripts in
+    // `scripts/`, which have no build step. Same argument as `config/models.json`.
+    files: ["scripts/**/*.js", "utils/**/*.js", "*.js"],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "commonjs",

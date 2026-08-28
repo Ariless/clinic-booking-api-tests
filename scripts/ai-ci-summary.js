@@ -13,11 +13,11 @@
 // generated report output.
 require("dotenv").config({ quiet: true });
 
-const https = require("https");
 const fs = require("fs");
 const path = require("path");
 // One place names the models this repository uses; see config/models.ts for what each role is for.
 const MODEL = process.env.CLAUDE_TOOLING_MODEL || require("../config/models.json").tooling;
+const { callClaude: sharedCallClaude } = require("./lib/anthropicRequest");
 
 const ROOT = path.join(__dirname, "..");
 const RESULTS_PATH = process.env.RESULTS_PATH ?? path.join(ROOT, "test-results.json");
@@ -52,44 +52,11 @@ function firstError(tests) {
 
 // ── Claude call ───────────────────────────────────────────────────────────────
 
+// The transport lives in `scripts/lib/anthropicRequest.js` — one copy for all five scripts and
+// the bug reporter. It records `usage` in the token ledger, which six local copies of this
+// function used to discard along with the rest of the response.
 function callClaude(prompt, apiKey) {
-    const body = JSON.stringify({
-        model: MODEL,
-        max_tokens: 1024,
-        messages: [{ role: "user", content: prompt }],
-    });
-
-    return new Promise((resolve, reject) => {
-        const req = https.request(
-            {
-                hostname: "api.anthropic.com",
-                path: "/v1/messages",
-                method: "POST",
-                headers: {
-                    "x-api-key": apiKey,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                    "content-length": Buffer.byteLength(body),
-                },
-            },
-            (res) => {
-                let data = "";
-                res.on("data", (c) => (data += c));
-                res.on("end", () => {
-                    try {
-                        const parsed = JSON.parse(data);
-                        if (parsed.error) reject(new Error(parsed.error.message));
-                        else resolve(parsed.content[0].text);
-                    } catch (e) {
-                        reject(e);
-                    }
-                });
-            }
-        );
-        req.on("error", reject);
-        req.write(body);
-        req.end();
-    });
+    return sharedCallClaude(prompt, apiKey, { maxTokens: 1024, model: MODEL, label: "ci-summary" });
 }
 
 // ── fallback: plain stats ─────────────────────────────────────────────────────

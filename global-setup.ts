@@ -1,5 +1,9 @@
 import { DEFAULT_PROXY_PORT, startReplayProxy, type ProxyMode } from './utils/claudeReplayProxy';
 
+// CommonJS, so the plain-`node` scripts in `scripts/` read the same ledger — see `config/models.ts`.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const ledger = require('./utils/tokenLedger') as { reset: () => void };
+
 /**
  * Brings up the Claude record/replay proxy when the run asks for one, and does nothing otherwise.
  *
@@ -8,6 +12,10 @@ import { DEFAULT_PROXY_PORT, startReplayProxy, type ProxyMode } from './utils/cl
  * on that, since its whole purpose is to reach the live API.
  */
 async function globalSetup(): Promise<(() => Promise<void>) | void> {
+    // Before the early return below: every run reports its own spend, including the runs that use
+    // no proxy at all. A ledger carried over from the previous run would bill this one for it.
+    ledger.reset();
+
     const mode = process.env.CLAUDE_PROXY_MODE as ProxyMode | undefined;
     if (mode !== 'record' && mode !== 'replay') return;
 

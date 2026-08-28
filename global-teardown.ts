@@ -1,11 +1,17 @@
 import path from 'path';
 import Database from 'better-sqlite3';
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const ledger = require('./utils/tokenLedger') as {
+  formatReport: () => string;
+  checkBudget: () => { withinBudget: boolean; maxUsd: number; reasons: string[] };
+};
+
 const DB_PATH = process.env.DB_PATH
   ? path.resolve(process.env.DB_PATH)
   : path.resolve(__dirname, '../sut/data/clinic.db');
 
-async function globalTeardown() {
+async function cleanupDatabase() {
   const db = new Database(DB_PATH);
 
   try {
@@ -89,6 +95,37 @@ async function globalTeardown() {
   } finally {
     db.close();
   }
+}
+
+/**
+ * Runs after the whole suite: reports what the run spent on the Anthropic API, then cleans the DB.
+ *
+ * The report is printed before the cleanup and the budget is enforced after it, so an overspent run
+ * still leaves the database in the state the next run expects — a failing gate that also corrupts
+ * the fixtures would cost more than it saves. `max_tokens` caps one response; this caps the run.
+ */
+async function globalTeardown() {
+  console.log(ledger.formatReport());
+  const verdict = ledger.checkBudget();
+
+  const overspend = verdict.withinBudget
+    ? null
+    : new Error(
+        `[tokens] run exceeded its API budget — ${verdict.reasons.join('; ')}. ` +
+          `Raise it deliberately with CLAUDE_RUN_BUDGET_USD, or see config/budget.json.`
+      );
+
+  // Not a `throw` inside `finally`: that would swallow whatever the cleanup threw, and a lost
+  // SQLITE error is a worse outcome than a delayed budget failure. The cleanup runs either way;
+  // its own failure wins, and the overspend is still printed before it.
+  try {
+    await cleanupDatabase();
+  } catch (err) {
+    if (overspend) console.error(overspend.message);
+    throw err;
+  }
+
+  if (overspend) throw overspend;
 }
 
 export default globalTeardown;
