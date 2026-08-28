@@ -442,6 +442,22 @@ or fails for the wrong reason, misreports the system exactly as a broken endpoin
 | **Category** | Documentation drift — a claim that ages instead of breaking |
 | **Portfolio note** | Test counts drift quietly; access claims drift loudly. This one told every reader that the interesting parts were held back, in a repository that had just published them. The fix worth keeping is not the edit — it is that three of the four numbers behind it now fail a check instead of ageing. |
 
+### TST-11 — `@pact-foundation/pact` 16.5.0 fails the one interaction whose request body is `{}` (✅ Pinned 2026-08-28)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Worked around 2026-08-28 by pinning `16.4.0` exactly; upstream unfixed |
+| **Found by** | The `main` run after a routine `npm update` — three jobs went red at once (API tests, Delegated AI service, Invariant contract), all of them the ones that run `tests/api` |
+| **Severity** | High — it reddens the badge on the repository's front page, and the failure names the SUT rather than the tool |
+| **Symptom** | `PATCH /appointments/:id/cancel` verified as `expected 200 but was 400`, `Expected body Present(2 bytes) but was empty`, and a missing `Content-Type`. The provider is fine: curl the same route by hand and it answers 200. |
+| **Root cause** | The mobile consumer records that interaction with an empty JSON object as the body. `mobile.pact.provider.test.ts` rewrites requests through a `requestFilter` — `parseBody` hands back an empty buffer for `{}`, and the filter compensates. 16.5.0 changed that path: the body now arrives at the provider absent rather than as `{}`, so Express parses no JSON, the route rejects the request, and the 400 comes back with no body and no content type. |
+| **Why it looked like a product defect** | All three mismatches describe the *provider's* response. Nothing in the output names the verifier, and the version moved by a patch-level bump inside a caret range — `^16.4.0` silently resolved to 16.5.0 on an ordinary install. |
+| **Fix** | `"@pact-foundation/pact": "16.4.0"` — exact, no caret. The suite is green again at 206 passed. Verified both ways: 16.5.0 fails 2 of 7 interactions, 16.4.0 passes all 7, on a freshly seeded database each time. |
+| **What it costs** | Dependabot will keep proposing 16.5+ and CI will keep rejecting those pull requests, which is the intended behaviour: the gate is the thing reporting that the tool is still broken. Unpin once the empty-body path is fixed upstream. |
+| **Portfolio note** | The instructive part is the direction of the accusation. A verifier regression reads as a provider defect, because the tool reports what the provider answered and never that it altered the request first. Three red jobs, three genuine mismatches, and nothing wrong with the system under test. |
+
+---
+
 ### TST-10 — `model-drift.yml` never called a model (✅ Fixed 2026-08-27)
 
 **Before:** the job exported `ANTHROPIC_API_KEY` and `ENABLE_AI_RECOMMENDATION` on the line that ran
@@ -683,6 +699,7 @@ through the hop being guarded.
 | TST-07 | No Jest test in the SUT could load `src/app.js` — uuid 14 is ESM-only and Jest's CommonJS runtime dies on it, so every property of the *assembled* app was unreachable from the fast suite | ✅ Fixed 2026-08-26: `test-helpers/uuid-cjs.js` mapped in `jest.config.js`; production loads the real package unchanged | Medium | Writing the first test that needed the real app 2026-08-26 |
 | TST-08 | AI bug reporter sent a failed test's `error.message` and `error.stack` to Anthropic unredacted — Playwright quotes the compared values, so symptoms and bearer tokens travelled to a third party, a file and the Allure report | ✅ Fixed 2026-08-26: `utils/phi.ts` + `buildBugReportPrompt()` split out of the transport; 9 tests | High | PII audit of the three paths symptoms leave by 2026-08-26 |
 | TST-09 | Cassette key ignored the prompt — `JSON.stringify(body, keys)` filters properties at every depth instead of sorting them, so every recorded request shared one key and replay answered questions it was never asked (8/8 green in 2.1s, 40 matched, 0 missed) | ✅ Fixed 2026-08-27: explicit recursive `canonicalise()`; 6 tests. Unsalvageable cassettes deleted and re-recorded the same day — 40 responses across 29 files (was 3), replay `matched 40 · missed 0`, job now gating | High | Wiring the replay job into CI 2026-08-27 |
+| TST-11 | `@pact-foundation/pact` 16.5.0 sends the `{}` cancel body as absent, so the provider answers 400 and the mismatch reads as a provider defect | ✅ Worked around 2026-08-28: pinned to `16.4.0` exactly; upstream unfixed | High | `main` red after a routine `npm update` 2026-08-28 |
 | TST-10 | `model-drift.yml` never called a model — shell variables before `docker compose up` reach the compose process, not the container, and the compose file hardcoded `AI_MOCK_RESPONSE: "true"`; the job reported "no drift" weekly from mid-May | ✅ Fixed 2026-08-27: `${...}` pass-through + a `/health` gate asserting `implementation === "claude"` in both AI jobs | High | Centralising the model id 2026-08-27 |
 | TST-04 | AI suite needs two mutually exclusive `AI_RATE_LIMIT_MAX` settings; a correct 429 was reported as a broken endpoint | ✅ Fixed 2026-08-21: `skipIfThrottled()` in all 9 multi-call loops | Medium | Verifying the TST-02 fix 2026-08-21 |
 | DOC-01 | Six docs claimed that tests living in this repository lived elsewhere, pointing at a README section that never existed | ✅ Fixed 2026-08-21: notices rewritten or removed; counts corrected and put under the convention check | Medium | Repository audit 2026-08-21 |

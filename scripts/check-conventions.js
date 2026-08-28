@@ -182,7 +182,9 @@ let facts;
     const summary = knownIssues.slice(knownIssues.indexOf("## Summary table"));
     const count = (re) => (summary.match(re) || []).length;
 
-    const closed = count(/✅ (Fixed|Addressed)/g);
+    // "Worked around" counts as closed: TST-11 is shut by an exact-version pin, not by a fix in
+    // the dependency. The register calls that resolved because nothing is left for us to do.
+    const closed = count(/✅ (Fixed|Addressed|Worked around)/g);
     const open = count(/🔴 Open/g);
     const debt = count(/⚠️ Design debt/g);
 
