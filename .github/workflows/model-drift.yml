@@ -30,6 +30,10 @@ env:
   # Blank on the schedule, set by hand to sweep. Read by both the SUT (ANTHROPIC_MODEL, via compose)
   # and the suite (CLAUDE_MODEL, via config/models.ts), so one value moves the whole run.
   CLAUDE_MODEL: ${{ inputs.model || '' }}
+  # `secrets` is not a valid context inside `if:` — a workflow that references it there fails to
+  # start at all, so every push produced a red run with no jobs. Resolve the secret to a boolean
+  # here, where the context is allowed, and gate the steps on `env` instead.
+  HAS_AI_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
 
 jobs:
   rag-drift:
@@ -55,11 +59,10 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Skip if no API key
-        if: ${{ !secrets.ANTHROPIC_API_KEY }}
+        if: env.HAS_AI_KEY != 'true'
         run: |
-          echo "ANTHROPIC_API_KEY secret not set — skipping drift run."
+          echo "::notice::ANTHROPIC_API_KEY secret not set — the drift run is skipped."
           echo "Add the secret to enable weekly model drift detection."
-          exit 0
 
       # Was: the same three variables exported here, with `docker-compose.test.yml` hardcoding
       # AI_MOCK_RESPONSE: "true" and never mentioning ANTHROPIC_API_KEY. Exported variables reach the
@@ -68,6 +71,7 @@ jobs:
       # model. The compose file now references them; the gate below is what makes the mistake
       # impossible to repeat silently.
       - name: Start SUT (AI recommendation enabled, real key)
+        if: env.HAS_AI_KEY == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_MODEL: ${{ inputs.model || '' }}
@@ -80,6 +84,7 @@ jobs:
       # The SUT reports which of the three recommendation paths it is on. "mock" here means the run
       # would measure retrieval, not the model — the exact failure this job spent months in.
       - name: Fail unless the SUT is really calling the model
+        if: env.HAS_AI_KEY == 'true'
         run: |
           IMPL=$(curl -sf "$BASE_URL/health" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).checks.ai.implementation))")
           echo "AI implementation: $IMPL"
@@ -89,20 +94,22 @@ jobs:
           fi
 
       - name: SUT logs on failure
-        if: failure()
+        if: failure() && env.HAS_AI_KEY == 'true'
         run: docker compose -f sut/docker-compose.test.yml logs
 
       - name: Install Playwright
+        if: env.HAS_AI_KEY == 'true'
         run: npm ci && npx playwright install chromium --with-deps
 
       - name: Run @rag golden dataset
+        if: env.HAS_AI_KEY == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ENABLE_AI_RECOMMENDATION: "true"
         run: npx playwright test --grep @rag
 
       - name: Generate drift summary
-        if: always()
+        if: always() && env.HAS_AI_KEY == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESULTS_PATH: test-results.json
@@ -110,7 +117,7 @@ jobs:
         run: node scripts/ai-ci-summary.js
 
       - name: Stamp results with date
-        if: always()
+        if: always() && env.HAS_AI_KEY == 'true'
         run: |
           DATE=$(date +%Y-%m-%d)
           mkdir -p rag-drift-results
@@ -121,7 +128,7 @@ jobs:
           echo "Trigger: ${{ github.event_name }}" >> rag-drift-results/metadata.txt
 
       - name: Upload drift results
-        if: always()
+        if: always() && env.HAS_AI_KEY == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: rag-drift-${{ github.run_id }}

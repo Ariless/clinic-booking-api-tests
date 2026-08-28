@@ -10,27 +10,17 @@
 // reporting tooling along with the subject, and an empty CI input being read as a model id.
 
 import { test, expect } from '@playwright/test';
-import { JUDGE_MODEL, SUBJECT_MODEL, TOOLING_MODEL } from '../../config/models';
+import { JUDGE_MODEL, SUBJECT_MODEL, TOOLING_MODEL, resolveModels } from '../../config/models';
 
-/** Re-imports `config/models` with the given environment, bypassing the require cache. */
-function loadWith(env: Record<string, string | undefined>): typeof import('../../config/models') {
-    const previous: Record<string, string | undefined> = {};
-    for (const [key, value] of Object.entries(env)) {
-        previous[key] = process.env[key];
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-    }
-    try {
-        delete require.cache[require.resolve('../../config/models')];
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require('../../config/models') as typeof import('../../config/models');
-    } finally {
-        for (const [key, value] of Object.entries(previous)) {
-            if (value === undefined) delete process.env[key];
-            else process.env[key] = value;
-        }
-        delete require.cache[require.resolve('../../config/models')];
-    }
+/**
+ * Reads the ids as if the process had started with this environment and nothing else.
+ *
+ * Was a re-import with `delete require.cache[...]`, which stopped resetting anything when
+ * Playwright 1.62 changed how it loads TypeScript: the sweep assertion below kept passing the
+ * default id back to itself and would have gone on reporting a rule it no longer checked.
+ */
+function loadWith(env: Record<string, string | undefined>) {
+    return resolveModels(env as NodeJS.ProcessEnv);
 }
 
 test.describe('the models configuration keeps its three roles apart @unit', () => {

@@ -22,6 +22,23 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ids = require('./models.json') as { subject: string; judge: string; tooling: string };
 
+/**
+ * Reads the three ids out of an environment, defaulting to `models.json`.
+ *
+ * A function rather than three top-level constants so the reading itself can be asserted against a
+ * given environment. The test used to re-import this module with `delete require.cache[...]`, which
+ * worked only while Playwright transpiled it to CommonJS: 1.62 changed that and the sweep assertion
+ * silently started reading the default. A rule that can only be tested through the loader's
+ * internals is a rule that stops being tested when the loader changes.
+ */
+export function resolveModels(env: NodeJS.ProcessEnv = process.env) {
+    return {
+        SUBJECT_MODEL: env.CLAUDE_MODEL || ids.subject,
+        JUDGE_MODEL: env.CLAUDE_JUDGE_MODEL || ids.judge,
+        TOOLING_MODEL: env.CLAUDE_TOOLING_MODEL || ids.tooling,
+    };
+}
+
 // `||`, not `??`, throughout. A workflow that offers an optional model input passes an *empty
 // string* when the field is left blank, and `??` treats that as a value — every model id in the run
 // would become "". Falsy-or is the correct reading of "unset" for an environment variable.
@@ -36,7 +53,7 @@ const ids = require('./models.json') as { subject: string; judge: string; toolin
  * `aiServiceParity.test.js` holds the SUT's two copies together, and `SUBJECT_MODEL` is what tests
  * assert the recording was made against.
  */
-export const SUBJECT_MODEL = process.env.CLAUDE_MODEL || ids.subject;
+export const SUBJECT_MODEL = resolveModels().SUBJECT_MODEL;
 
 /**
  * The model that judges the subject's reasoning.
@@ -50,7 +67,7 @@ export const SUBJECT_MODEL = process.env.CLAUDE_MODEL || ids.subject;
  * Overridable so the judge can itself be swept: the `@rag` layer has never checked that the judge
  * agrees with a human, and the golden dataset in `eu-ai-act.steps.ts` is the material for doing it.
  */
-export const JUDGE_MODEL = process.env.CLAUDE_JUDGE_MODEL || ids.judge;
+export const JUDGE_MODEL = resolveModels().JUDGE_MODEL;
 
 /**
  * The model behind the tooling that reports *on* the suite — bug reports, CI summaries, gap
@@ -61,4 +78,4 @@ export const JUDGE_MODEL = process.env.CLAUDE_JUDGE_MODEL || ids.judge;
  * which of the two moved. Haiku on purpose — these run on every CI job and none of them gate a
  * merge.
  */
-export const TOOLING_MODEL = process.env.CLAUDE_TOOLING_MODEL || ids.tooling;
+export const TOOLING_MODEL = resolveModels().TOOLING_MODEL;
