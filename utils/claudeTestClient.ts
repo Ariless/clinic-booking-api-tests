@@ -61,8 +61,11 @@ export function claudeTestClient(): Anthropic {
 
     const port = process.env.CLAUDE_PROXY_PORT ?? String(DEFAULT_PROXY_PORT);
     return withLedger(new Anthropic({
-        // The SDK refuses to construct without a key even when nothing authenticates downstream, and
-        // in replay nothing does — the proxy answers from a file. Recording uses the real key.
+        // Nothing authenticates downstream in replay — the proxy answers from a file — but an
+        // explicit placeholder keeps the client off whatever ANTHROPIC_API_KEY the machine happens
+        // to have. (Checked 2026-08-28: the SDK constructs fine without a key and fails at request
+        // time; this is about which key is used, not about being able to build the client.)
+        // Recording uses the real key.
         apiKey: process.env.ANTHROPIC_API_KEY || 'replay-mode-placeholder-key',
         baseURL: `http://127.0.0.1:${port}`,
         // A missing cassette is a 404 and a decision to make, not a blip to paper over.
