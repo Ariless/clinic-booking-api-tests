@@ -839,6 +839,84 @@ entry, a line count equal to the entry count, no directive phrasing, and a lengt
 interpolation would be the structural fix and is not done — the corpus is a checked-in file with six
 rows, so the guard sits where a change to it would be reviewed.
 
+## 13. CI infrastructure weaknesses (added 2026-08-29)
+
+Weaknesses in the harness rather than in the SUT. They are recorded here because both of them
+produced a red pipeline that pointed at the wrong thing — the first reported a missing package as a
+failure of the smoke gate, the second is the reason it could.
+
+### 13.1 The test repository resolved the SUT's dependencies out of its own `node_modules` (found and fixed 2026-08-29)
+
+**Risk:** `tests/unit/ai.retrieval.test.ts` and `ai.retrieval.metrics.test.ts` load SUT production
+code into the Playwright process directly:
+
+```ts
+require(path.join(SUT_ROOT, 'src/services/aiRecommendation'))
+```
+
+In CI the SUT is checked out into `./sut` and started in Docker, where its dependencies live inside
+the image. Nothing ran `npm install` in that directory, so `sut/node_modules` did not exist on the
+runner, and Node resolved every bare `require` in the SUT's own source upwards — into the test
+repository's `node_modules`.
+
+That worked by coincidence. Everything `aiRecommendation.js` reached (`@anthropic-ai/sdk`, and
+`better-sqlite3` transitively through `doctorsRepository` → `db/connection`) happens to be listed in
+this repository's `package.json`, for reasons that were never written down as this reason.
+
+**What broke it:** SUT commit `255fa4a` (2026-08-28, "Record what a model call did, in gen_ai.*
+names") added a seventh require to `aiRecommendation.js` — `../telemetry/genAiTelemetry`, which
+pulls `@opentelemetry/api` and `@opentelemetry/semantic-conventions/incubating`. Neither is a
+dependency of this repository. Locally the suite stayed green, because `sut/node_modules` exists on
+a development machine.
+
+**Effect:** every job that starts Playwright failed at file collection — seven in `api-tests.yml`
+plus `impact-analysis`, `security-scan` (agentic), `model-drift` and `update-visual-snapshots`. A
+change to the SUT's observability, in a different repository, took the whole pipeline down, and the
+first line of the log named the smoke script.
+
+**Why the obvious fix was not taken:** adding `@opentelemetry/api` and
+`@opentelemetry/semantic-conventions` to this repository's `package.json` would have restored the
+green in one line, and would have deepened the problem. Two package files would then carry the same
+libraries at independently drifting versions, and these unit tests would be checking SUT code
+against a *different* build of a dependency than the one running in the container — a test that no
+longer testifies about production while still reporting a pass.
+
+**Fix:** `npm ci --prefix sut --omit=dev` alongside the existing `npm ci`, in all seven jobs that
+start Playwright, with `sut/package-lock.json` added to the `setup-node` cache key. The SUT gets its
+own dependency tree, so resolution on the runner matches the developer machine and the Docker image.
+`--omit=dev` skips Jest and Stryker, which nothing on the runner uses: 43 packages, ~10s uncached.
+`chaos.yml` and `rate-limit.yml` were never affected — both already run `npm ci` in `sut` for their
+seeding step.
+
+**Verification:** a copy of the SUT without `node_modules`, placed inside the test repository,
+reproduces the runner's resolution exactly. Against that copy the pre-fix command fails identically
+to CI (`genAiTelemetry.js:21`, `Total: 0 tests in 0 files`); after `npm ci --prefix … --omit=dev`
+collection succeeds — 42 unit tests listed, 40 passed / 2 skipped.
+
+**Residual weakness:** nothing tests that the two repositories stay compatible. The next SUT commit
+that adds a top-level require will still be discovered by a red pipeline rather than by a check, and
+the discovery will still arrive named as whichever gate ran first. The structural answer is that
+`retrieve` and `buildPrompt` are pure functions of the SUT and their unit tests belong in the SUT
+repository, where dependencies are installed by definition — not adopted here, deliberately: the
+RAG unit layer is part of what this suite exists to demonstrate.
+
+### 13.2 A collection error in one file is reported as a failure of an unrelated gate (open)
+
+**Risk:** `playwright.config.ts` sets `testDir: "./tests"` and defines no project boundary around
+`tests/unit/`. Playwright loads every file under `testDir` before `--grep` filters anything, so an
+import error in any file fails every run, whatever it was scoped to.
+
+**Effect, observed in 13.1:** the failing tests are tagged `@unit`. The job that reported the
+failure was `Smoke`, whose step reads `run: npm run test:smoke`. Nothing in the first screen of the
+log connects the failure to the unit layer, and the tag that would have connected them is the one
+thing `--grep` never got to evaluate.
+
+**Direction of a fix:** a separate Playwright project for `tests/unit/`, so that layer loads — and
+fails — as itself. Not done: it changes how every job selects tests and wants its own verification
+run.
+
+**Test:** none. This is a property of the runner configuration, not a behaviour of the SUT.
+
 ## 6. Summary table
 
 | Weakness | Severity | Mitigated? | Test exists? |
@@ -895,3 +973,5 @@ rows, so the guard sits where a change to it would be reviewed.
 | Circuit breaker implemented, exposed on `/circuit-state`, asserted nowhere (ASI08) | Medium | ✅ covered 2026-08-27 | ✅ `aiCircuitBreaker.test.js` — 16 tests, states plus the route in `CLAUDE_DEGRADE` |
 | Breaker counted non-consecutive failures — a long-lived process would open it during normal operation | Medium | ✅ fixed 2026-08-27: any success clears the count | ✅ `aiCircuitBreaker.test.js`, observed red against the pre-fix build |
 | An open breaker answered `500 INTERNAL_ERROR` instead of `503`, and `CIRCUIT_OPEN` was in no contract | Medium | ✅ fixed 2026-08-27: mapped to 503; code, `AI_SERVICE_UNAVAILABLE` and `/circuit-state` added to the spec | ✅ `aiCircuitBreaker.test.js`, observed red against the pre-fix build |
+| SUT source loaded by the unit layer resolved its dependencies from the test repository | High | ✅ fixed 2026-08-29: `npm ci --prefix sut --omit=dev` in all seven Playwright jobs | ⚠️ verified by reproducing the runner's resolution locally; no check guards the next divergence |
+| A collection error in one file fails every job and is reported as the gate that ran first | Medium | ❌ open — `testDir: "./tests"`, no project boundary around `tests/unit/` | ❌ none — runner configuration, not SUT behaviour |
