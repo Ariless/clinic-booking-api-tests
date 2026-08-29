@@ -662,7 +662,19 @@ jobs:
       - name: Generate Allure report
         run: npx allure generate allure-results -o allure-report --clean
 
+      - name: Check the report is not empty
+        id: report
+        run: |
+          total=$(jq -r '.statistic.total' allure-report/widgets/summary.json)
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+          if [ "$total" = "0" ]; then
+            echo "::warning::Allure report has 0 tests — deploy skipped, published report kept"
+          else
+            echo "Allure report contains $total tests"
+          fi
+
       - name: Deploy to GitHub Pages
+        if: steps.report.outputs.total != '0'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
