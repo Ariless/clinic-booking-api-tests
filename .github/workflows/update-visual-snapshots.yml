@@ -34,7 +34,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            sut/package-lock.json
 
       - name: Start SUT
         run: |
@@ -42,7 +44,7 @@ jobs:
           DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose -f sut/docker-compose.test.yml up -d --wait
 
       - name: Install Playwright
-        run: npm ci && npx playwright install chromium --with-deps
+        run: npm ci && npm ci --prefix sut --omit=dev && npx playwright install chromium --with-deps
 
       - name: Generate linux baselines
         run: npx playwright test tests/ui/visual.test.js --update-snapshots

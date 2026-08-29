@@ -75,7 +75,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            sut/package-lock.json
 
       - name: Start SUT
         run: |
@@ -87,7 +89,7 @@ jobs:
         run: docker compose -f sut/docker-compose.test.yml logs
 
       - name: Install Playwright
-        run: npm ci && npx playwright install chromium --with-deps
+        run: npm ci && npm ci --prefix sut --omit=dev && npx playwright install chromium --with-deps
 
       - name: Smoke (@smoke)
         run: npm run test:smoke
@@ -127,7 +129,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            sut/package-lock.json
 
       - name: Start SUT
         run: |
@@ -139,7 +143,7 @@ jobs:
         run: docker compose -f sut/docker-compose.test.yml logs
 
       - name: Install Playwright
-        run: npm ci && npx playwright install chromium --with-deps
+        run: npm ci && npm ci --prefix sut --omit=dev && npx playwright install chromium --with-deps
 
       # Fails when a claim the docs make about the suite stops being true —
       # page objects instantiated instead of injected, or counts in
@@ -241,7 +245,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            sut/package-lock.json
 
       # No ANTHROPIC_API_KEY anywhere in this job, deliberately. If a call escapes the proxy it
       # fails on authentication instead of quietly costing money and reporting a pass.
@@ -270,7 +276,7 @@ jobs:
           fi
 
       - name: Install Playwright
-        run: npm ci && npx playwright install chromium --with-deps
+        run: npm ci && npm ci --prefix sut --omit=dev && npx playwright install chromium --with-deps
 
       # Playwright's global setup starts the proxy on port 3010 when CLAUDE_PROXY_MODE is set; the
       # container reaches it through host.docker.internal. A missing recording is a 404 from the
@@ -326,7 +332,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            sut/package-lock.json
 
       - name: Start SUT with the invariant contract on
         run: |
@@ -338,7 +346,7 @@ jobs:
         run: docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.invariants.yml logs
 
       - name: Install Playwright
-        run: npm ci && npx playwright install chromium --with-deps
+        run: npm ci && npm ci --prefix sut --omit=dev && npx playwright install chromium --with-deps
 
       # The oracle must be seen failing before its silence means anything: these tests desync state
       # on purpose via /debug/break-invariant and require the 500.
@@ -414,7 +422,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            sut/package-lock.json
 
       - name: Start SUT with the recommendation delegated
         run: |
@@ -426,7 +436,7 @@ jobs:
         run: docker compose -f sut/docker-compose.test.yml -f sut/docker-compose.ai-service.yml logs
 
       - name: Install Playwright
-        run: npm ci && npx playwright install chromium --with-deps
+        run: npm ci && npm ci --prefix sut --omit=dev && npx playwright install chromium --with-deps
 
       # The provider side of the contract, verified against the service actually running in this job
       # rather than against a stub of it.
@@ -485,7 +495,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            sut/package-lock.json
 
       - name: Start SUT
         run: |
@@ -497,7 +509,7 @@ jobs:
         run: docker compose -f sut/docker-compose.test.yml logs
 
       - name: Install Playwright
-        run: npm ci && npx playwright install chromium --with-deps
+        run: npm ci && npm ci --prefix sut --omit=dev && npx playwright install chromium --with-deps
 
       - name: E2E & UI tests (visual excluded — run update-visual-snapshots first)
         run: npx playwright test tests/e2e tests/ui --pass-with-no-tests --grep-invert @visual
@@ -561,7 +573,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            sut/package-lock.json
 
       - name: Start SUT
         run: |
@@ -573,7 +587,7 @@ jobs:
         run: docker compose -f sut/docker-compose.test.yml logs
 
       - name: Install Playwright
-        run: npm ci && npx playwright install chromium --with-deps
+        run: npm ci && npm ci --prefix sut --omit=dev && npx playwright install chromium --with-deps
 
       - name: Visual tests (@visual)
         run: |

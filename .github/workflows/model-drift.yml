@@ -56,7 +56,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            sut/package-lock.json
 
       - name: Skip if no API key
         if: env.HAS_AI_KEY != 'true'
@@ -99,7 +101,7 @@ jobs:
 
       - name: Install Playwright
         if: env.HAS_AI_KEY == 'true'
-        run: npm ci && npx playwright install chromium --with-deps
+        run: npm ci && npm ci --prefix sut --omit=dev && npx playwright install chromium --with-deps
 
       - name: Run @rag golden dataset
         if: env.HAS_AI_KEY == 'true'

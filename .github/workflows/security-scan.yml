@@ -97,7 +97,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            sut/package-lock.json
 
       - name: Start SUT
         run: |
@@ -109,7 +111,7 @@ jobs:
         run: docker compose -f sut/docker-compose.test.yml logs
 
       - name: Install Playwright
-        run: npm ci && npx playwright install chromium --with-deps
+        run: npm ci && npm ci --prefix sut --omit=dev && npx playwright install chromium --with-deps
 
       # ASI03 (identity), ASI09 (what the answer claims), plus the pre-existing IDOR / BOLA / JWT
       # tampering tests — the web Top 10 half of the same tag.

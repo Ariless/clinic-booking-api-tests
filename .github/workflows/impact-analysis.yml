@@ -42,7 +42,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            sut/package-lock.json
 
       - name: Get changed files
         run: |
@@ -71,7 +73,7 @@ jobs:
         run: docker compose -f sut/docker-compose.test.yml logs
 
       - name: Install Playwright
-        run: npm ci && npx playwright install chromium --with-deps
+        run: npm ci && npm ci --prefix sut --omit=dev && npx playwright install chromium --with-deps
 
       - name: Run impacted tests
         id: run_tests
