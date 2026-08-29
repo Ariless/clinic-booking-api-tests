@@ -6,7 +6,7 @@
 **Playwright + TypeScript** suite for a clinic booking API — API, UI and end-to-end, with the
 appointment state machine, RBAC boundaries and the waitlist as the risk surface.
 
-*One of four repositories on [what a green test run does not tell you](#part-of-a-series).*
+*One of five repositories on [what a green test run does not tell you](#part-of-a-series).*
 
 | | |
 | --- | --- |
@@ -612,13 +612,13 @@ All business logic is exercised at the API layer (fast, deterministic, no browse
 
 ## Part of a series
 
-Four repositories around one question: **what a green test run does not tell you.**
+Five repositories around one question: **what a green test run does not tell you.**
 
 - **clinic-booking-api-tests** — coverage you can audit: a requirements matrix, a defect register, and counts verified by CI so the README cannot drift from the code *(you are here)*
 - [clinic-mobile-tests](https://github.com/Ariless/clinic-mobile-tests) — the layer an API or a browser test cannot reach: permissions, Doze, offline transitions, deep links
 - [temporal-failure-lab](https://github.com/Ariless/temporal-failure-lab) — the system is working and the tests still lie: time, ordering and eventual consistency
+- [roguelike-engine](https://github.com/Ariless/roguelike-engine) — a deterministic rule engine as SUT: replayable runs, invariants and 16,000-seed regressions, where a change that did nothing looks exactly like a change that worked
 - [silent-tests-lab](https://github.com/Ariless/silent-tests-lab) — tests that pass without asserting, text wrong for half the roster, and content nobody ever reaches
-
 ---
 
 ## Author
