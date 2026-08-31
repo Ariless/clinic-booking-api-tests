@@ -180,7 +180,7 @@ The previous version of this document ended by saying the four "No" categories a
 missing capability — the model cannot act — and that an MCP server over this API was the obvious next
 step. It was built: `sut/mcp-server/`, six tools, a separate deployable with its own manifest.
 
-Three properties carry the category, each asserted in `sut/src/__tests__/mcpServer.test.js` (16 tests,
+Three properties carry the category, each asserted in `sut/src/__tests__/mcpServer.test.js` (21 tests,
 driven by a real MCP client over an in-memory transport rather than by importing the handlers):
 
 **Profiles remove affordances rather than guarding them.** A session runs under `readonly`, `booking`
