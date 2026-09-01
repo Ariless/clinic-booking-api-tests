@@ -18,6 +18,9 @@ on:
 
 env:
   BASE_URL: http://127.0.0.1:3000
+  # See model-drift.yml: the SUT lives at ./sut on the runner, not ../sut. The unit tests that
+  # require SUT sources (knowledge-integrity, ai.retrieval*) cannot be loaded without this.
+  SUT_ROOT: sut
 
 jobs:
   zap:

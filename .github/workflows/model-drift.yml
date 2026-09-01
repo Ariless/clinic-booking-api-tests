@@ -25,6 +25,10 @@ concurrency:
 env:
   BASE_URL: http://127.0.0.1:3000
   DB_PATH: sut/data/clinic.db
+  # The SUT is checked out *inside* this repo (`path: sut`); on a dev machine the two are siblings.
+  # The unit tests fall back to `../../../sut`, which on the runner resolves outside the workspace —
+  # so without this the whole suite fails at collection time, before a single @rag test runs.
+  SUT_ROOT: sut
   AI_MOCK_RESPONSE: "false"   # real Claude calls — this is the point of drift detection
   RATE_LIMIT_REGISTER_MAX: "1000"
   # Blank on the schedule, set by hand to sweep. Read by both the SUT (ANTHROPIC_MODEL, via compose)
