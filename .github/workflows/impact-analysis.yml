@@ -15,6 +15,10 @@ concurrency:
 env:
   BASE_URL: http://127.0.0.1:3000
   DB_PATH: sut/data/clinic.db
+  # The SUT is checked out *inside* this repo (`path: sut`); on a dev machine the two are siblings.
+  # Without this the unit tests fall back to `../../../sut`, which resolves outside the workspace and
+  # throws at collection time, before a single selected test runs.
+  SUT_ROOT: sut
   AI_MOCK_RESPONSE: "true"
   RATE_LIMIT_REGISTER_MAX: "1000"
 

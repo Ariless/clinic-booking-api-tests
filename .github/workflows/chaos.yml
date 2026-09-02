@@ -15,6 +15,10 @@ on:
 
 env:
   BASE_URL: http://127.0.0.1:3000
+  # The SUT is checked out *inside* this repo (`path: sut`); on a dev machine the two are siblings.
+  # `--grep @chaos` loads every spec to build the list, unit tests included, so without this the run
+  # dies at collection on `../../../sut`.
+  SUT_ROOT: sut
 
 jobs:
   chaos:
