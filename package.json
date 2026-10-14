@@ -45,7 +45,7 @@
     "@playwright/test": "^1.62.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
-    "@types/ws": "^8.18.1",
+    "@types/ws": "^8.18.2",
     "allure-commandline": "^2.38.1",
     "allure-playwright": "^3.7.1",
     "better-sqlite3": "^12.9.0",
@@ -56,11 +56,11 @@
     "typescript-eslint": "^8.67.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.122.0",
+    "@anthropic-ai/sdk": "^0.133.0",
     "ajv": "^8.18.0",
     "dotenv": "^17.4.2",
     "kafkajs": "^2.2.4",
-    "ws": "^8.20.0"
+    "ws": "^8.22.0"
   },
   "overrides": {
     "uuid": "^14.0.0"
