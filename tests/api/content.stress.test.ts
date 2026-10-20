@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { UserClient } from '../../api/UserClient';
 import { generateUser } from '../../utils/userUtils';
+import { generateEdgeCaseUsers } from '../../utils/aiTestDataGenerator';
 
 // Builds a unique email for each edge-case registration so there are no DUPLICATE_EMAIL conflicts
 function edgeEmail(label: string): string {
@@ -112,3 +113,29 @@ test.describe("POST /api/v1/auth/register — content stress (static) @api", () 
   });
 });
 
+// ---------------------------------------------------------------------------
+// AI-generated edge cases — Claude proposes names the static list may not cover.
+// Without ANTHROPIC_API_KEY the generator returns its static fallback set, so this
+// block still runs: a suite should never quietly get smaller because a model was
+// unavailable. See utils/aiTestDataGenerator.ts.
+// ---------------------------------------------------------------------------
+
+test.describe("POST /api/v1/auth/register — content stress (AI-generated) @api @ai-data", () => {
+  test("201: AI-generated edge-case names are stored and returned unchanged @api @ai-data", async ({ request }) => {
+    const users = new UserClient(request);
+    const cases = await generateEdgeCaseUsers();
+    expect(cases.length).toBeGreaterThan(0);
+
+    for (const { name, description } of cases) {
+      const { status, body } = await users.registerPatient({ email: edgeEmail(description), name });
+      expect(status, `registration failed for ${description}: ${name}`).toBe(201);
+
+      const token = body.token as string;
+      // The 201 alone would pass on a write that mangled the name — read it back instead.
+      const me = await users.getMe(token);
+      expect((me.body.user as Record<string, unknown>).name, `stored name differs for ${description}`).toBe(name);
+
+      await users.deleteMyAccount(token);
+    }
+  });
+});

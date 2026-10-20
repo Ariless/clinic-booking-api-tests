@@ -31,8 +31,9 @@ const SYMPTOMS = 'chest pain and shortness of breath';
 
 test.describe('ASI03 — the model is only reached on behalf of an identified caller @security', () => {
     test("POST /api/v1/ai/recommend-doctor — 401 AUTH_REQUIRED with no token @api @security", async ({ request }) => {
-        // Until 2026-08-27 this answered 200. Every other domain route in the API required a token;
-        // the one route that spends money at a third party did not.
+        // Until 2026-08-27 this answered 200. Every route that reads a patient's data required a
+        // token (the doctor directory is public on purpose); the one route that spends money at a
+        // third party did not.
         const ai = new AiRecommendClient(request);
 
         const { status, body } = await ai.recommendAnonymously(SYMPTOMS);

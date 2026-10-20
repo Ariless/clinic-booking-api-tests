@@ -1,4 +1,3 @@
-import https from 'https';
 import { TOOLING_MODEL } from '../config/models';
 
 export interface EdgeCaseUser {
@@ -18,43 +17,27 @@ const STATIC_FALLBACK: EdgeCaseUser[] = [
   { name: "John-François O'Neill", description: "hyphen + apostrophe + diacritic combined" },
 ];
 
-function callClaude(prompt: string, apiKey: string): Promise<string> {
-  const body = JSON.stringify({
-    model: TOOLING_MODEL,
-    max_tokens: 1024,
-    messages: [{ role: 'user', content: prompt }],
-  });
+// The transport is shared with the reporting scripts — one copy, in
+// `scripts/lib/anthropicRequest.js`, which records `usage` in the token ledger. This file used to
+// carry its own copy built straight on `https.request`, so every name this generator produced was
+// billed and counted nowhere. Same fix as `utils/aiBugReporter.ts`.
+//
+// `require` rather than `import`: the shared transport is CommonJS because `scripts/` runs straight
+// through `node` with no build step.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { callClaude: sharedCallClaude } = require('../scripts/lib/anthropicRequest') as {
+  callClaude: (
+    prompt: string,
+    apiKey: string,
+    options?: { maxTokens?: number; model?: string; label?: string }
+  ) => Promise<string>;
+};
 
-  return new Promise((resolve, reject) => {
-    const req = https.request(
-      {
-        hostname: 'api.anthropic.com',
-        path: '/v1/messages',
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-          'content-length': Buffer.byteLength(body),
-        },
-      },
-      (res) => {
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(data) as { error?: { message: string }; content: Array<{ text: string }> };
-            if (parsed.error) reject(new Error(parsed.error.message));
-            else resolve(parsed.content[0].text);
-          } catch (e) {
-            reject(e);
-          }
-        });
-      }
-    );
-    req.on('error', reject);
-    req.write(body);
-    req.end();
+function callClaude(prompt: string, apiKey: string): Promise<string> {
+  return sharedCallClaude(prompt, apiKey, {
+    maxTokens: 1024,
+    model: TOOLING_MODEL,
+    label: 'test-data-generator',
   });
 }
 
