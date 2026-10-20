@@ -2,7 +2,7 @@
 
 **Purpose:** trace every business requirement to the test file(s) that verify it, and confirm coverage status.  
 **Requirements last reviewed:** 2026-05-18 — the mapping below has not been re-walked since, while the suite has roughly doubled. Treat unmapped recent tests as a known gap in this document, not as missing coverage.  
-**Suite at the time of that review:** 148 automated tests. **Today:** 372 unique tests / 437 runs across 83 files (`npm run test:count`, verified 2026-08-28).
+**Suite at the time of that review:** 148 automated tests. **Today:** 377 unique tests / 446 runs across 84 files (`npm run test:count`, verified 2026-10-20).
 
 Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered
 

@@ -705,3 +705,31 @@ through the hop being guarded.
 | DOC-01 | Six docs claimed that tests living in this repository lived elsewhere, pointing at a README section that never existed | ✅ Fixed 2026-08-21: notices rewritten or removed; counts corrected and put under the convention check | Medium | Repository audit 2026-08-21 |
 | DOC-02 | `ai-gap-analysis.js` filtered on `.test.js`; after the TS migration it reported 0% coverage over an empty inventory | ✅ Fixed 2026-08-21: filter accepts `.ts`, report regenerated, `dotenv` added to all `ai:*` scripts | Medium | Regenerating the report 2026-08-21 |
 | DOC-03 | `ai-service` recorded as wired into the SUT since 2026-05-18; `callAiService()` has never existed | ✅ Fixed 2026-08-21: delegation client, distinct 503 code, compose entry, CI job; parity test added after the two retrieval copies were found drifted | Medium | Repository audit 2026-08-21 |
+
+### TST-12 — The synthetic-data generator was written, documented and never called (✅ Fixed 2026-09-10)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-09-10 |
+| **Found by** | Checking a CV claim against the code: the bullet said synthetic test data was generated for edge cases, and `generateEdgeCaseUsers()` turned out to have no callers |
+| **Severity** | Medium |
+| **Business impact** | `content.stress.test.ts` ran ten hand-written edge cases only. The AI-generated block described in `BACKLOG.md` (done 2026-05-18) and in `TEST_STRATEGY.md` did not exist in the suite, so names a human would not think of were never exercised — while both documents stated the opposite. |
+| **Root cause** | The `@ai-data` test was lost, most likely during the TypeScript migration where files were merged; `utils/aiTestDataGenerator.ts` survived, its only caller did not. Same class as TST-10 (`model-drift.yml` never called a model) and DOC-03 (an extracted service documented as wired in). |
+| **Fix** | Added the `@ai-data` describe block to `tests/api/content.stress.test.ts`: calls `generateEdgeCaseUsers()`, registers each name, reads it back through `GET /auth/me` so a 201 on a mangled write cannot pass, and deletes the account. Without a key the generator returns its static fallback and the block still runs. |
+| **Where** | `tests/api/content.stress.test.ts` · `utils/aiTestDataGenerator.ts` |
+
+---
+
+### TST-13 — The synthetic-data generator billed Anthropic calls that no ledger counted (✅ Fixed 2026-09-10)
+
+| Field | Value |
+|---|---|
+| **Status** | ✅ Fixed 2026-09-10 |
+| **Found by** | A passing `@ai-data` run reported `[tokens] no Anthropic API calls recorded this run` while a valid key was loaded — the call had happened, the ledger had not seen it |
+| **Severity** | Low |
+| **Business impact** | Every generated batch of edge-case names was paid for and counted nowhere, so the token ledger under-reported real spend and a cost regression here would stay invisible. |
+| **Root cause** | `utils/aiTestDataGenerator.ts` carried its own copy of the transport built directly on `https.request` instead of the shared `scripts/lib/anthropicRequest.js`, which records `usage`. Exactly the defect already fixed once in `utils/aiBugReporter.ts` — one copy had been missed. |
+| **Fix** | Replaced the local transport with `sharedCallClaude` under the label `test-data-generator`, matching the pattern in `aiBugReporter.ts`. A run now reports the call: 153 in / 306 out. |
+| **Where** | `tests/utils/aiTestDataGenerator.ts` · `tests/scripts/lib/anthropicRequest.js` |
+
+---

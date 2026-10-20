@@ -27,7 +27,7 @@ data/         testData.ts (endpoints), seedAccounts.ts, schemas/
 fixtures/     Playwright fixtures — userFixture, slotFixture, twoUsersFixture, index
 flows/        multi-step API sequences reused across tests
 pages/        Page Objects — one class per screen, extends BasePage
-utils/        dbClient, schemaValidator, slotAssertion, webhookTestServer, aiBugReporter, userUtils
+utils/        dbClient, schemaValidator, slotAssertion, webhookTestServer, aiBugReporter, userUtils, webVitals
 tests/api/    API tests
 tests/e2e/    E2E cross-layer tests
 tests/ui/     UI browser tests

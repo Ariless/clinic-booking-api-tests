@@ -922,7 +922,7 @@ expect(entry).toMatchObject({
 
 **Before:** Registration tests only covered `test_<timestamp>@example.com` — ASCII email, generic name. No coverage of international scripts, special characters, or long inputs.
 
-**After:** `tests/api/content.stress.test.ts` — 10 tests across two describe blocks.
+**After:** `tests/api/content.stress.test.ts` — 11 tests across two describe blocks.
 
 **Static block (always runs, no API key required):**
 Covers known content edge cases and boundary conditions:
@@ -942,7 +942,7 @@ Covers known content edge cases and boundary conditions:
 
 Each success case registers the user, then asserts that `GET /auth/me` returns the exact name (no truncation, no corruption) before cleanup.
 
-**AI-generated block (`@ai-data`, skipped without key):**
+**AI-generated block (`@ai-data`, falls back to the static set without a key — it is never skipped):**
 `generateEdgeCaseUsers()` in `utils/aiTestDataGenerator.ts` calls Claude Haiku with a prompt asking for 8 diverse edge-case names covering scripts and combinations the static list might miss. On any API error or missing key, returns the static fallback list — test remains green.
 
 **Why this matters:** Shows AI augmenting test data design, not replacing it. The static tests cover known categories; Claude is asked to think of cases beyond the obvious list. The graceful degradation pattern (`try/catch → static fallback`) means the suite stays green in CI without a key, while a richer set of cases runs when one is available.
@@ -1029,6 +1029,24 @@ Full findings: `SYSTEM_WEAKNESS_REPORT.md` §5.
 **Interview line:** *"I have two layers of security testing. `security.test.ts` tests known scenarios — IDOR, BOLA, JWT tamper. OWASP ZAP searches independently — it doesn't know what I tested, so it covers gaps I didn't think of: missing security headers, CORS issues, information disclosure. Different tools answering different questions."*
 
 ---
+
+### 15.15 Core Web Vitals — lab regression guard (added 2026-10-20) ✅
+
+**Before:** performance was covered only on the server side: k6 on the booking flow (p95 latency, error rate). Nothing measured what the customer's browser experiences — how fast the main content appears, whether the page jumps while loading, how quickly it responds to input. Lighthouse had been used in one-off audits, never as a check.
+
+**After:** `tests/ui/web-vitals.test.ts` + `utils/webVitals.ts` — 4 tests, run on every pull request in the UI job:
+- `login page` — LCP ≤ 2.5 s
+- `booking page` — CLS ≤ 0.1 while the wizard loads data
+- `login form` — INP ≤ 200 ms while typing
+- `web vitals meter` — control: an injected shift must register, otherwise a CLS of 0 proves nothing
+
+All under a 4x CPU slowdown (Lighthouse's mobile preset), in desktop Chrome and the Pixel 7 project. The metrics are read from the browser's own `PerformanceObserver` entries, no extra dependency.
+
+**Checked from the other side** (one-off runs, not committed): a 3 s delay on the `/login` document → LCP 3068 ms, test red; a 300 ms busy `keydown` handler → INP 360 ms, test red. A 3 s delay on subresources left LCP at ~136 ms — the login page paints its text before its script loads, which is the correct behaviour, not a meter fault.
+
+**Found while building it:** in the mobile-chrome project the browser flags layout shifts in the first ~500 ms after navigation as `hadRecentInput` although the test sent no input, so standard CLS silently drops them. The control test caught it (CLS 0 for a shift that clearly happened). The booking test therefore reads `clsAnyCause`, which counts every shift; the test performs no input on that page, so nothing is wrongly included.
+
+**Why:** the JD-level requirement is "knowledge of performance / Core Web Vitals", and the honest version of that is a check that fails when a change makes the page slower or jumpier — not a paragraph about thresholds. Lab numbers on localhost are far below the thresholds (LCP ~60 ms, CLS 0, INP ~56 ms); the value is the regression guard, and real-user data (CrUX, 75th percentile) remains the measure Google uses.
 
 ## 16. Narrative & depth layer — backlog (agreed 2026-04-30)
 
@@ -1124,6 +1142,7 @@ Each test file covers a **unique risk dimension**. No two files test the same th
 | `visual.test.ts` | Visual regression — pixel-level baseline comparison for login (empty + error) and register pages across Chromium and mobile-chrome; catches CSS/layout regressions invisible to behavioural tests |
 | `guest-gates.test.ts` | Auth guard — unauthenticated users cannot access protected pages (booking, consultations, notifications) |
 | `accessibility.test.ts` | WCAG compliance — axe-core audit on login, register, booking pages |
+| `web-vitals.test.ts` | Core Web Vitals as a lab regression guard — LCP on login, CLS while the booking wizard loads, INP while typing, all on a 4x slower CPU; plus a control test proving the CLS meter registers a shift. Chromium-only APIs, so desktop Chrome and Pixel 7 only (`docs/WEB_VITALS.md`) |
 | `api-error-states.test.ts` | Error display routing — server 500 and network abort surface to correct UI zones (booking form message vs appointment banner); `page.route()` mocking without SUT changes |
 | `doctor.schedule.ui.test.ts` | Doctor schedule form — 7 day checkboxes, checkbox enables inputs, save shows toast, saved data loads on revisit, OUTSIDE_WORKING_HOURS shown when booking outside schedule |
 | `reschedule.ui.test.ts` | Reschedule button visibility — shown for pending/confirmed only; reschedule flow refreshes list to pending + shows toast |
