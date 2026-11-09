@@ -19,18 +19,18 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history so the commit push works cleanly.
           fetch-depth: 0
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ vars.SUT_GITHUB_REPOSITORY || 'Ariless/clinic-booking-api' }}
           path: sut
           token: ${{ secrets.SUT_GITHUB_TOKEN }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
