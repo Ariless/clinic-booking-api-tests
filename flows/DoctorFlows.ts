@@ -15,7 +15,7 @@ export async function createSlot(request: APIRequestContext, doctorToken: string
         seedSlotIsAvailable,
         authHeader(doctorToken),
     );
-    if (status !== 201) throw new Error("Slot creation failed");
+    if (status !== 201) throw new Error(`Slot creation failed: ${status} ${JSON.stringify(body)}`);
 
     return { slot: body, seedSlotStart, seedSlotEnd };
 }

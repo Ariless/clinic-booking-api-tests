@@ -10,11 +10,6 @@ export class BasePage {
 
     async navigate(path: string) {
         await this.page.goto(path);
-        await this.dismissCookies();
-    }
-
-    async dismissCookies() {
-        // Clinic demo — no cookie consent wall; kept for parity with the older shop framework.
     }
 
     async getTitle() {

@@ -917,6 +917,31 @@ run.
 
 **Test:** none. This is a property of the runner configuration, not a behaviour of the SUT.
 
+### 13.3 The API client hid the real status behind a JSON parse error (found and fixed 2026-11-09)
+
+**Before:** `BaseClient.parseResponse` and `parseResponseFull` called `JSON.parse` on every non-empty
+body. A proxy or a crashed server answering with an HTML error page (a 502 from a gateway, say)
+made `JSON.parse` throw, so the test failed with `SyntaxError: Unexpected token <` before its
+status assertion ran. The one fact that explains the failure, the status code, never reached the
+report.
+
+**After:** one shared `parseBody()` keeps a body that is not JSON as raw text. The status assertion
+runs and reports the real status, and the text is there to read. The two parse methods now share
+it instead of carrying the same parsing twice.
+
+**Found by:** a review of the framework against current practice, not by a failing run. Nothing in
+CI has hit it, because the local and CI SUT never sit behind a proxy.
+
+**Same review, same day:** the three setup flows (`loginDoctor`, `bookAppointment`, `createSlot`)
+threw `"Doctor login failed"`-style errors with no status or body; they now include both, matching
+the fixtures. An empty `dismissCookies()` left over from an older shop framework was removed from
+`BasePage`.
+
+**Verification:** lint and `tsc --noEmit` clean; API and UI layers on chromium against a local SUT:
+268 passed, 52 skipped, 0 failed.
+
+**Test:** none dedicated. A test would need an endpoint that answers non-JSON on demand.
+
 ## 6. Summary table
 
 | Weakness | Severity | Mitigated? | Test exists? |
@@ -975,3 +1000,4 @@ run.
 | An open breaker answered `500 INTERNAL_ERROR` instead of `503`, and `CIRCUIT_OPEN` was in no contract | Medium | ✅ fixed 2026-08-27: mapped to 503; code, `AI_SERVICE_UNAVAILABLE` and `/circuit-state` added to the spec | ✅ `aiCircuitBreaker.test.js`, observed red against the pre-fix build |
 | SUT source loaded by the unit layer resolved its dependencies from the test repository | High | ✅ fixed 2026-08-29: `npm ci --prefix sut --omit=dev` in all seven Playwright jobs | ⚠️ verified by reproducing the runner's resolution locally; no check guards the next divergence |
 | A collection error in one file fails every job and is reported as the gate that ran first | Medium | ❌ open — `testDir: "./tests"`, no project boundary around `tests/unit/` | ❌ none — runner configuration, not SUT behaviour |
+| API client threw `SyntaxError` on a non-JSON body and hid the real status | Medium | ✅ fixed 2026-11-09: non-JSON body kept as text, one shared `parseBody()` | ⚠️ none dedicated; layers green after the change |

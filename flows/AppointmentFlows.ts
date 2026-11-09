@@ -5,7 +5,7 @@ import type { APIRequestContext } from "@playwright/test";
 export async function bookAppointment(request: APIRequestContext, slotId: number, patientToken: string) {
     const api = new AppointmentsClient(request);
     const { status, body } = await api.createAppointment(slotId, authHeader(patientToken));
-    if (status !== 201) throw new Error("Booking failed");
+    if (status !== 201) throw new Error(`Booking failed: ${status} ${JSON.stringify(body)}`);
     return body;
 }
 
